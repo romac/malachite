@@ -1,6 +1,13 @@
 name: Rust
 
-on: [push, pull_request]
+on:
+  push:
+    branches: master
+    paths:
+      - Code/**
+  pull_request:
+    paths:
+      - Code/**
 
 permissions:
   checks: write
