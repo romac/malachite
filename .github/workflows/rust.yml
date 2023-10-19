@@ -1,7 +1,9 @@
-name: "Rust"
-on:
-  push:
-  pull_request:
+name: Rust
+
+on: [push, pull_request]
+
+permissions:
+  checks: write
 
 jobs:
   test:
@@ -31,10 +33,11 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy
-        - uses: auguwu/clippy-action@1
-          working-directory: Code
-          with:
-            token: ${{secrets.GITHUB_TOKEN}}
+      - name: Run clippy
+        uses: auguwu/clippy-action@1
+        with:
+          token: ${{secrets.GITHUB_TOKEN}}
+          args: --manifest-path Code/Cargo.toml
  
   fmt:
     name: Formatting
@@ -47,5 +50,6 @@ jobs:
         with:
           components: rustfmt
       - name: Check formatting
-        working-directory: Code
         uses: actions-rust-lang/rustfmt@v1
+        with:
+          manifest-path: Code/Cargo.toml
