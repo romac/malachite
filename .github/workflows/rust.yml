@@ -15,10 +15,10 @@ jobs:
       - name: Install cargo-nextest
         uses: taiki-e/install-action@cargo-hack
       - name: Build code
-        working_dir: Code
+        working-directory: Code
         run: cargo nextest run --workspace --all-features --no-run
       - name: Run tests
-        working_dir: Code
+        working-directory: Code
         run: cargo nextest run --workspace --all-features
 
   clippy:
@@ -32,6 +32,7 @@ jobs:
         with:
           components: clippy
         - uses: auguwu/clippy-action@1
+          working-directory: Code
           with:
             token: ${{secrets.GITHUB_TOKEN}}
  
@@ -46,4 +47,5 @@ jobs:
         with:
           components: rustfmt
       - name: Check formatting
+        working-directory: Code
         uses: actions-rust-lang/rustfmt@v1
