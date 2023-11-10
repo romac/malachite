@@ -1,5 +1,6 @@
 //! Tally votes of the same type (eg. prevote or precommit)
 
+#![no_std]
 #![forbid(unsafe_code)]
 #![deny(unused_crate_dependencies, trivial_casts, trivial_numeric_casts)]
 #![warn(

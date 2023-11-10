@@ -1,5 +1,6 @@
 //! Per-round consensus state machine
 
+#![no_std]
 #![forbid(unsafe_code)]
 #![deny(unused_crate_dependencies, trivial_casts, trivial_numeric_casts)]
 #![warn(
@@ -10,6 +11,8 @@
 )]
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::panic))]
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
+
+extern crate alloc;
 
 pub mod events;
 pub mod message;
