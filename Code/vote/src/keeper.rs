@@ -19,7 +19,7 @@ pub enum Message<Value> {
     SkipRound(Round),
 }
 
-struct PerRound<Ctx>
+pub struct PerRound<Ctx>
 where
     Ctx: Context,
 {
@@ -38,6 +38,18 @@ where
             addresses_weights: RoundWeights::new(),
             emitted_msgs: BTreeSet::new(),
         }
+    }
+
+    pub fn votes(&self) -> &RoundVotes<Ctx::Address, ValueId<Ctx>> {
+        &self.votes
+    }
+
+    pub fn addresses_weights(&self) -> &RoundWeights<Ctx::Address> {
+        &self.addresses_weights
+    }
+
+    pub fn emitted_msgs(&self) -> &BTreeSet<Message<ValueId<Ctx>>> {
+        &self.emitted_msgs
     }
 }
 
@@ -89,6 +101,14 @@ where
             threshold_params,
             per_round: BTreeMap::new(),
         }
+    }
+
+    pub fn total_weight(&self) -> &Weight {
+        &self.total_weight
+    }
+
+    pub fn per_round(&self) -> &BTreeMap<Round, PerRound<Ctx>> {
+        &self.per_round
     }
 
     /// Apply a vote with a given weight, potentially triggering an event.
