@@ -25,7 +25,7 @@ where
 {
     votes: RoundVotes<Ctx::Address, ValueId<Ctx>>,
     addresses_weights: RoundWeights<Ctx::Address>,
-    emitted_msgs: BTreeSet<Output<ValueId<Ctx>>>,
+    emitted_outputs: BTreeSet<Output<ValueId<Ctx>>>,
 }
 
 impl<Ctx> PerRound<Ctx>
@@ -36,7 +36,7 @@ where
         Self {
             votes: RoundVotes::new(),
             addresses_weights: RoundWeights::new(),
-            emitted_msgs: BTreeSet::new(),
+            emitted_outputs: BTreeSet::new(),
         }
     }
 
@@ -48,8 +48,8 @@ where
         &self.addresses_weights
     }
 
-    pub fn emitted_msgs(&self) -> &BTreeSet<Output<ValueId<Ctx>>> {
-        &self.emitted_msgs
+    pub fn emitted_outputs(&self) -> &BTreeSet<Output<ValueId<Ctx>>> {
+        &self.emitted_outputs
     }
 }
 
@@ -62,7 +62,7 @@ where
         Self {
             votes: self.votes.clone(),
             addresses_weights: self.addresses_weights.clone(),
-            emitted_msgs: self.emitted_msgs.clone(),
+            emitted_outputs: self.emitted_outputs.clone(),
         }
     }
 }
@@ -76,7 +76,7 @@ where
         f.debug_struct("PerRound")
             .field("votes", &self.votes)
             .field("addresses_weights", &self.addresses_weights)
-            .field("emitted_msgs", &self.emitted_msgs)
+            .field("emitted_outputs", &self.emitted_outputs)
             .finish()
     }
 }
@@ -144,7 +144,7 @@ where
 
             if skip_round {
                 let msg = Output::SkipRound(vote.round());
-                round.emitted_msgs.insert(msg.clone());
+                round.emitted_outputs.insert(msg.clone());
                 return Some(msg);
             }
         }
@@ -160,8 +160,8 @@ where
         let msg = threshold_to_output(vote.vote_type(), vote.round(), threshold);
 
         match msg {
-            Some(msg) if !round.emitted_msgs.contains(&msg) => {
-                round.emitted_msgs.insert(msg.clone());
+            Some(msg) if !round.emitted_outputs.contains(&msg) => {
+                round.emitted_outputs.insert(msg.clone());
                 Some(msg)
             }
             _ => None,
