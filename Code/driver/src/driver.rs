@@ -9,7 +9,7 @@ use malachite_round::input::Input as RoundEvent;
 use malachite_round::output::Output as RoundOutput;
 use malachite_round::state::{State as RoundState, Step};
 use malachite_round::state_machine::Info;
-use malachite_vote::keeper::Output as VoteMessage;
+use malachite_vote::keeper::Output as VoteKeeperOutput;
 use malachite_vote::keeper::VoteKeeper;
 use malachite_vote::Threshold;
 use malachite_vote::ThresholdParams;
@@ -260,20 +260,20 @@ where
         let vote_round = signed_vote.vote.round();
         let current_round = self.round();
 
-        let Some(vote_msg) =
+        let Some(vote_output) =
             self.votes
                 .apply_vote(signed_vote.vote, validator.voting_power(), current_round)
         else {
             return Ok(None);
         };
 
-        let round_event = match vote_msg {
-            VoteMessage::PolkaAny => RoundEvent::PolkaAny,
-            VoteMessage::PolkaNil => RoundEvent::PolkaNil,
-            VoteMessage::PolkaValue(v) => RoundEvent::PolkaValue(v),
-            VoteMessage::PrecommitAny => RoundEvent::PrecommitAny,
-            VoteMessage::PrecommitValue(v) => RoundEvent::PrecommitValue(v),
-            VoteMessage::SkipRound(r) => RoundEvent::SkipRound(r),
+        let round_event = match vote_output {
+            VoteKeeperOutput::PolkaAny => RoundEvent::PolkaAny,
+            VoteKeeperOutput::PolkaNil => RoundEvent::PolkaNil,
+            VoteKeeperOutput::PolkaValue(v) => RoundEvent::PolkaValue(v),
+            VoteKeeperOutput::PrecommitAny => RoundEvent::PrecommitAny,
+            VoteKeeperOutput::PrecommitValue(v) => RoundEvent::PrecommitValue(v),
+            VoteKeeperOutput::SkipRound(r) => RoundEvent::SkipRound(r),
         };
 
         self.apply_event(vote_round, round_event)
