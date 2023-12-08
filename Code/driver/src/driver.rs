@@ -45,11 +45,9 @@ where
         proposer_selector: impl ProposerSelector<Ctx> + 'static,
         validator_set: Ctx::ValidatorSet,
         address: Ctx::Address,
+        threshold_params: ThresholdParams,
     ) -> Self {
-        let votes = VoteKeeper::new(
-            validator_set.total_voting_power(),
-            ThresholdParams::default(), // TODO: Make this configurable
-        );
+        let votes = VoteKeeper::new(validator_set.total_voting_power(), threshold_params);
 
         Self {
             ctx,

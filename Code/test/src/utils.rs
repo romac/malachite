@@ -192,11 +192,6 @@ pub fn propose_state_with_proposal_and_valid(
     valid_round: Round,
     proposal: Proposal,
 ) -> State<TestContext> {
-    // TODO - set_valid doesn't work because the valid round is set to state round
-    // we need to set it to something different.
-    // propose_state(round)
-    //     .set_proposal(proposal.clone())
-    //     .set_valid(proposal.value)
     State {
         height: Height::new(1),
         round: state_round,
