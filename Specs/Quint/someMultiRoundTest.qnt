@@ -12,22 +12,16 @@ import someMultiRoundRuns(
     slow = "v4"
 ) as N4F0 from "./someMultiRoundRuns"
 
-run AllButOneTest = {
+run AllButOneTest = 
     N4F0::AllButOneDecideInR1WhileSlowInR0
-}
 
-run DecideFutureRoundTest = {
+run DecideFutureRoundTest = 
     N4F0::DecideForFutureRoundRun
-}
 
-run DecideForFutureRoundPrecommitFirstTest = {
+run DecideForFutureRoundPrecommitFirstTest = 
     N4F0::DecideForFutureRoundPrecommitFirstRun
-}
 
-run RoundswitchTest = {
+run RoundswitchTest =
     N4F0::RoundswitchRun
-}
-
-
 
 }
