@@ -9,25 +9,25 @@ module consensusTest {
     // Consensus state machine
     // *************************************************************************
 
-    var system: Address -> ConsensusState
-    var _input: (Address, ConsensusInput)
-    var _output: ConsensusOutput
+    var state: ConsensusState
+    var input: ConsensusInput
+    var output: ConsensusOutput
 
-    action initFor(processes: Set[Address]): bool = all {
-        system' = processes.mapBy(p => initConsensusState(p, 1)),
-        _input' = (noAddress, NoConsensusInput),
-        _output' = NoConsensusOutput,
+    action initFor(p: Address, height: Height): bool = all {
+        state' = initConsensusState(p, height),
+        input' = NoConsensusInput,
+        output' = NoConsensusOutput,
     }
 
-    action init = initFor(Set("Josef"))
+    action init = initFor("Josef", 1)
 
     // For testing.
-    action fireInput(proc: Address, input: ConsensusInput): bool =
-        val res = consensus(system.get(proc), input)
+    action fireInput(__input: ConsensusInput): bool =
+        val res = consensus(state, __input)
         all {
-            system' = system.put(proc, res.cs),
-            _input' = (proc, input),
-            _output' = res.out,
+            state' = res.cs,
+            input' = __input,
+            output' = res.out,
         }
 
     action step =
@@ -36,28 +36,27 @@ module consensusTest {
         nondet v = oneOf(Set("A", "B", "C"))
         nondet vr = oneOf(Set(-1, 1, 2, 3, 4))
         any {
-            fireInput("Josef", NewHeightCInput(h)),
-            fireInput("Josef", NewRoundCInput(r)),
-            fireInput("Josef", NewRoundProposerCInput((r, v))),
-            fireInput("Josef", ProposalCInput((r, Val(v)))),
-            fireInput("Josef", ProposalAndPolkaPreviousAndValidCInput((Val(v), r))),
-            fireInput("Josef", ProposalInvalidCInput),
-            fireInput("Josef", PolkaNilCInput),
-            fireInput("Josef", PolkaAnyCInput),
-            fireInput("Josef", ProposalAndPolkaAndValidCInput(Val(v))),
-            fireInput("Josef", PrecommitAnyCInput),
-            fireInput("Josef", ProposalAndCommitAndValidCInput(Val(v))),
-            fireInput("Josef", RoundSkipCInput(r)),
-            fireInput("Josef", TimeoutProposeCInput((h, r))),
-            fireInput("Josef", TimeoutPrevoteCInput((h, r))),
-            fireInput("Josef", TimeoutPrecommitCInput((h, r))),
-            fireInput("Josef", ProposalAndPolkaAndInvalidCInput((h, r, Val(v)))),
+            fireInput(NewRoundCInput(r)),
+            fireInput(NewRoundProposerCInput((r, v))),
+            fireInput(ProposalCInput((r, Val(v)))),
+            fireInput(ProposalAndPolkaPreviousAndValidCInput((Val(v), r))),
+            fireInput(ProposalInvalidCInput),
+            fireInput(PolkaNilCInput),
+            fireInput(PolkaAnyCInput),
+            fireInput(ProposalAndPolkaAndValidCInput(Val(v))),
+            fireInput(PrecommitAnyCInput),
+            fireInput(ProposalAndCommitAndValidCInput(Val(v))),
+            fireInput(RoundSkipCInput(r)),
+            fireInput(TimeoutProposeCInput((h, r))),
+            fireInput(TimeoutPrevoteCInput((h, r))),
+            fireInput(TimeoutPrecommitCInput((h, r))),
+            fireInput(ProposalAndPolkaAndInvalidCInput((h, r, Val(v)))),
         }
 
     action unchangedAll = all {
-        system' = system,
-        _input' = _input,
-        _output' = _output,
+        state' = state,
+        input' = input,
+        output' = output,
     }
 
     // *************************************************************************
@@ -70,59 +69,59 @@ module consensusTest {
 
     // This test should call each input type at least once
     run DecideNonProposerTest =
-        initFor(Set("Josef"))
-        .then(fireInput("Josef", NewRoundCInput(0)))
-        .then(_assert(_output == TimeoutOutput(ProposeTimeout)))
+        initFor("Josef", 1)
+        .then(fireInput(NewRoundCInput(0)))
+        .then(_assert(output == TimeoutOutput((0, ProposeTimeout))))
         
-        .then(fireInput("Josef", ProposalCInput((0, Val("block")))))
-        .then(_assert(_output.isVoteMsgWith(Prevote, Val("block"))))
+        .then(fireInput(ProposalCInput((0, Val("block")))))
+        .then(_assert(output.isVoteMsgWith(Prevote, Val("block"))))
         
-        .then(fireInput("Josef", ProposalAndPolkaAndValidCInput(Val("block"))))
-        .then(_assert(_output.isVoteMsgWith(Precommit, Val("block"))))
+        .then(fireInput(ProposalAndPolkaAndValidCInput(Val("block"))))
+        .then(_assert(output.isVoteMsgWith(Precommit, Val("block"))))
         
-        .then(fireInput("Josef", ProposalAndCommitAndValidCInput(Val("block"))))
-        .then(_assert(_output == DecidedOutput(Val("block"))))
-        
-        .then(fireInput("Josef", NewHeightCInput(system.get("Josef").height + 1)))
-        .then(_assert(system.get("Josef").height == 2))
-        
-        .then(fireInput("Josef", NewRoundProposerCInput((0, "nextBlock"))))
-        .then(_assert(_output == ProposalOutput(mkProposal("Josef", 2, 0, "nextBlock", -1))))
-        
-        .then(fireInput("Josef", ProposalCInput((0, Val("nextBlock"))))) // it is assumed that the proposer receives its own message
-        .then(_assert(_output.isVoteMsgWith(Prevote, Val("nextBlock")) and system.get("Josef").step == PrevoteStep))
-        
-        .then(fireInput("Josef", PolkaAnyCInput))
-        .then(_assert(_output == TimeoutOutput(PrevoteTimeout)))
-        
-        .then(fireInput("Josef", TimeoutPrevoteCInput((2, 0))))
-        .then(_assert(_output.isVoteMsgWith(Precommit, Nil) and system.get("Josef").step == PrecommitStep))
-        
-        .then(fireInput("Josef", PrecommitAnyCInput))
-        .then(_assert(_output == TimeoutOutput(PrecommitTimeout)))
+        .then(fireInput(ProposalAndCommitAndValidCInput(Val("block"))))
+        .then(_assert(output == DecidedOutput(Val("block"))))
 
-        .then(fireInput("Josef", TimeoutPrecommitCInput((2, 0))))
-        .then(_assert(_output == SkipRoundOutput(1)))
+    // TODO: rename test?
+    run DecideNonProposerAtHeight2Test =
+        initFor("Josef", 2)     
+        .then(fireInput(NewRoundProposerCInput((0, "nextBlock"))))
+        .then(_assert(output == ProposalOutput(mkProposal("Josef", 2, 0, "nextBlock", -1))))
         
-        .then(fireInput("Josef", NewRoundCInput(1)))
-        .then(_assert(_output == TimeoutOutput(ProposeTimeout)))
+        .then(fireInput(ProposalCInput((0, Val("nextBlock"))))) // it is assumed that the proposer receives its own message
+        .then(_assert(output.isVoteMsgWith(Prevote, Val("nextBlock")) and state.step == PrevoteStep))
+        
+        .then(fireInput(PolkaAnyCInput))
+        .then(_assert(output == TimeoutOutput((0, PrevoteTimeout))))
+        
+        .then(fireInput(TimeoutPrevoteCInput((2, 0))))
+        .then(_assert(output.isVoteMsgWith(Precommit, Nil) and state.step == PrecommitStep))
+        
+        .then(fireInput(PrecommitAnyCInput))
+        .then(_assert(output == TimeoutOutput((0, PrecommitTimeout))))
 
-        .then(fireInput("Josef", TimeoutProposeCInput((2, 1))))
-        .then(_assert(_output.isVoteMsgWith(Prevote, Nil) and system.get("Josef").step == PrevoteStep))
+        .then(fireInput(TimeoutPrecommitCInput((2, 0))))
+        .then(_assert(output == SkipRoundOutput(1) and state.step == UnstartedStep))
         
-        .then(fireInput("Josef", PolkaNilCInput))
-        .then(_assert(_output.isVoteMsgWith(Precommit, Nil) and system.get("Josef").step == PrecommitStep))
+        .then(fireInput(NewRoundCInput(1)))
+        .then(_assert(output == TimeoutOutput((1, ProposeTimeout))))
+
+        .then(fireInput(TimeoutProposeCInput((2, 1))))
+        .then(_assert(output.isVoteMsgWith(Prevote, Nil) and state.step == PrevoteStep))
         
-        .then(fireInput("Josef", PrecommitAnyCInput))
-        .then(_assert(_output == TimeoutOutput(PrecommitTimeout)))
+        .then(fireInput(PolkaNilCInput))
+        .then(_assert(output.isVoteMsgWith(Precommit, Nil) and state.step == PrecommitStep))
         
-        .then(fireInput("Josef", TimeoutPrecommitCInput((2, 1))))
-        .then(_assert(_output == SkipRoundOutput(2)))
+        .then(fireInput(PrecommitAnyCInput))
+        .then(_assert(output == TimeoutOutput((1, PrecommitTimeout))))
         
-        .then(fireInput("Josef", NewRoundCInput(2)))
-        .then(_assert(_output == TimeoutOutput(ProposeTimeout)))
+        .then(fireInput(TimeoutPrecommitCInput((2, 1))))
+        .then(_assert(output == SkipRoundOutput(2)))
         
-        .then(fireInput("Josef", ProposalInvalidCInput))
-        .then(_assert(_output.isVoteMsgWith(Prevote, Nil) and system.get("Josef").step == PrevoteStep))
+        .then(fireInput(NewRoundCInput(2)))
+        .then(_assert(output == TimeoutOutput((2, ProposeTimeout))))
+        
+        .then(fireInput(ProposalInvalidCInput))
+        .then(_assert(output.isVoteMsgWith(Prevote, Nil) and state.step == PrevoteStep))
 
 }

@@ -6,19 +6,8 @@ parse:
 	npx @informalsystems/quint parse voteBookkeeperTest.qnt
 .PHONY: parse
 
-test-con:
-	npx @informalsystems/quint run consensusTest.qnt
-.PHONY: test-con
-
-test-sm:
-	npx @informalsystems/quint test statemachineTest.qnt
-.PHONY: test-sm
-
-test-vk:
-	npx @informalsystems/quint test voteBookkeeperTest.qnt
-.PHONY: test-vk
-
-test: test-con test-sm test-vk
+test:
+	find *Test.qnt -maxdepth 1 -type f -exec time quint test {} \; 
 .PHONY: test
 
 verify:
@@ -37,9 +26,17 @@ traces-sim:
 .PHONY: traces-sim
 
 # Generate traces from `run` statements.
-traces-run:
+traces-run-vk:
 	mkdir -p traces/votekeeper
 	npx @informalsystems/quint test --output traces/votekeeper/{}.itf.json voteBookkeeperTest.qnt
+.PHONY: traces-run-vk
+
+traces-run-con:
+	mkdir -p traces/consensus
+	npx @informalsystems/quint test --output traces/consensus/{}.itf.json consensusTest.qnt
+.PHONY: traces-run-con
+
+traces-run: traces-run-vk traces-run-con
 .PHONY: traces-run
 
 traces: traces-sim traces-run

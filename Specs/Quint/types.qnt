@@ -33,10 +33,11 @@ module types {
     // Steps in a round
     type Step =
         | NoStep
+        | UnstartedStep
         | ProposeStep
         | PrevoteStep
         | PrecommitStep
-        | DecidedStep
+        | CommitStep
 
     type Timeout =
         | ProposeTimeout // Timeout waiting for proposal.

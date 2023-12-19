@@ -74,7 +74,7 @@ where
             address,
             validator_set,
             vote_keeper: votes,
-            round_state: RoundState::new(height, Round::new(0)),
+            round_state: RoundState::new(height, Round::Nil),
             proposal: None,
             pending_input: None,
         }
@@ -173,7 +173,7 @@ where
             self.round_state = RoundState::new(height, round);
         }
 
-        self.apply_input(round, RoundInput::NewRound)
+        self.apply_input(round, RoundInput::NewRound(round))
     }
 
     async fn apply_propose_value(

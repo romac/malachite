@@ -1,17 +1,17 @@
-#[path = "votekeeper/runner.rs"]
+#[path = "consensus/runner.rs"]
 pub mod runner;
-#[path = "votekeeper/utils.rs"]
+#[path = "consensus/utils.rs"]
 pub mod utils;
 
 use glob::glob;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+use malachite_itf::consensus::State;
 use malachite_itf::utils::generate_traces;
-use malachite_itf::votekeeper::State;
 use malachite_test::{Address, PrivateKey};
 
-use runner::VoteKeeperRunner;
+use runner::ConsensusRunner;
 use utils::ADDRESSES;
 
 const RANDOM_SEED: u64 = 0x42;
@@ -32,7 +32,7 @@ fn test_itf() {
         .expect("invalid random seed for quint");
 
     generate_traces(
-        "voteBookkeeperTest.qnt",
+        "consensusTest.qnt",
         &temp_dir.path().to_string_lossy(),
         quint_seed,
     );
@@ -41,7 +41,10 @@ fn test_itf() {
         .expect("Failed to read glob pattern")
         .flatten()
     {
-        println!("🚀 Running trace {json_fixture:?}");
+        println!(
+            "🚀 Running trace {:?}",
+            json_fixture.file_name().unwrap().to_str().unwrap()
+        );
 
         let json = std::fs::read_to_string(&json_fixture).unwrap();
         let trace = itf::trace_from_str::<State>(&json).unwrap();
@@ -49,7 +52,7 @@ fn test_itf() {
         let mut rng = StdRng::seed_from_u64(RANDOM_SEED);
 
         // build mapping from model addresses to real addresses
-        let vote_keeper_runner = VoteKeeperRunner {
+        let consensus_runner = ConsensusRunner {
             address_map: ADDRESSES
                 .iter()
                 .map(|&name| {
@@ -59,6 +62,6 @@ fn test_itf() {
                 .collect(),
         };
 
-        trace.run_on(vote_keeper_runner).unwrap();
+        trace.run_on(consensus_runner).unwrap();
     }
 }

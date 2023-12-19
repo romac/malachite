@@ -21,7 +21,8 @@ module consensus {
     }  
 
     pure def initConsensusState(p: Address, h: Height) : ConsensusState = {
-        p: p, 
+        // The node address is only needed or setting the source of the Proposal and Vote messages.
+        p: p,
         // round must be -1, as nothing should be done before a NewRound
         // function is called
         round: -1, 
@@ -40,8 +41,6 @@ module consensus {
     type ConsensusInput = 
         // For the initial state
         | NoConsensusInput
-        // Setup the state-machine for a single-height execution
-        | NewHeightCInput(Height)
         // Start a new round, not as proposer.
         | NewRoundCInput(Round)
         // Start a new round as proposer with the proposed Value.
@@ -66,7 +65,7 @@ module consensus {
         // Proposal and 2/3+ commits for the proposal => decision
         | ProposalAndCommitAndValidCInput(Value)
         // Receive +1/3 messages from different validators for a higher round.
-        | RoundSkipCInput(Round)
+        | RoundSkipCInput(Round) // TODO: rename to SkipRoundCInput
         // Timeout waiting for proposal.
         | TimeoutProposeCInput((Height, Round))
         // Timeout waiting for prevotes for a value.
@@ -78,7 +77,7 @@ module consensus {
         | NoConsensusOutput
         | ProposalOutput(Proposal)
         | VoteOutput(Vote)
-        | TimeoutOutput(Timeout)
+        | TimeoutOutput((Round, Timeout))
         | DecidedOutput(Value)
         | SkipRoundOutput(Round)
         | ErrorOutput(str)
@@ -92,7 +91,7 @@ module consensus {
     pure def toPrecommitOutput(state, src, height, round, valueId) = 
         { cs: state, out: VoteOutput(mkVote(Precommit, src, height, round, valueId)) }
     pure def toTimeoutOutput(state, timeout) = 
-        { cs: state, out: TimeoutOutput(timeout) }
+        { cs: state, out: TimeoutOutput((state.round, timeout)) }
     pure def toDecidedOutput(state, value) = 
         { cs: state, out: DecidedOutput(value) }
     pure def toSkipRoundOutput(state, round) = 
@@ -122,27 +121,29 @@ module consensus {
         | NoConsensusInput => 
             state.toErrorOutput("NoConsensusInput is not a valid consensus input")
         
-        | NewHeightCInput(h) => 
-            if (h > state.height)
-                initConsensusState(state.p, h).toNoConsensusOutput()
-            else state.toNoConsensusOutput()
-        
         // line 11.14
         | NewRoundProposerCInput(round_value) =>
             val r = round_value._1
             val v = round_value._2
-            if (r > state.round)
+            if (not(state.step.in(Set(UnstartedStep, NoStep))))
+                state.toErrorOutput("state is not Unstarted or initial step")
+            else if (r <= state.round)
+                state.toErrorOutput("new round is not bigger than current round")
+            else
                 val proposedValue = if (state.validValue != Nil) state.validValue.getVal() else v // lines 15-18
                 state
                     .with("step", ProposeStep)
                     .with("round", r)
                     .toProposalOutput(state.p, state.height, r, proposedValue, state.validRound) // line 19
-            else state.toErrorOutput("new round is not bigger than current round")
 
         // line 11.20
         // TODO: discuss comment "ev.round must match state.round"
         | NewRoundCInput(r) =>
-            if (r > state.round)
+            if (not(state.step.in(Set(UnstartedStep, NoStep))))
+                state.toErrorOutput("state is not Unstarted or initial step")
+            else if (r <= state.round)
+                state.toErrorOutput("new round is not bigger than current round")
+            else
                 // We just report that a timeout should be started. The executor must take care
                 // of figuring out whether it needs to record the round number and height per
                 // timeout
@@ -150,7 +151,6 @@ module consensus {
                     .with("step", ProposeStep)
                     .with("round", r)
                     .toTimeoutOutput(ProposeTimeout)                                  // line 21
-            else state.toErrorOutput("new round is not bigger than current round")
 
         // line 22
         // Here it is assumed that 
@@ -241,11 +241,11 @@ module consensus {
 
         // line 49
         | ProposalAndCommitAndValidCInput(v) => 
-            if (state.step != DecidedStep)
+            if (state.step != CommitStep)
                 state
-                    .with("step", DecidedStep)
+                    .with("step", CommitStep)
                     .toDecidedOutput(v)
-            else state.toErrorOutput("ProposalAndCommitAndValidCInput when in DecidedStep")
+            else state.toErrorOutput("ProposalAndCommitAndValidCInput when in CommitStep")
 
         | ProposalAndPolkaAndInvalidCInput =>
             // TODO
@@ -254,7 +254,9 @@ module consensus {
         // line 55
         | RoundSkipCInput(r) => 
             if (r > state.round)
-                state.toSkipRoundOutput(r)
+                state
+                    .with("step", UnstartedStep)
+                    .toSkipRoundOutput(r)
             else state.toErrorOutput("RoundSkipCInput for round not bigger than current round")
 
         // line 57
@@ -285,7 +287,10 @@ module consensus {
             if (h == state.height and r == state.round)
                 // TODO: here we should call newRound. For this we would need to know whether
                 // we are proposer for next round.
-                state.toSkipRoundOutput(state.round + 1)
+                state
+                    // CHECK: setting the step to UnstartedStep was added to match the code behavior
+                    .with("step", UnstartedStep)
+                    .toSkipRoundOutput(state.round + 1)
             else state.toErrorOutput("TimeoutPrecommitCInput")
 
         }
