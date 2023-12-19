@@ -105,8 +105,8 @@ where
     }
 
     /// Process the given input, returning the outputs to be broadcast to the network.
-    pub async fn process(&mut self, msg: Input<Ctx>) -> Result<Vec<Output<Ctx>>, Error<Ctx>> {
-        let round_output = match self.apply(msg).await? {
+    pub fn process(&mut self, msg: Input<Ctx>) -> Result<Vec<Output<Ctx>>, Error<Ctx>> {
+        let round_output = match self.apply(msg)? {
             Some(msg) => msg,
             None => return Ok(Vec::new()),
         };
@@ -151,17 +151,17 @@ where
     }
 
     /// Apply the given input to the state machine, returning the output, if any.
-    async fn apply(&mut self, input: Input<Ctx>) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+    fn apply(&mut self, input: Input<Ctx>) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
         match input {
-            Input::NewRound(height, round) => self.apply_new_round(height, round).await,
-            Input::ProposeValue(round, value) => self.apply_propose_value(round, value).await,
-            Input::Proposal(proposal, validity) => self.apply_proposal(proposal, validity).await,
+            Input::NewRound(height, round) => self.apply_new_round(height, round),
+            Input::ProposeValue(round, value) => self.apply_propose_value(round, value),
+            Input::Proposal(proposal, validity) => self.apply_proposal(proposal, validity),
             Input::Vote(vote) => self.apply_vote(vote),
             Input::TimeoutElapsed(timeout) => self.apply_timeout(timeout),
         }
     }
 
-    async fn apply_new_round(
+    fn apply_new_round(
         &mut self,
         height: Ctx::Height,
         round: Round,
@@ -176,7 +176,7 @@ where
         self.apply_input(round, RoundInput::NewRound(round))
     }
 
-    async fn apply_propose_value(
+    fn apply_propose_value(
         &mut self,
         round: Round,
         value: Ctx::Value,
@@ -184,7 +184,7 @@ where
         self.apply_input(round, RoundInput::ProposeValue(value))
     }
 
-    async fn apply_proposal(
+    fn apply_proposal(
         &mut self,
         proposal: Ctx::Proposal,
         validity: Validity,

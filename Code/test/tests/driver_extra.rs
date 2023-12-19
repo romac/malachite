@@ -1,5 +1,3 @@
-use futures::executor::block_on;
-
 use malachite_common::Round;
 use malachite_driver::{Driver, Input, Output, Validity};
 use malachite_round::state::State;
@@ -855,7 +853,7 @@ fn run_steps(driver: &mut Driver<TestContext>, steps: Vec<TestStep>) {
     for step in steps {
         println!("Step: {}", step.desc);
 
-        let mut outputs = block_on(driver.process(step.input)).expect("execute succeeded");
+        let mut outputs = driver.process(step.input).expect("execute succeeded");
         let output = outputs.pop();
 
         assert_eq!(output, step.expected_output, "expected output");

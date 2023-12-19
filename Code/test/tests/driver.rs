@@ -1,4 +1,3 @@
-use futures::executor::block_on;
 use malachite_test::utils::{make_validators, FixedProposer, RotateProposer};
 
 use malachite_common::{NilOrVal, Round, Timeout, TimeoutStep};
@@ -874,7 +873,8 @@ fn driver_steps_no_value_to_propose() {
 
     let mut driver = Driver::new(ctx, height, sel, vs, my_addr, Default::default());
 
-    let mut outputs = block_on(driver.process(Input::NewRound(Height::new(1), Round::new(0))))
+    let mut outputs = driver
+        .process(Input::NewRound(Height::new(1), Round::new(0)))
         .expect("execute succeeded");
 
     let output = outputs.pop();
@@ -903,7 +903,7 @@ fn driver_steps_proposer_not_found() {
 
     let mut driver = Driver::new(ctx, height, sel, vs, my_addr, Default::default());
 
-    let output = block_on(driver.process(Input::NewRound(Height::new(1), Round::new(0))));
+    let output = driver.process(Input::NewRound(Height::new(1), Round::new(0)));
     assert_eq!(output, Err(Error::ProposerNotFound(v1.address)));
 }
 
@@ -926,16 +926,17 @@ fn driver_steps_validator_not_found() {
     let mut driver = Driver::new(ctx, height, sel, vs, my_addr, Default::default());
 
     // Start new height
-    block_on(driver.process(Input::NewRound(Height::new(1), Round::new(0))))
+    driver
+        .process(Input::NewRound(Height::new(1), Round::new(0)))
         .expect("execute succeeded");
 
     // v2 prevotes for some proposal, we cannot find it in the validator set => error
-    let output = block_on(driver.process(Input::Vote(Vote::new_prevote(
+    let output = driver.process(Input::Vote(Vote::new_prevote(
         Height::new(1),
         Round::new(0),
         NilOrVal::Val(value.id()),
         v2.address,
-    ))));
+    )));
 
     assert_eq!(output, Err(Error::ValidatorNotFound(v2.address)));
 }
@@ -1166,7 +1167,7 @@ fn run_steps(driver: &mut Driver<TestContext>, steps: Vec<TestStep>) {
             .input
             .unwrap_or_else(|| input_from_prev_output.unwrap());
 
-        let mut outputs = block_on(driver.process(input)).expect("execute succeeded");
+        let mut outputs = driver.process(input).expect("execute succeeded");
         let output = outputs.pop();
 
         assert_eq!(output, step.expected_output, "expected output");
