@@ -41,9 +41,6 @@ where
     /// The total voting power of the validator set.
     fn total_voting_power(&self) -> VotingPower;
 
-    /// Get the validator with the given public key.
-    fn get_by_public_key(&self, public_key: &PublicKey<Ctx>) -> Option<&Ctx::Validator>;
-
     /// Get the validator with the given address.
     fn get_by_address(&self, address: &Ctx::Address) -> Option<&Ctx::Validator>;
 }
