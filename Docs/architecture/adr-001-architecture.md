@@ -247,14 +247,14 @@ The driver is passed a instance of the `Context` trait which defines all the dat
 
 The Multiplexer is responsible for multiplexing the input data and returning the appropriate event to the Round State Machine.
 
-The table below describes the input to the Multiplexer and the output events to the Round State Machine.
 The input data is:
 - The step change from the Round State Machine.
-- The output events from the Vote Keeper.
+- The threshold emitted by the Vote Keeper.
 - Proposals and votes from the Driver.
 
+The table below describes the input to the Multiplexer and the output events to the Round State Machine.
 
-| Step Changed To | Vote Keeper Rhreshold | Proposal        | Multiplexed Input to Round SM   | New Step        | Algo Condition | Output                             |
+| Step Changed To | Vote Keeper Threshold | Proposal        | Multiplexed Input to Round SM   | New Step        | Algo Condition | Output                             |
 |---------------- | --------------------- | --------------- |---------------------------------| ---------       | -------------- | ---------------------------------- |
 | new(??)         | -                     | -               | NewRound                        | propose         | L11            | …                                  |
 | any             | PrecommitValue(v)     | Proposal(v)     | PropAndPrecommitValue           | commit          | L49            | decide(v)                          |
