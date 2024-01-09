@@ -1,10 +1,10 @@
 // -*- mode: Bluespec; -*-
 
-module voteBookkeeper {
+module votekeeper {
 
     import types.* from "./types"
-    import basicSpells.* from "./basicSpells"
-    import extraSpells.* from "./extraSpells"
+    import basicSpells.* from "../spells/basic"
+    import extraSpells.* from "../spells/extra"
 
     // ****************************************************************************
     // Types

@@ -4,11 +4,11 @@
 // Vote Bookkeeper State Machine
 // **************************************************************************** 
 
-module voteBookkeeperSM  {
+module votekeeperSM  {
 
-    import types.* from "./types"
-    import voteBookkeeper.* from "./voteBookkeeper"
-    export voteBookkeeper.*
+    import types.* from "../../specs/types"
+    import votekeeper.* from "../../specs/votekeeper"
+    export votekeeper.*
 
     // ************************************************************************
     // Model parameters 
@@ -67,9 +67,9 @@ module voteBookkeeperSM  {
 // Vote Bookkeeper Models
 // **************************************************************************** 
 
-module voteBookkeeperModels {
+module votekeeperModels {
     
-    import voteBookkeeperSM(
+    import votekeeperSM(
         INITIAL_HEIGHT = 1,
         INITIAL_TOTAL_WEIGHT = 100,
         ADDRESS_WEIGHTS = Map("alice" -> 10, "bob" -> 30, "john" -> 60),
