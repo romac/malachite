@@ -20,19 +20,44 @@ run ListTakeAStep (active) = {
 }
 
 run ListDeliverProposal (active, propMsg) = {
-    active.length().reps(i => deliverProposal(active[i], propMsg))
+    all{
+        assert( Faulty.contains(propMsg.srcAddress) or 
+                SetFromList(active).forall(proc => propBuffer.get(proc).contains(propMsg))),
+        active.length().reps(i => deliverProposal(active[i], propMsg))
+    }
+}
+
+run ListDeliverVote (active, voteMsg) = {
+    active.length().reps(i => deliverVote(active[i], voteMsg))
 }
 
 run ListDeliverSomeProposal (active) = {
-    active.length().reps(i => deliverSomeProposal(active[i]))
+    all{
+        assert( Faulty != Set() or 
+                SetFromList(active).forall(proc => propBuffer.get(proc) != Set())),
+        active.length().reps(i => deliverSomeProposal(active[i]))
+    }
 }
 
-run ProcessDeliverAllVotes(voteType, recipient, fromList, valset, h, r, value) =
-    fromList.length().reps(i => deliverVote(recipient, mkVote(voteType, fromList[i], h, r, value)))
+run ProcessDeliverAllVotes (voteType, recipient, fromList, valset, h, r, value) = {
+    all {
+        assert( SetFromList(fromList).forall(proc => 
+                    Faulty.contains(proc) or
+                    voteBuffer.get(recipient).contains(mkVote(voteType, proc, h, r, value))
+        )),
+        fromList.length().reps(i => deliverVote(recipient, mkVote(voteType, fromList[i], h, r, value)))
+    }
+}
 
 run ListDeliverAllVotes(voteType, fromList, toList, valset, h, r, value) =
-    toList.length().reps(i => ProcessDeliverAllVotes(voteType, toList[i], fromList, valset, h, r, value))
-
+    all {
+        assert( SetFromList(fromList).forall(proc => 
+                    Faulty.contains(proc) or
+                    SetFromList(toList).forall(recp => voteBuffer.get(recp).contains(mkVote(voteType, proc, h, r, value)))
+        )),
+        toList.length().reps(i => ProcessDeliverAllVotes(voteType, toList[i], fromList, valset, h, r, value))
+    }
+    
 run onlyProposerReceivesProposal(active, valList, valset, h, r, value) = {
     val p = proposer(valset, h, r)
     setNextValueToPropose(p, value)
@@ -53,7 +78,10 @@ run onlyProposerReceivesProposal(active, valList, valset, h, r, value) = {
 run everyoneReceivesProposalVR (active, valList, valset, h, r, value, vr) = {
     val p = proposer(valset, h, r)
     val propMsg = mkProposal(p, h, r, value, vr)
-    setNextValueToPropose(p, value)
+    all{
+        setNextValueToPropose(p, value),
+        assert(ListContains(active, p)) // proposer must be in active list for this run
+    }
     .then(ListTakeAStep(active))
     .then(all{ // after new round an empty step to clean step "propose"
         assert(SetFromList(active).forall(proc => system.get(proc).es.pendingStepChange == ProposeStep)),
@@ -73,7 +101,10 @@ run everyoneReceivesProposalVR (active, valList, valset, h, r, value, vr) = {
 run everyoneReceivesProposal (active, valList, valset, h, r, value) = {
     val p = proposer(valset, h, r)
     val propMsg = mkProposal(p, h, r, value, -1)
-    setNextValueToPropose(p, value)
+    all{
+        setNextValueToPropose(p, value),
+        assert(ListContains(active, p)) // proposer must be in active list for this run
+    }
     .then(ListTakeAStep(active))
     .then(all{ // after new round an empty step to clean step "propose"
         assert(SetFromList(active).forall(proc => system.get(proc).es.pendingStepChange == ProposeStep)),
@@ -90,14 +121,15 @@ run everyoneReceivesProposal (active, valList, valset, h, r, value) = {
     })        
 }
 
-run fromPrevoteToPrecommit(prevoteSenders, prevoteReceivers, valList, valset, h, r, value) =
+run fromPrevoteToPrecommit(prevoteSenders, prevoteReceivers, valList, valset, h, r, value) = {
     ListDeliverAllVotes(Prevote, prevoteSenders, prevoteReceivers, valset, h, r, value)
-        .then(prevoteSenders.length().reps(_ => ListTakeAStep(prevoteReceivers)))
-        // extra step due to timeoutprevote double step
-        .then(ListTakeAStep(prevoteReceivers))
+    .then(prevoteSenders.length().reps(_ => ListTakeAStep(prevoteReceivers)))
+    // extra step due to timeoutprevote double step
+    .then(ListTakeAStep(prevoteReceivers))
     .then(all{ 
         assert(SetFromList(prevoteReceivers).forall(proc => system.get(proc).es.pendingStepChange == PrecommitStep)),
         ListTakeAStep(prevoteReceivers)
     })
+}
 
 }

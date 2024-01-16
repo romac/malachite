@@ -89,7 +89,7 @@ pure def startTimeout(sys: Address -> NodeState, v: Address, timeout: Timeout) :
 
 action valStep(v: Address) : bool = {
     // pick action
-    val next_action = system.get(v).nextAction() // TODO: nextAction could go within driver boundary
+    val next_action = system.get(v).nextAction() // nextAction could go within driver boundary
     val node_state = next_action._1
     val driver_input = next_action._2
     // remove action from v

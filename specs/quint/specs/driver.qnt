@@ -1,9 +1,5 @@
 // -*- mode: Bluespec; -*-
 
-/*
-  TODO: round switch upon f+1 messages from the future is not done yet.
-  We need to catch the event from the bookkeeper
-*/ 
 
 module driver {
     import extraSpells.* from "../spells/extra"
@@ -98,9 +94,10 @@ module driver {
     // check whether the event has been already sent to consensus. If not, do so.
     pure def callConsensus(es: DriverState, bk: Bookkeeper, csInput: ConsensusInput): (DriverState, ConsensusOutput) =
         // Check whether we already executed the event already
-        // TODO: Perhaps this check should be more fine-grained. Perhaps some inputs should only be acted on once per
+        // Note: Perhaps this check should be more fine-grained. Perhaps some inputs should only be acted on once per
         //          round, independent of the step.
-        // TODO: get rid of bk parameter
+        // Potential improvement: get rid of bk parameter. Not done yet, as we might refactor to have a single call
+        //                        to consensus from the driver
         if (es.executedInputs.ListContains((csInput, es.cs.height, es.cs.round, es.cs.step)))
             ({ ...es, bk: bk, cs: es.cs }, NoConsensusOutput)
         else
@@ -111,7 +108,7 @@ module driver {
             ({ ...es, bk: bk, cs: res.cs, executedInputs: csInputs }, res.out)
 
     // We do this if the driver receives a Precommit
-    // TODO: vote can be removed because the vote data is already in vkOutput.
+    // Potential improvement: vote could be removed because the vote data is already in vkOutput.
     pure def handlePrecommit(es: DriverState, vote: Vote, vkOutput: VoteKeeperOutput): (DriverState, ConsensusOutput) =
         match vkOutput {
             | PrecommitValueVKOutput(round_value) =>
@@ -123,7 +120,7 @@ module driver {
                     callConsensus(es, es.bk, PrecommitAnyCInput)
                 else if (r > es.cs.round)
                     // if it is for a future round I can trigger skipround
-                    // TODO: should we really do this. It is dead code as the f+1 event already happened
+                    // Potential improvement: This is dead code as the f+1 event already happened
                     callConsensus(es, es.bk, RoundSkipCInput(vote.round))
                 // ignore messages from past rounds
                 else (es, NoConsensusOutput)
@@ -141,14 +138,11 @@ module driver {
 
     // We do this if the driver receives a Prevote
     pure def handlePrevote(es: DriverState, vkOutput: VoteKeeperOutput): (DriverState, ConsensusOutput) =
-        // TODO: events do not have heights now.
-        // TODO: Polka implications missing.
         match vkOutput {
             | PolkaValueVKOutput(round_value) =>
                 val r = round_value._1
                 val v: NonNilValue = round_value._2
                 if (r < es.cs.round and es.existsProposalValid(es.cs.round, v, r))
-                    // TODO: the value should come from the proposal   
                     callConsensus(es, es.bk, ProposalAndPolkaPreviousAndValidCInput((Val(v), r)))
                 else if (r == es.cs.round)
                     if (es.existsProposal(es.cs.round, v))
@@ -158,16 +152,12 @@ module driver {
                     else
                         // there is no matching proposal
                         callConsensus(es, es.bk, PolkaAnyCInput)
-
-                // It is for a future round
-                // TODO: we might check whether it is for a future round and jump
                 else (es, NoConsensusOutput)
 
             | PolkaAnyVKOutput(r) =>
                 if (r == es.cs.round)
                     // call consensus and remember that we did it
                     callConsensus(es, es.bk, PolkaAnyCInput)  
-                // TODO: we might check whether it is for a future round and jump
                 else (es, NoConsensusOutput)
                     
             | PolkaNilVKOutput(r) => 
@@ -184,17 +174,13 @@ module driver {
         }
 
     // We do this if a timeout expires at the driver
+    // We assume that the timeout event is always for the current round.
     pure def handleTimeout(es: DriverState, t: Timeout): (DriverState, ConsensusOutput) =
-        // TODO: We assume that the timeout event is always for the current round. If this is not
-        // the case, we need to encode it in the input to which round the timeout belongs
         match t {
             | ProposeTimeout => callConsensus(es, es.bk, TimeoutProposeCInput((es.cs.height, es.cs.round)))
             | PrevoteTimeout => callConsensus(es, es.bk, TimeoutPrevoteCInput((es.cs.height, es.cs.round)))
             | PrecommitTimeout => callConsensus(es, es.bk, TimeoutPrecommitCInput((es.cs.height, es.cs.round)))
         }
-
-    // TODO: change result type of proposal (an other similar functions to this so that consensus can be called at one point in the driver
-    // type MuxResult = {es: DriverState, ci: ConsensusInput}
 
     // We do this if the driver receives a proposal
     pure def handleProposal(es: DriverState, prop: Proposal): (DriverState, ConsensusOutput) =
@@ -209,7 +195,6 @@ module driver {
             if (receivedCommit)
                 // we have a commit that matches the proposal. We don't need to compare against
                 // es.cs.round
-                // TODO: check heights in bookkeeper
                 callConsensus(newES, newES.bk, ProposalAndCommitAndValidCInput(Val(prop.proposal)))
             else if (es.cs.round != prop.round or es.cs.height != prop.height) 
                 // the proposal is from the right proposer and valid, but not for this round
@@ -245,8 +230,8 @@ module driver {
         else // not(isValid(proposal))
             // keep ES (don't use newES here), that is, drop proposal
             if (es.cs.step == ProposeStep and es.cs.round == prop.round and es.cs.height == prop.height)
-                if (checkThreshold(es.bk, es.cs.round, Prevote, th))
-                    callConsensus(es, es.bk, ProposalAndPolkaAndInvalidCInput((es.cs.height, es.cs.round, id(Val(prop.proposal)))))
+                if (checkThreshold(es.bk, prop.validRound, Prevote, th))
+                    callConsensus(es, es.bk, ProposalAndPolkaAndInvalidCInput(id(Val(prop.proposal))))
                 else 
                     callConsensus(es, es.bk, ProposalInvalidCInput)
             else (es, NoConsensusOutput)
@@ -260,7 +245,7 @@ module driver {
 
     // We do this if a step change of the consensus state machine was recorded
     pure def handleStepChange(es: DriverState) : (DriverState, ConsensusOutput) =
-        // TODO: First add to pending precommitany if it exists
+        // First add to pending precommitany if it exists
         val newES = 
             if (checkThreshold(es.bk, es.cs.round, Precommit, AnyThreshold)) 
                 val pend = (PrecommitAnyCInput, es.cs.height, es.cs.round) 
@@ -272,8 +257,10 @@ module driver {
         val propSet = newES.proposals.filter(x => x.srcAddress == proposer_ and x.height == newES.cs.height and x.round == newES.cs.round)
         if (propSet != Set())
             val proposal: Proposal = propSet.fold(emptyProposal, (sum, y) => y) 
-                        // TODO:    If the proposer is faulty there might be multiple
-                        //          figure out what to do
+            // If the proposer is faulty there might be multiple proposals
+            // here we just pick one of them
+            // TODO: check whether there is a liveness issue with that. Added a question about it:
+            //       https://github.com/informalsystems/malachite/issues/103#issuecomment-1888753234
             handleProposal(newES, proposal)
 
         // then go into step distinction but only consider rules without proposals
@@ -296,8 +283,6 @@ module driver {
             callConsensus(es, es.bk, NewRoundProposerCInput((r, prop.getVal())))
         else 
             callConsensus(es, es.bk, NewRoundCInput(r)) 
-        // what do we do now in the new round? Shouldn't we look whether we can build an event.
-        // TODO: compute pending events.
 
     // We do this when we have decided
     pure def handleDecided(es: DriverState, res: ConsensusOutput, value: Value): (DriverState, ConsensusOutput) =
@@ -328,9 +313,10 @@ module driver {
     // Main entry point
     // *************************************************************************
 
-    // TODO: return ConsensusInput so that we know from outside what event was fired.
+    // Potential improvement: return ConsensusInput so that we know from outside what event was fired.
     pure def driverLogic(state: DriverState, input: DriverInput): (DriverState, ConsensusOutput) =
-        // TODO: shall we check whether the sender actually is in the validator set
+        // TODO: We need to check whether the sender actually is in the validator set. Where should
+        //       we put the check?
         match input {
             | SetNextProposedValueDInput(v) =>
                 (state.setValue(Val(v)), NoConsensusOutput)
@@ -367,7 +353,7 @@ module driver {
                         val newState2 = cons_res._1
                         val conOut = cons_res._2
                         match cons_res._2 {
-                            // TODO: dead branch. But we should put this after consensus call logic into a function
+                            // dead branch. But we should put this after consensus call logic into a function
                             | DecidedOutput(v) => handleDecided(newState2, conOut, v)
                             | SkipRoundOutput(r) => handleSkip(newState2, r)
                             | _ => (newState2, conOut)
@@ -421,10 +407,11 @@ module driver {
         state.timeouts.exists(x => x._2 == state.es.cs.height and x._3 == state.es.cs.round)
 
     // Pick an outstanding timeout and remove it from the incoming list.
-    // Assumes that state.timeouts is not empty.
+    // Assumes that state.timeouts is not empty for current height and round, that is, that
+    // existsTimeout has been called.
     pure def pickTimeout(state: NodeState): (NodeState, DriverInput) =
         val timeouts = state.timeouts.filter(x => x._2 == state.es.cs.height and x._3 == state.es.cs.round)
-        // TODO: check that timeouts is not empty
+        // Potential improvement: We could check that timeouts is not empty
         // val someTimeout = timeouts.chooseSome()
         val someTimeout: (Timeout, Height, Round) = timeouts.fold((ProposeTimeout, 0, 0), (sum, y) => y)
         val newstate = { ...state, timeouts: state.timeouts.exclude(Set(someTimeout))}
@@ -445,9 +432,6 @@ module driver {
             val input_height_round = state.es.pendingInputs.fold((NoConsensusInput, -1, -1), (sum, y) => y)
             // this might be cheating as we look into the "es"
             (state, PendingDInput(input_height_round._1))
-            // I DID IT. TODO: In the "starkBFT Spec" Google doc, it is written that pending events
-            // should be executed before new messages, which would require to push this
-            // branch up.
 
         else if (state.incomingProposals != Set())
             // pick proposal, remove it from incoming

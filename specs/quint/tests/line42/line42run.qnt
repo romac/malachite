@@ -10,8 +10,12 @@ val others = validators.exclude(Set(testedVal))
 val othersList = others.fold(List(), (s, x) => s.append(x))
 
 run runToLine42 =
-    val value = "blue"
-    init
+    nondet value = oneOf(Values)
+    all{
+        init,
+        // in this test we need testedVal to be different from proposer
+        assert(testedVal != proposer(validatorSet, 0, 0)) 
+    }
     .then(valStep(testedVal))
     .then(everyoneReceivesProposal(othersList, validatorList, validatorSet, 0, 0, value))
     .then(fromPrevoteToPrecommit(othersList, othersList, validatorList, validatorSet, 0, 0, Val(value)))

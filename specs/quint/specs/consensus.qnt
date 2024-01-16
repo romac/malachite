@@ -17,7 +17,6 @@ module consensus {
         lockedValue: ValueId,
         validRound: Round,
         validValue: ValueId,
-        //continue
     }  
 
     pure def initConsensusState(p: Address, h: Height) : ConsensusState = {
@@ -59,13 +58,13 @@ module consensus {
         | ProposalAndPolkaAndValidCInput(Value)
         // found after Montebello
         // TODO: Discuss what to do about it
-        | ProposalAndPolkaAndInvalidCInput((Height, Round, Value))
+        | ProposalAndPolkaAndInvalidCInput(Value)
         // Receive +2/3 precommits from different validators, not for the same value or nil.
         | PrecommitAnyCInput
         // Proposal and 2/3+ commits for the proposal => decision
         | ProposalAndCommitAndValidCInput(Value)
         // Receive +1/3 messages from different validators for a higher round.
-        | RoundSkipCInput(Round) // TODO: rename to SkipRoundCInput
+        | RoundSkipCInput(Round) 
         // Timeout waiting for proposal.
         | TimeoutProposeCInput((Height, Round))
         // Timeout waiting for prevotes for a value.
@@ -113,7 +112,6 @@ module consensus {
     type ConsensusResult = {
         cs: ConsensusState,
         out: ConsensusOutput,
-    //    pending: Set[ConsensusOutput], // TODO: not sure we need this
     }
 
     pure def consensus(state: ConsensusState, input: ConsensusInput): ConsensusResult =
@@ -137,7 +135,6 @@ module consensus {
                     .toProposalOutput(state.p, state.height, r, proposedValue, state.validRound) // line 19
 
         // line 11.20
-        // TODO: discuss comment "ev.round must match state.round"
         | NewRoundCInput(r) =>
             if (not(state.step.in(Set(UnstartedStep, NoStep))))
                 state.toErrorOutput("state is not Unstarted or initial step")
@@ -179,7 +176,7 @@ module consensus {
                     .toPrevoteOutput(state.p, state.height, state.round, Nil)
             else state.toErrorOutput("ProposalCInput when not in ProposeStep")
 
-        // line 28
+        // line 28 (with valid(v) evaluates to true)
         | ProposalAndPolkaPreviousAndValidCInput(value_vr) =>
             val v: Value = value_vr._1
             val vr: Round = value_vr._2
@@ -191,10 +188,14 @@ module consensus {
                 else 
                     state
                         .with("step", PrevoteStep)                                    // line 33
-                        .toPrevoteOutput(state.p, state.height, state.round, Nil)     // line 32
+                        .toPrevoteOutput(state.p, state.height, state.round, Nil)     // line 32 (valid)
             else state.toErrorOutput("ProposalAndPolkaPreviousAndValidCInput")
-                // TODO: should we add the event to pending in this case. We would need to
-                // do this in the executor
+
+        // line 28 (with valid(v) evaluates to false)
+        | ProposalAndPolkaAndInvalidCInput =>
+            state
+                .with("step", PrevoteStep)                                    // line 33
+                .toPrevoteOutput(state.p, state.height, state.round, Nil)     // line 32 (invalid)
 
         // line 34
         | PolkaAnyCInput =>
@@ -217,9 +218,6 @@ module consensus {
                         .with("validRound", state.round)                              // line 43
                         .toPrecommitOutput(state.p, state.height, state.round, id(v)) // line 40
                 | PrecommitStep =>
-                    // TODO: check whether Daniel's comment
-                    // "if state > prevote, we should update the valid round!"
-                    // was properly addressed
                     state
                         .with("validValue", v)                                         // line 42
                         .with("validRound", state.round)                               // line 43
@@ -246,10 +244,6 @@ module consensus {
                     .with("step", CommitStep)
                     .toDecidedOutput(v)
             else state.toErrorOutput("ProposalAndCommitAndValidCInput when in CommitStep")
-
-        | ProposalAndPolkaAndInvalidCInput =>
-            // TODO
-            state.toNoConsensusOutput()
 
         // line 55
         | RoundSkipCInput(r) => 
@@ -285,8 +279,6 @@ module consensus {
             val h = height_round._1
             val r = height_round._2
             if (h == state.height and r == state.round)
-                // TODO: here we should call newRound. For this we would need to know whether
-                // we are proposer for next round.
                 state
                     // CHECK: setting the step to UnstartedStep was added to match the code behavior
                     .with("step", UnstartedStep)

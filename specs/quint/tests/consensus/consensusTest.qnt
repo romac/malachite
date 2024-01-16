@@ -19,7 +19,7 @@ module consensusTest {
         output' = NoConsensusOutput,
     }
 
-    action init = initFor("Josef", 1)
+    action init = initFor("v1", 1)
 
     // For testing.
     action fireInput(__input: ConsensusInput): bool =
@@ -50,7 +50,7 @@ module consensusTest {
             fireInput(TimeoutProposeCInput((h, r))),
             fireInput(TimeoutPrevoteCInput((h, r))),
             fireInput(TimeoutPrecommitCInput((h, r))),
-            fireInput(ProposalAndPolkaAndInvalidCInput((h, r, Val(v)))),
+            fireInput(ProposalAndPolkaAndInvalidCInput(Val(v))),
         }
 
     action unchangedAll = all {
@@ -69,7 +69,7 @@ module consensusTest {
 
     // This test should call each input type at least once
     run DecideNonProposerTest =
-        initFor("Josef", 1)
+        initFor("v1", 1)
         .then(fireInput(NewRoundCInput(0)))
         .expect(output == TimeoutOutput((0, ProposeTimeout)))
         
@@ -84,9 +84,9 @@ module consensusTest {
 
     // TODO: rename test?
     run DecideNonProposerAtHeight2Test =
-        initFor("Josef", 2)     
+        initFor("v1", 2)     
         .then(fireInput(NewRoundProposerCInput((0, "nextBlock"))))
-        .expect(output == ProposalOutput(mkProposal("Josef", 2, 0, "nextBlock", -1)))
+        .expect(output == ProposalOutput(mkProposal("v1", 2, 0, "nextBlock", -1)))
         
         .then(fireInput(ProposalCInput((0, Val("nextBlock"))))) // it is assumed that the proposer receives its own message
         .expect(output.isVoteMsgWith(Prevote, Val("nextBlock")) and state.step == PrevoteStep)
