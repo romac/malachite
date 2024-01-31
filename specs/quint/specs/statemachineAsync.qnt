@@ -87,9 +87,13 @@ pure def startTimeout(sys: Address -> NodeState, v: Address, timeout: Timeout) :
     val newTimeout = (timeout, sys.get(v).es.cs.height, sys.get(v).es.cs.round)
     sys.put(v, { ...sys.get(v), timeouts: sys.get(v).timeouts.union(Set(newTimeout)) })
 
+// record a get value request
+pure def addGetValueRequest(sys: Address -> NodeState, v: Address, h: Height, r: Round) : Address -> NodeState =
+    sys.put(v, { ...sys.get(v), getValueRequests: sys.get(v).getValueRequests.union(Set((h,r)))})
+
 action valStep(v: Address) : bool = {
     // pick action
-    val next_action = system.get(v).nextAction() // nextAction could go within driver boundary
+    val next_action = system.get(v).nextAction() 
     val node_state = next_action._1
     val driver_input = next_action._2
     // remove action from v
@@ -104,11 +108,19 @@ action valStep(v: Address) : bool = {
         // do networking
         match consensus_output {
             | ProposalOutput(proposal) => all {
-                // TODO: do we need to start a timeout on this result, that is, when we are proposer and
-                // send a proposal?
                 propBuffer' = sendProposal(propBuffer, proposal), 
                 voteBuffer' = voteBuffer,
-                system' = sys,
+                // if there has been the GetValue flow before, the timeout is already started
+                // but since it is added to a set it is no harm in calling startTimeout again
+                // in the model
+                system' = startTimeout(sys, v, ProposeTimeout),
+            }
+            | GetValueAndScheduleTimeoutOutput(height_round_timeout) => all{
+                propBuffer' = propBuffer, 
+                voteBuffer' = voteBuffer,
+                // record the value request and start the propose timeout
+                val sysVal = addGetValueRequest(sys, v, height_round_timeout._1, height_round_timeout._2)
+                system' = startTimeout(sysVal, v, height_round_timeout._3),
             }
             | VoteOutput(vote) => all {
                 propBuffer' = propBuffer,
@@ -141,13 +153,14 @@ action valStep(v: Address) : bool = {
 }
 
 action setNextValueToPropose(v: Address, value: NonNilValue) : bool = all {
-    val res = driver(system.get(v).es, SetNextProposedValueDInput(value))
-    val newNS = { ...system.get(v), es: res._1}
+    val newNS = setValue(system.get(v), value)
     system' = system.put(v, newNS),
     _hist' = _hist,
     propBuffer' = propBuffer,
     voteBuffer' = voteBuffer,
 }
+
+
 
 action deliverProposal(v: Address, p: Proposal) : bool = all {
     propBuffer.get(v).union(AllFaultyProposals).contains(p), // the proposal must be sent or from a faulty node

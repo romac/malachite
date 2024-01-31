@@ -82,8 +82,7 @@ action valStep(v: Address): bool =
     }
 
 action setNextValueToPropose(v: Address, value: NonNilValue): bool = all {
-    val res = driver(system.get(v).es, SetNextProposedValueDInput(value))
-    val newNS = { ...system.get(v), es: res._1}
+    val newNS = setValue(system.get(v), value)
     system' = system.put(v, newNS),
     _hist' = _hist
 }
@@ -95,6 +94,10 @@ action step =
         valStep(v),
         setNextValueToPropose(v, value),
     }
+
+// record a get value request
+pure def addGetValueRequest(sys: Address -> NodeState, v: Address, h: Height, r: Round) : Address -> NodeState =
+    sys.put(v, { ...sys.get(v), getValueRequests: sys.get(v).getValueRequests.union(Set((h,r)))})
 
 action valStepCommand(v: Address, command: Command): bool =
     // pick action
@@ -112,6 +115,10 @@ action valStepCommand(v: Address, command: Command): bool =
         match consensus_output {
             | ProposalOutput(proposal) =>
                 system' = deliverProposal(sys, proposal) // TODO: this is immediate
+            | GetValueAndScheduleTimeoutOutput(height_round) => 
+                // record the value request and start the propose timeout
+                val sysVal = addGetValueRequest(sys, v, height_round._1, height_round._2)
+                system' = startTimeout(sysVal, v, ProposeTimeout)    
             | VoteOutput(vote) =>
                 system' = deliverVote(sys, vote) // TODO: this is immediate
             | TimeoutOutput(timeout) =>
@@ -131,6 +138,7 @@ run DecidingRunTest =
     .then(setNextValueToPropose("v2", "a block"))
     .then(valStepCommand("v1", StartCmd))
     .then(valStepCommand("v2", StartCmd))
+    .then(valStepCommand("v2", ProposeValueCmd))
     .then(valStepCommand("v3", StartCmd))
     .then(valStepCommand("v4", StartCmd))
     .then(valStepCommand("v1", ProposalCmd))

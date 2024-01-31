@@ -22,7 +22,6 @@ module driver {
         started: bool,
         voteKeeperOutput: VoteKeeperOutput,
         chain : List[Value],
-        nextValueToPropose: Value,
     }
 
     pure def initDriver(v: Address, vs: Address -> Weight): DriverState = {
@@ -36,7 +35,6 @@ module driver {
         started: false,
         voteKeeperOutput: NoVKOutput,
         chain : List(),
-        nextValueToPropose: Nil, 
     }
 
     pure def existsProposal(state, round, value) = 
@@ -45,8 +43,8 @@ module driver {
     pure def existsProposalValid(state, round, value, validRound) = 
         state.proposals.exists(p => p.round == round and p.proposal == value and p.validRound == validRound)
 
-    pure def setValue(es: DriverState, value: Value): DriverState =
-        { ...es, nextValueToPropose: value }
+    pure def setValue(s: NodeState, value: NonNilValue): NodeState =
+        { ...s, nextValueToPropose: Val(value) }
 
     // *************************************************************************
     // Input
@@ -59,8 +57,8 @@ module driver {
         | TimeoutDInput(Timeout)
         | StartDInput
         | PendingDInput(ConsensusInput)
-        | SetNextProposedValueDInput(NonNilValue)
         | StepChangeDInput
+        | ProposeValueDInput(NonNilValue)
 
     val emptyProposal = mkProposal(noAddress, 0, 0, "", 0)
     val emptyVote = mkVote(Prevote, noAddress, 0, 0, Nil)
@@ -80,7 +78,7 @@ module driver {
         else "v4"
     }
 
-    pure def getValue(state: DriverState): Value = state.nextValueToPropose
+    pure def getValue(state: NodeState): Value = state.nextValueToPropose
 
     type ConsensusCall = {
         es: DriverState,
@@ -279,8 +277,7 @@ module driver {
     // We do this when we need to jump to a new round
     pure def handleSkip(es: DriverState, r: Round): (DriverState, ConsensusOutput) =
         if (proposer(es.valset, es.cs.height, es.cs.round + 1) == es.cs.p) // line 14
-            val prop = if (es.cs.validValue != Nil) es.cs.validValue else es.getValue() // line 15
-            callConsensus(es, es.bk, NewRoundProposerCInput((r, prop.getVal())))
+            callConsensus(es, es.bk, NewRoundProposerCInput(r))
         else 
             callConsensus(es, es.bk, NewRoundCInput(r)) 
 
@@ -318,8 +315,6 @@ module driver {
         // TODO: We need to check whether the sender actually is in the validator set. Where should
         //       we put the check?
         match input {
-            | SetNextProposedValueDInput(v) =>
-                (state.setValue(Val(v)), NoConsensusOutput)
             | StartDInput =>
                 handleSkip({ ...state, started: true }, 0)
             | ProposalDInput(proposal) =>
@@ -331,6 +326,8 @@ module driver {
                     | SkipRoundOutput(r) => handleSkip(newState, r)
                     | _ => (newState, conOut)
                 }
+            | ProposeValueDInput(v) =>
+                callConsensus(state, state.bk, ProposeValueCInput(v))
             | VoteDInput(vote) => 
                 match vote.voteType {
                     | Precommit =>
@@ -394,6 +391,8 @@ module driver {
         timeouts: Set[(Timeout, Height, Round)],
         incomingVotes: Set[Vote],
         incomingProposals: Set[Proposal],
+        getValueRequests: Set[(Height, Round)],
+        nextValueToPropose: Value, 
     }
 
     pure def initNode(v: Address, vs: Address -> Weight): NodeState = {
@@ -401,6 +400,8 @@ module driver {
         timeouts: Set(),
         incomingVotes: Set(),
         incomingProposals: Set(),
+        getValueRequests: Set(),
+        nextValueToPropose: Nil, 
     }
 
     pure def existsTimeout(state: NodeState): bool =
@@ -420,10 +421,19 @@ module driver {
     // This is a simple function that figures out in what external events (messages,
     // timeouts, etc.) the node should act.
     // currently this is linked in via the state machine. But we can move it into
-    // the functional layer/
+    // the functional layer
     pure def nextAction(state: NodeState): (NodeState, DriverInput) =
         if (not(state.es.started))
             (state, StartDInput)
+
+        // This is hard coded right now. I remove the request when served
+        // also this prevents the StepChangeDInput for the proposer of a new round
+        else if (state.getValueRequests.contains((state.es.cs.height, state.es.cs.round)))
+            val newstate = { ...state, getValueRequests: state.getValueRequests.exclude(Set((state.es.cs.height, state.es.cs.round)))}
+            if (state.nextValueToPropose != Nil)
+                (newstate, ProposeValueDInput(getVal(state.nextValueToPropose)))
+            else
+                (newstate, ProposeValueDInput("nothing to propose"))
 
         else if (state.es.pendingStepChange != NoStep)
             (state, StepChangeDInput)
@@ -456,6 +466,7 @@ module driver {
     type Command =
         | StartCmd
         | PendingCmd
+        | ProposeValueCmd
         | ProposalCmd
         | VoteCmd
         | TimeoutCmd
@@ -464,6 +475,13 @@ module driver {
     pure def nextActionCommand(state: NodeState, command: Command): (NodeState, DriverInput) =
         if (command == StartCmd and not(state.es.started))
             (state, StartDInput)
+
+        else if (command == ProposeValueCmd and state.getValueRequests.contains((state.es.cs.height, state.es.cs.round)))
+            val newstate = { ...state, getValueRequests: state.getValueRequests.exclude(Set((state.es.cs.height, state.es.cs.round)))}
+            if (state.nextValueToPropose != Nil)
+                (newstate, ProposeValueDInput(getVal(state.nextValueToPropose)))
+            else
+                (newstate, ProposeValueDInput("nothing to propose"))
 
         else if (command == PendingCmd and state.es.pendingInputs != Set())
             val input_height_round = state.es.pendingInputs.fold((NoConsensusInput, -1, -1), (sum, y) => y)
