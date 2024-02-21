@@ -120,10 +120,7 @@ where
         weight: Weight,
         current_round: Round,
     ) -> Option<Output<ValueId<Ctx>>> {
-        let per_round = self
-            .per_round
-            .entry(vote.round())
-            .or_insert_with(PerRound::new);
+        let per_round = self.per_round.entry(vote.round()).or_default();
 
         per_round.votes.add_vote(
             vote.vote_type(),
