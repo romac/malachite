@@ -13,8 +13,18 @@ use crate::{
 pub struct RotateProposer;
 
 impl ProposerSelector<TestContext> for RotateProposer {
-    fn select_proposer(&self, round: Round, validator_set: &ValidatorSet) -> Address {
-        let proposer_index = round.as_i64() as usize % validator_set.validators.len();
+    fn select_proposer(
+        &self,
+        height: Height,
+        round: Round,
+        validator_set: &ValidatorSet,
+    ) -> Address {
+        assert!(round != Round::Nil && round.as_i64() >= 0);
+
+        let height = height.as_u64() as usize;
+        let round = round.as_i64() as usize;
+
+        let proposer_index = (height - 1 + round) % validator_set.validators.len();
         validator_set.validators[proposer_index].address
     }
 }
@@ -31,7 +41,12 @@ impl FixedProposer {
 }
 
 impl ProposerSelector<TestContext> for FixedProposer {
-    fn select_proposer(&self, _round: Round, _validator_set: &ValidatorSet) -> Address {
+    fn select_proposer(
+        &self,
+        _height: Height,
+        _round: Round,
+        _validator_set: &ValidatorSet,
+    ) -> Address {
         self.proposer
     }
 }
@@ -60,8 +75,13 @@ pub fn new_round_output(round: Round) -> Output<TestContext> {
     Output::NewRound(Height::new(1), round)
 }
 
-pub fn proposal_output(round: Round, value: Value, locked_round: Round) -> Output<TestContext> {
-    let proposal = Proposal::new(Height::new(1), round, value, locked_round);
+pub fn proposal_output(
+    round: Round,
+    value: Value,
+    locked_round: Round,
+    address: Address,
+) -> Output<TestContext> {
+    let proposal = Proposal::new(Height::new(1), round, value, locked_round, address);
     Output::Propose(proposal)
 }
 
@@ -70,8 +90,9 @@ pub fn proposal_input(
     value: Value,
     locked_round: Round,
     validity: Validity,
+    address: Address,
 ) -> Input<TestContext> {
-    let proposal = Proposal::new(Height::new(1), round, value, locked_round);
+    let proposal = Proposal::new(Height::new(1), round, value, locked_round, address);
     Input::Proposal(proposal, validity)
 }
 
