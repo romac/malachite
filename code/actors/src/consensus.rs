@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use malachite_node::proposer::select_proposer;
 use ractor::rpc::call_and_forward;
 use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef};
 use tokio::sync::mpsc;
@@ -13,10 +14,10 @@ use malachite_common::{
     Context, Height, NilOrVal, Proposal, Round, SignedProposal, SignedVote, Timeout, TimeoutStep,
     Validator, ValidatorSet, ValueId, Vote, VoteType,
 };
+use malachite_driver::Driver;
 use malachite_driver::Input as DriverInput;
 use malachite_driver::Output as DriverOutput;
 use malachite_driver::Validity;
-use malachite_driver::{Driver, ProposerSelector};
 use malachite_gossip::{Channel, Event as GossipEvent};
 use malachite_network::Msg as NetworkMsg;
 use malachite_network::PeerId;
@@ -37,7 +38,6 @@ pub enum Next<Ctx: Context> {
 
 pub struct Params<Ctx: Context> {
     pub start_height: Ctx::Height,
-    pub proposer_selector: Arc<dyn ProposerSelector<Ctx>>,
     pub validator_set: Ctx::ValidatorSet,
     pub address: Ctx::Address,
     pub threshold_params: ThresholdParams,
@@ -294,7 +294,7 @@ where
         state: &mut State<Ctx>,
     ) -> Result<(), ractor::ActorProcessingErr> {
         match &input {
-            DriverInput::NewRound(_, _) => {
+            DriverInput::NewRound(_, _, _) => {
                 state.timers.cast(TimersMsg::Reset)?;
             }
 
@@ -391,9 +391,16 @@ where
     ) -> Result<Next<Ctx>, ActorProcessingErr> {
         match output {
             DriverOutput::NewRound(height, round) => {
-                info!("New round at height {height}: {round}");
+                info!("Starting round {round} at height {height}");
 
-                Ok(Next::Input(DriverInput::NewRound(height, round)))
+                let proposer = self.get_proposer(height, round)?;
+                info!("Proposer for height {height} and round {round}: {proposer}");
+
+                Ok(Next::Input(DriverInput::NewRound(
+                    height,
+                    round,
+                    proposer.clone(),
+                )))
             }
 
             DriverOutput::Propose(proposal) => {
@@ -492,6 +499,18 @@ where
 
         Ok(())
     }
+
+    fn get_proposer(
+        &self,
+        height: Ctx::Height,
+        round: Round,
+    ) -> Result<Ctx::Address, ActorProcessingErr> {
+        select_proposer::<Ctx>(height, round, &self.params.validator_set)
+            .cloned()
+            .ok_or_else(|| {
+                format!("Failed to select proposer for height {height} and round {round}").into()
+            })
+    }
 }
 
 #[async_trait]
@@ -520,7 +539,6 @@ where
         let driver = Driver::new(
             self.ctx.clone(),
             self.params.start_height,
-            self.params.proposer_selector.clone(),
             self.params.validator_set.clone(),
             self.params.address.clone(),
             self.params.threshold_params,
@@ -549,11 +567,14 @@ where
     ) -> Result<(), ractor::ActorProcessingErr> {
         match msg {
             Msg::StartHeight(height) => {
-                info!("Starting height {height}");
+                let round = Round::new(0);
+                info!("Starting height {height} at round {round}");
+
+                let proposer = self.get_proposer(height, round)?;
+                info!("Proposer for height {height} and round {round}: {proposer}");
 
                 myself.cast(Msg::SendDriverInput(DriverInput::NewRound(
-                    height,
-                    Round::new(0),
+                    height, round, proposer,
                 )))?;
 
                 // Drain the pending message queue to process any gossip events that were received
