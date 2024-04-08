@@ -1,3 +1,4 @@
+pub mod cal;
 pub mod consensus;
 pub mod gossip;
 pub mod node;

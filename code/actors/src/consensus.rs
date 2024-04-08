@@ -1,11 +1,9 @@
 use std::collections::VecDeque;
 use std::fmt::Display;
 use std::sync::Arc;
-use std::time::Instant;
 
 use async_trait::async_trait;
-use malachite_node::proposer::select_proposer;
-use ractor::rpc::call_and_forward;
+use ractor::rpc::{call_and_forward, CallResult};
 use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef};
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
@@ -25,8 +23,9 @@ use malachite_proto as proto;
 use malachite_proto::Protobuf;
 use malachite_vote::{Threshold, ThresholdParams};
 
+use crate::cal::Msg as CALMsg;
 use crate::gossip::Msg as GossipMsg;
-use crate::proposal_builder::{BuildProposal, ProposedValue};
+use crate::proposal_builder::{Msg as ProposalBuilderMsg, ProposedValue};
 use crate::timers::{Config as TimersConfig, Msg as TimersMsg, TimeoutElapsed, Timers};
 use crate::util::forward;
 
@@ -38,10 +37,12 @@ pub enum Next<Ctx: Context> {
 
 pub struct Params<Ctx: Context> {
     pub start_height: Ctx::Height,
-    pub validator_set: Ctx::ValidatorSet,
+    pub initial_validator_set: Ctx::ValidatorSet,
     pub address: Ctx::Address,
     pub threshold_params: ThresholdParams,
 }
+
+// type Ref<T> = ActorRef<<T as Actor>::Msg>;
 
 pub struct Consensus<Ctx>
 where
@@ -51,14 +52,14 @@ where
     params: Params<Ctx>,
     timers_config: TimersConfig,
     gossip: ActorRef<GossipMsg>,
-    proposal_builder: ActorRef<BuildProposal<Ctx>>,
+    cal: ActorRef<CALMsg<Ctx>>,
+    proposal_builder: ActorRef<ProposalBuilderMsg<Ctx>>,
     tx_decision: mpsc::Sender<(Ctx::Height, Round, Ctx::Value)>,
 }
 
 pub enum Msg<Ctx: Context> {
     StartHeight(Ctx::Height),
     MoveToHeight(Ctx::Height),
-    MoveToNextHeight,
     GossipEvent(Arc<GossipEvent>),
     TimeoutElapsed(Timeout),
     ProposeValue(Ctx::Height, Round, Option<Ctx::Value>),
@@ -83,6 +84,7 @@ where
     driver: Driver<Ctx>,
     timers: ActorRef<TimersMsg>,
     msg_queue: VecDeque<Msg<Ctx>>,
+    validator_set: Ctx::ValidatorSet,
 }
 
 impl<Ctx> Consensus<Ctx>
@@ -96,7 +98,8 @@ where
         params: Params<Ctx>,
         timers_config: TimersConfig,
         gossip: ActorRef<GossipMsg>,
-        proposal_builder: ActorRef<BuildProposal<Ctx>>,
+        cal: ActorRef<CALMsg<Ctx>>,
+        proposal_builder: ActorRef<ProposalBuilderMsg<Ctx>>,
         tx_decision: mpsc::Sender<(Ctx::Height, Round, Ctx::Value)>,
     ) -> Self {
         Self {
@@ -104,17 +107,20 @@ where
             params,
             timers_config,
             gossip,
+            cal,
             proposal_builder,
             tx_decision,
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn spawn(
         ctx: Ctx,
         params: Params<Ctx>,
         timers_config: TimersConfig,
         gossip: ActorRef<GossipMsg>,
-        proposal_builder: ActorRef<BuildProposal<Ctx>>,
+        cal: ActorRef<CALMsg<Ctx>>,
+        proposal_builder: ActorRef<ProposalBuilderMsg<Ctx>>,
         tx_decision: mpsc::Sender<(Ctx::Height, Round, Ctx::Value)>,
         supervisor: Option<ActorCell>,
     ) -> Result<ActorRef<Msg<Ctx>>, ractor::SpawnErr> {
@@ -123,6 +129,7 @@ where
             params,
             timers_config,
             gossip,
+            cal,
             proposal_builder,
             tx_decision,
         );
@@ -179,8 +186,7 @@ where
 
                 info!(%from, %validator_address, "Received vote: {:?}", signed_vote.vote);
 
-                let Some(validator) = self.params.validator_set.get_by_address(validator_address)
-                else {
+                let Some(validator) = state.validator_set.get_by_address(validator_address) else {
                     warn!(%from, %validator_address, "Received vote from unknown validator");
                     return Ok(());
                 };
@@ -220,8 +226,7 @@ where
 
                 info!(%from, %validator_address, "Received proposal: {:?}", signed_proposal.proposal);
 
-                let Some(validator) = self.params.validator_set.get_by_address(validator_address)
-                else {
+                let Some(validator) = state.validator_set.get_by_address(validator_address) else {
                     warn!(%from, %validator_address, "Received proposal from unknown validator");
                     return Ok(());
                 };
@@ -281,7 +286,7 @@ where
         myself.cast(Msg::SendDriverInput(DriverInput::TimeoutElapsed(timeout)))?;
 
         if timeout.step == TimeoutStep::Commit {
-            myself.cast(Msg::MoveToNextHeight)?;
+            myself.cast(Msg::MoveToHeight(height.increment()))?;
         }
 
         Ok(())
@@ -393,7 +398,8 @@ where
             DriverOutput::NewRound(height, round) => {
                 info!("Starting round {round} at height {height}");
 
-                let proposer = self.get_proposer(height, round)?;
+                let validator_set = &state.driver.validator_set;
+                let proposer = self.get_proposer(height, round, validator_set).await?;
                 info!("Proposer for height {height} and round {round}: {proposer}");
 
                 Ok(Next::Input(DriverInput::NewRound(
@@ -478,16 +484,16 @@ where
         round: Round,
         timeout: Timeout,
     ) -> Result<(), ActorProcessingErr> {
-        let deadline = Instant::now() + self.timers_config.timeout_duration(timeout.step);
+        let timeout_duration = self.timers_config.timeout_duration(timeout.step);
 
-        // Call `BuildProposal` on the proposal builder actor,
-        // and forward the reply to the current actor, wrapping it in `Msg::ProposeValue`.
+        // Call `GetValue` on the CAL actor, and forward the reply to the current actor,
+        // wrapping it in `Msg::ProposeValue`.
         call_and_forward(
             &self.proposal_builder.get_cell(),
-            |reply| BuildProposal {
+            |reply| ProposalBuilderMsg::GetValue {
                 height,
                 round,
-                deadline,
+                timeout_duration,
                 reply,
             },
             myself.get_cell(),
@@ -500,16 +506,43 @@ where
         Ok(())
     }
 
-    fn get_proposer(
+    async fn get_proposer(
         &self,
         height: Ctx::Height,
         round: Round,
+        validator_set: &Ctx::ValidatorSet,
     ) -> Result<Ctx::Address, ActorProcessingErr> {
-        select_proposer::<Ctx>(height, round, &self.params.validator_set)
-            .cloned()
-            .ok_or_else(|| {
-                format!("Failed to select proposer for height {height} and round {round}").into()
-            })
+        assert!(validator_set.count() > 0);
+        assert!(round != Round::Nil && round.as_i64() >= 0);
+
+        let height = height.as_u64() as usize;
+        let round = round.as_i64() as usize;
+
+        let proposer_index = (height - 1 + round) % validator_set.count();
+        let proposer = validator_set.get_by_index(proposer_index).unwrap();
+
+        Ok(proposer.address().clone())
+    }
+
+    async fn get_validator_set(
+        &self,
+        height: Ctx::Height,
+    ) -> Result<Ctx::ValidatorSet, ActorProcessingErr> {
+        let result = self
+            .cal
+            .call(|reply| CALMsg::GetValidatorSet { height, reply }, None)
+            .await?;
+
+        // TODO: Figure out better way to handle this:
+        // - use `ractor::cast!` macro?
+        // - extension trait?
+        match result {
+            CallResult::Success(validator_set) => Ok(validator_set),
+            error => Err(format!(
+                "Error at height {height} when waiting for proposer: {error:?}"
+            )),
+        }
+        .map_err(Into::into)
     }
 }
 
@@ -539,7 +572,7 @@ where
         let driver = Driver::new(
             self.ctx.clone(),
             self.params.start_height,
-            self.params.validator_set.clone(),
+            self.params.initial_validator_set.clone(),
             self.params.address.clone(),
             self.params.threshold_params,
         );
@@ -548,6 +581,7 @@ where
             driver,
             timers,
             msg_queue: VecDeque::new(),
+            validator_set: self.params.initial_validator_set.clone(),
         })
     }
 
@@ -570,7 +604,8 @@ where
                 let round = Round::new(0);
                 info!("Starting height {height} at round {round}");
 
-                let proposer = self.get_proposer(height, round)?;
+                let validator_set = &state.driver.validator_set;
+                let proposer = self.get_proposer(height, round, validator_set).await?;
                 info!("Proposer for height {height} and round {round}: {proposer}");
 
                 myself.cast(Msg::SendDriverInput(DriverInput::NewRound(
@@ -585,16 +620,11 @@ where
                 }
             }
 
-            Msg::MoveToNextHeight => {
-                let height = state.driver.height().increment();
-                info!("Moving to next height {height}");
-
-                myself.cast(Msg::MoveToHeight(height))?;
-            }
-
             Msg::MoveToHeight(height) => {
                 state.timers.cast(TimersMsg::Reset)?;
-                state.driver.move_to_height(height);
+
+                let validator_set = self.get_validator_set(height).await?;
+                state.driver.move_to_height(height, validator_set);
 
                 debug_assert_eq!(state.driver.height(), height);
                 debug_assert_eq!(state.driver.round(), Round::Nil);

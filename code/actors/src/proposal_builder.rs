@@ -1,19 +1,9 @@
-use std::marker::PhantomData;
-use std::sync::atomic::AtomicPtr;
-use std::time::Instant;
-
-use async_trait::async_trait;
-use ractor::{Actor, ActorCell, ActorRef, RpcReplyPort};
+use std::time::Duration;
 
 use malachite_common::{Context, Round};
-use malachite_node::value_builder::ValueBuilder;
+use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
 
-pub struct BuildProposal<Ctx: Context> {
-    pub height: Ctx::Height,
-    pub round: Round,
-    pub deadline: Instant,
-    pub reply: RpcReplyPort<ProposedValue<Ctx>>,
-}
+use crate::util::ValueBuilder;
 
 pub struct ProposedValue<Ctx: Context> {
     pub height: Ctx::Height,
@@ -21,71 +11,81 @@ pub struct ProposedValue<Ctx: Context> {
     pub value: Option<Ctx::Value>,
 }
 
-pub struct ProposalBuilder<Ctx> {
-    builder: Box<dyn ValueBuilder<Ctx>>,
-    marker: PhantomData<AtomicPtr<Ctx>>,
+pub enum Msg<Ctx: Context> {
+    GetValue {
+        height: Ctx::Height,
+        round: Round,
+        timeout_duration: Duration,
+        reply: RpcReplyPort<ProposedValue<Ctx>>,
+    },
 }
 
-impl<Ctx> ProposalBuilder<Ctx>
-where
-    Ctx: Context,
-{
-    pub async fn spawn(
-        builder: Box<dyn ValueBuilder<Ctx>>,
-        supervisor: Option<ActorCell>,
-    ) -> Result<ActorRef<BuildProposal<Ctx>>, ractor::SpawnErr> {
-        let this = Self {
-            builder,
-            marker: PhantomData,
-        };
+pub struct ProposalBuilder<Ctx: Context> {
+    #[allow(dead_code)]
+    ctx: Ctx,
+    value_builder: Box<dyn ValueBuilder<Ctx>>,
+}
 
-        let (actor_ref, _) = if let Some(supervisor) = supervisor {
-            Actor::spawn_linked(None, this, (), supervisor).await?
-        } else {
-            Actor::spawn(None, this, ()).await?
-        };
+impl<Ctx: Context> ProposalBuilder<Ctx> {
+    pub async fn spawn(
+        ctx: Ctx,
+        value_builder: Box<dyn ValueBuilder<Ctx>>,
+    ) -> Result<ActorRef<Msg<Ctx>>, ActorProcessingErr> {
+        let (actor_ref, _) = Actor::spawn(None, Self { ctx, value_builder }, ()).await?;
 
         Ok(actor_ref)
+    }
+
+    async fn get_value(
+        &self,
+        height: Ctx::Height,
+        round: Round,
+        timeout_duration: Duration,
+    ) -> Result<ProposedValue<Ctx>, ActorProcessingErr> {
+        let value = self
+            .value_builder
+            .build_value(height, timeout_duration)
+            .await;
+
+        Ok(ProposedValue {
+            height,
+            round,
+            value,
+        })
     }
 }
 
 #[async_trait]
-impl<Ctx> Actor for ProposalBuilder<Ctx>
-where
-    Ctx: Context,
-{
-    type Msg = BuildProposal<Ctx>;
+impl<Ctx: Context> Actor for ProposalBuilder<Ctx> {
+    type Msg = Msg<Ctx>;
     type State = ();
     type Arguments = ();
 
     async fn pre_start(
         &self,
-        _myself: ractor::ActorRef<Self::Msg>,
-        _args: (),
-    ) -> Result<(), ractor::ActorProcessingErr> {
+        _myself: ActorRef<Self::Msg>,
+        _: Self::Arguments,
+    ) -> Result<Self::State, ActorProcessingErr> {
         Ok(())
     }
 
     async fn handle(
         &self,
-        _myself: ractor::ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         msg: Self::Msg,
         _state: &mut Self::State,
-    ) -> Result<(), ractor::ActorProcessingErr> {
-        let BuildProposal {
-            height,
-            round,
-            deadline,
-            reply,
-        } = msg;
-
-        let value = self.builder.build_proposal(height, deadline).await;
-
-        reply.send(ProposedValue {
-            height,
-            round,
-            value,
-        })?;
+    ) -> Result<(), ActorProcessingErr> {
+        match msg {
+            Msg::GetValue {
+                height,
+                round,
+                timeout_duration,
+                reply,
+            } => {
+                let value = self.get_value(height, round, timeout_duration).await?;
+                reply.send(value)?;
+            }
+        }
 
         Ok(())
     }
