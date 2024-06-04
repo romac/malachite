@@ -1,4 +1,6 @@
+use malachite_common::Transaction;
 use malachite_proto::{self as proto};
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Copy)]
 pub struct ValueId(u64);
@@ -47,6 +49,12 @@ pub struct Value(u64);
 impl Value {
     pub const fn new(value: u64) -> Self {
         Self(value)
+    }
+
+    pub fn new_from_transactions(txes: Vec<Transaction>) -> Self {
+        let mut hash = DefaultHasher::new();
+        txes.hash(&mut hash);
+        Value::new(hash.finish())
     }
 
     pub const fn as_u64(&self) -> u64 {

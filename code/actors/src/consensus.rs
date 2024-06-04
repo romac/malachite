@@ -6,14 +6,15 @@ use async_trait::async_trait;
 use ractor::rpc::{call_and_forward, CallResult};
 use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef};
 use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use malachite_common::{
-    Context, Height, NilOrVal, Proposal, Round, SignedProposal, SignedVote, Timeout, TimeoutStep,
-    Validator, ValidatorSet, ValueId, Vote, VoteType,
+    Context, Height, NilOrVal, Proposal, Round, SignedBlockPart, SignedProposal, SignedVote,
+    Timeout, TimeoutStep, Validator, ValidatorSet, Value, ValueId, Vote, VoteType,
 };
 use malachite_driver::Driver;
 use malachite_driver::Input as DriverInput;
+use malachite_driver::Input::BlockReceived;
 use malachite_driver::Output as DriverOutput;
 use malachite_driver::Validity;
 use malachite_gossip::{Channel, Event as GossipEvent};
@@ -23,9 +24,8 @@ use malachite_proto as proto;
 use malachite_proto::Protobuf;
 use malachite_vote::{Threshold, ThresholdParams};
 
-use crate::cal::Msg as CALMsg;
 use crate::gossip::Msg as GossipMsg;
-use crate::proposal_builder::{Msg as ProposalBuilderMsg, ProposedValue};
+use crate::host::{LocallyProposedValue, Msg as HostMsg, ReceivedProposedValue};
 use crate::timers::{Config as TimersConfig, Msg as TimersMsg, TimeoutElapsed, Timers};
 use crate::util::forward;
 
@@ -52,8 +52,7 @@ where
     params: Params<Ctx>,
     timers_config: TimersConfig,
     gossip: ActorRef<GossipMsg>,
-    cal: ActorRef<CALMsg<Ctx>>,
-    proposal_builder: ActorRef<ProposalBuilderMsg<Ctx>>,
+    host: ActorRef<HostMsg<Ctx>>,
     tx_decision: mpsc::Sender<(Ctx::Height, Round, Ctx::Value)>,
 }
 
@@ -62,13 +61,17 @@ pub enum Msg<Ctx: Context> {
     MoveToHeight(Ctx::Height),
     GossipEvent(Arc<GossipEvent>),
     TimeoutElapsed(Timeout),
-    ProposeValue(Ctx::Height, Round, Option<Ctx::Value>),
     SendDriverInput(DriverInput<Ctx>),
     Decided(Ctx::Height, Round, Ctx::Value),
     ProcessDriverOutputs(
         Vec<DriverOutput<Ctx>>,
         Option<(VoteType, Round, NilOrVal<ValueId<Ctx>>)>,
     ),
+    // The proposal builder has built a value and can be used in a new proposal consensus message
+    ProposeValue(Ctx::Height, Round, Option<Ctx::Value>),
+    // The proposal builder has build a new block part, needs to be signed and gossiped by consensus
+    BuilderBlockPart(Ctx::BlockPart),
+    BlockReceived(ReceivedProposedValue<Ctx>),
 }
 
 impl<Ctx: Context> From<TimeoutElapsed> for Msg<Ctx> {
@@ -93,14 +96,14 @@ where
     Ctx: Context,
     Ctx::Vote: Protobuf<Proto = proto::Vote>,
     Ctx::Proposal: Protobuf<Proto = proto::Proposal>,
+    Ctx::BlockPart: Protobuf<Proto = proto::BlockPart>,
 {
     pub fn new(
         ctx: Ctx,
         params: Params<Ctx>,
         timers_config: TimersConfig,
         gossip: ActorRef<GossipMsg>,
-        cal: ActorRef<CALMsg<Ctx>>,
-        proposal_builder: ActorRef<ProposalBuilderMsg<Ctx>>,
+        host: ActorRef<HostMsg<Ctx>>,
         tx_decision: mpsc::Sender<(Ctx::Height, Round, Ctx::Value)>,
     ) -> Self {
         Self {
@@ -108,8 +111,7 @@ where
             params,
             timers_config,
             gossip,
-            cal,
-            proposal_builder,
+            host,
             tx_decision,
         }
     }
@@ -120,20 +122,11 @@ where
         params: Params<Ctx>,
         timers_config: TimersConfig,
         gossip: ActorRef<GossipMsg>,
-        cal: ActorRef<CALMsg<Ctx>>,
-        proposal_builder: ActorRef<ProposalBuilderMsg<Ctx>>,
+        host: ActorRef<HostMsg<Ctx>>,
         tx_decision: mpsc::Sender<(Ctx::Height, Round, Ctx::Value)>,
         supervisor: Option<ActorCell>,
     ) -> Result<ActorRef<Msg<Ctx>>, ractor::SpawnErr> {
-        let node = Self::new(
-            ctx,
-            params,
-            timers_config,
-            gossip,
-            cal,
-            proposal_builder,
-            tx_decision,
-        );
+        let node = Self::new(ctx, params, timers_config, gossip, host, tx_decision);
 
         let (actor_ref, _) = if let Some(supervisor) = supervisor {
             Actor::spawn_linked(None, node, (), supervisor).await?
@@ -150,11 +143,11 @@ where
         myself: ActorRef<Msg<Ctx>>,
         state: &mut State<Ctx>,
     ) -> Result<(), ractor::ActorProcessingErr> {
-        if let GossipEvent::Message(from, Channel::Consensus, data) = event {
+        if let GossipEvent::Message(from, _, data) = event {
             let from = PeerId::new(from.to_string());
             let msg = NetworkMsg::from_network_bytes(data).unwrap();
 
-            info!("Received message from peer {from}: {msg:?}");
+            //info!("Received message from peer {from}: {msg:?}");
 
             self.handle_network_msg(from, msg, myself, state).await?;
         }
@@ -190,22 +183,7 @@ where
                 }
 
                 let vote_height = signed_vote.vote.height();
-
-                if vote_height > state.driver.height() {
-                    warn!(
-                        %from, %validator_address,
-                        "Received vote for height {0} greater than current height {1}, moving to height {0}",
-                        vote_height, state.driver.height(),
-                    );
-
-                    // FIXME: We lose the vote here. We should instead buffer it
-                    //        and process it once we moved to the correct height.
-                    // NOTE: We cannot just send the vote via `SendDriverInput` because otherwise
-                    //       the vote will reach the driver before it has started the new height.
-                    myself.cast(Msg::MoveToHeight(vote_height))?;
-
-                    return Ok(());
-                }
+                assert!(vote_height == state.driver.height());
 
                 myself.cast(Msg::SendDriverInput(DriverInput::Vote(signed_vote.vote)))?;
             }
@@ -214,39 +192,80 @@ where
                 let signed_proposal = SignedProposal::<Ctx>::from_proto(proposal).unwrap();
                 let validator_address = signed_proposal.proposal.validator_address();
 
-                info!(%from, %validator_address, "Received proposal: {:?}", signed_proposal.proposal);
+                info!(%from, %validator_address, "Received proposal: (h: {}, r: {}, id: {:?})",
+                    signed_proposal.proposal.height(), signed_proposal.proposal.round(), signed_proposal.proposal.value().id());
 
                 let Some(validator) = state.validator_set.get_by_address(validator_address) else {
                     warn!(%from, %validator_address, "Received proposal from unknown validator");
                     return Ok(());
                 };
 
-                let valid = self
+                // TODO - verify that the proposal was signed by the proposer for the height and round, drop otherwise.
+                let proposal = &signed_proposal.proposal;
+                let proposal_height = proposal.height();
+                let proposal_round = proposal.round();
+
+                if !self
                     .ctx
-                    .verify_signed_proposal(&signed_proposal, validator.public_key());
-
-                let proposal_height = signed_proposal.proposal.height();
-
-                if proposal_height > state.driver.height() {
-                    warn!(
-                        %from, %validator_address,
-                        "Received proposal for height {0} greater than current height {1}, moving to height {0}",
-                        proposal_height, state.driver.height(),
+                    .verify_signed_proposal(&signed_proposal, validator.public_key())
+                {
+                    error!(
+                        "Received invalid signature for proposal ({}, {}, {:?}",
+                        proposal_height,
+                        proposal_round,
+                        proposal.value()
                     );
+                    return Ok(());
+                }
+                assert!(proposal_height == state.driver.height());
 
-                    // FIXME: We lose the proposal here. We should instead buffer it
-                    //        and process it once we moved to the correct height.
-                    // NOTE: We cannot just send the proposal via `SendDriverInput` because otherwise
-                    //       the proposal will reach the driver before it has started the new height.
-                    myself.cast(Msg::MoveToHeight(proposal_height))?;
+                let received_block = state
+                    .driver
+                    .received_blocks
+                    .iter()
+                    .find(|&x| x.0 == proposal_height && x.1 == proposal_round);
 
+                match received_block {
+                    Some(block) => {
+                        let valid = block.3; // TODO - struct
+                        myself.cast(Msg::SendDriverInput(DriverInput::Proposal(
+                            proposal.clone(),
+                            valid,
+                        )))?;
+                    }
+                    None => {
+                        // Store the proposal and wait for all block parts
+                        // TODO - or maybe integrate with receive-proposal() here? will this block until all parts are received?
+                        info!(
+                            "Received proposal {:?} before all block parts --STORING",
+                            proposal
+                        );
+                        state.driver.proposal = Some(proposal.clone());
+                    }
+                }
+            }
+            NetworkMsg::BlockPart(block_part) => {
+                let signed_block_part = SignedBlockPart::<Ctx>::from_proto(block_part).unwrap();
+                let validator_address = signed_block_part.validator_address();
+
+                let Some(validator) = state.validator_set.get_by_address(validator_address) else {
+                    warn!(%from, %validator_address, "Received block part from unknown validator");
+                    return Ok(());
+                };
+
+                if !self
+                    .ctx
+                    .verify_signed_block_part(&signed_block_part, validator.public_key())
+                {
+                    warn!(%from, %validator_address, "Received invalid block part: {signed_block_part:?}");
                     return Ok(());
                 }
 
-                myself.cast(Msg::SendDriverInput(DriverInput::Proposal(
-                    signed_proposal.proposal,
-                    Validity::from_valid(valid),
-                )))?;
+                // TODO - verify that the proposal was signed by the proposer for the height and round, drop otherwise.
+                self.host.cast(HostMsg::BlockPart {
+                    block_part: signed_block_part.block_part,
+                    reply_to: myself.clone(),
+                })?
             }
         }
 
@@ -306,6 +325,9 @@ where
 
             DriverInput::Vote(_) => (),
             DriverInput::TimeoutElapsed(_) => (),
+            DriverInput::BlockReceived(..) => {
+                debug!("Received full block {:?}", input);
+            }
         }
 
         let check_threshold = if let DriverInput::Vote(vote) = &input {
@@ -351,6 +373,10 @@ where
                 };
 
                 info!("Threshold met for {threshold:?} at round {round}, cancelling {timeout}");
+                // TODO - check on this. For L47 (PrecommitAny) the spec says:
+                // upon 2f + 1 (PRECOMMIT, hp, roundp, *) for the first time do
+                //   schedule OnTimeoutPrecommit(hp , roundp) to be executed after timeoutPrecommit(roundp)
+                // If we cancel the timeout we will not move to next round
                 state.timers.cast(TimersMsg::CancelTimeout(timeout))?;
             }
         }
@@ -401,8 +427,8 @@ where
 
             DriverOutput::Propose(proposal) => {
                 info!(
-                    "Proposing value {:?} at round {}",
-                    proposal.value(),
+                    "Proposing value with id: {:?}, at round {}",
+                    proposal.value().id(),
                     proposal.round()
                 );
 
@@ -423,7 +449,8 @@ where
 
             DriverOutput::Vote(vote) => {
                 info!(
-                    "Voting for value {:?} at round {}",
+                    "Voting {:?} for value {:?} at round {}",
+                    vote.vote_type(),
                     vote.value(),
                     vote.round()
                 );
@@ -441,7 +468,7 @@ where
             }
 
             DriverOutput::Decide(round, value) => {
-                info!("Decided on value {value:?} at round {round}");
+                info!("Decided on value {:?} at round {round}", value.id());
 
                 let _ = self
                     .tx_decision
@@ -479,15 +506,17 @@ where
         // Call `GetValue` on the CAL actor, and forward the reply to the current actor,
         // wrapping it in `Msg::ProposeValue`.
         call_and_forward(
-            &self.proposal_builder.get_cell(),
-            |reply| ProposalBuilderMsg::GetValue {
+            &self.host.get_cell(),
+            |reply| HostMsg::GetValue {
                 height,
                 round,
                 timeout_duration,
+                address: self.params.address.clone(),
+                consensus: myself.clone(),
                 reply,
             },
             myself.get_cell(),
-            |proposed: ProposedValue<Ctx>| {
+            |proposed: LocallyProposedValue<Ctx>| {
                 Msg::<Ctx>::ProposeValue(proposed.height, proposed.round, proposed.value)
             },
             None,
@@ -519,8 +548,11 @@ where
         height: Ctx::Height,
     ) -> Result<Ctx::ValidatorSet, ActorProcessingErr> {
         let result = self
-            .cal
-            .call(|reply| CALMsg::GetValidatorSet { height, reply }, None)
+            .host
+            .call(
+                |reply_to| HostMsg::GetValidatorSet { height, reply_to },
+                None,
+            )
             .await?;
 
         // TODO: Figure out better way to handle this:
@@ -543,6 +575,7 @@ where
     Ctx::Height: Display,
     Ctx::Vote: Protobuf<Proto = proto::Vote>,
     Ctx::Proposal: Protobuf<Proto = proto::Proposal>,
+    Ctx::BlockPart: Protobuf<Proto = proto::BlockPart>,
 {
     type Msg = Msg<Ctx>;
     type State = State<Ctx>;
@@ -606,6 +639,7 @@ where
                 // Drain the pending message queue to process any gossip events that were received
                 // before the driver started the new height and was still at round Nil.
                 let pending_msgs = std::mem::take(&mut state.msg_queue);
+                debug!("Replaying {} messages", pending_msgs.len());
                 for msg in pending_msgs {
                     myself.cast(msg)?;
                 }
@@ -655,7 +689,10 @@ where
             }
 
             Msg::Decided(height, round, value) => {
-                info!("Decided on value {value:?} at height {height} and round {round}");
+                info!(
+                    "Decided on value {:?} at height {height} and round {round}",
+                    value.id()
+                );
             }
 
             Msg::GossipEvent(event) => {
@@ -671,7 +708,7 @@ where
 
                         if state.connected_peers.len() == state.validator_set.count() - 1 {
                             info!(
-                                "Enough peers {} connected to start consensus",
+                                "Enough peers ({}) connected to start consensus",
                                 state.connected_peers.len()
                             );
 
@@ -682,16 +719,29 @@ where
                     GossipEvent::PeerDisconnected(peer_id) => {
                         info!("Disconnected from peer {peer_id}");
 
-                        state.connected_peers.retain(|p| p != &PeerId::new(peer_id));
+                        state.connected_peers.remove(&PeerId::new(peer_id));
 
                         // TODO: pause/stop consensus, if necessary
                     }
 
-                    _ => {
+                    GossipEvent::Message(_, _, data) => {
+                        let msg = NetworkMsg::from_network_bytes(data).unwrap(); // FIXME
+
+                        let Some(msg_height) = msg.msg_height() else {
+                            trace!("Received message without height, dropping");
+                            return Ok(());
+                        };
+
+                        // Queue messages if driver is not initialized, or if they are for higher height.
+                        // Process messages received for the current height.
+                        // Drop all others.
                         if state.driver.round() == Round::Nil {
                             debug!("Received gossip event at round -1, queuing for later");
                             state.msg_queue.push_back(Msg::GossipEvent(event));
-                        } else {
+                        } else if state.driver.height().as_u64() < msg_height {
+                            debug!("Received gossip event for higher height, queuing for later");
+                            state.msg_queue.push_back(Msg::GossipEvent(event));
+                        } else if state.driver.height().as_u64() == msg_height {
                             self.handle_gossip_event(event.as_ref(), myself, state)
                                 .await?;
                         }
@@ -710,6 +760,27 @@ where
             Msg::ProcessDriverOutputs(outputs, check_threshold) => {
                 self.process_driver_outputs(outputs, check_threshold, myself, state)
                     .await?;
+            }
+
+            Msg::BuilderBlockPart(block_part) => {
+                let signed_block_part = self.ctx.sign_block_part(block_part);
+                let proto = signed_block_part.to_proto().unwrap(); // FIXME
+                let msg = NetworkMsg::BlockPart(proto);
+                let bytes = msg.to_network_bytes().unwrap(); // FIXME
+                self.gossip
+                    .cast(GossipMsg::Broadcast(Channel::BlockParts, bytes))?;
+            }
+            Msg::BlockReceived(value) => {
+                info!("BLOCK RECEIVED {:?}", value);
+
+                if let Some(v) = value.value {
+                    self.send_driver_input(
+                        BlockReceived(value.height, value.round, v, value.valid),
+                        myself,
+                        state,
+                    )
+                    .await?;
+                }
             }
         }
 

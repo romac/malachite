@@ -1,13 +1,14 @@
 use core::fmt;
+use std::collections::HashMap;
 use std::error::Error;
 use std::ops::ControlFlow;
 use std::time::Duration;
 
 use futures::StreamExt;
 use libp2p::swarm::{self, SwarmEvent};
-use libp2p::{gossipsub, identify, mdns, SwarmBuilder};
+use libp2p::{gossipsub, identify, SwarmBuilder};
 use tokio::sync::mpsc;
-use tracing::{debug, error, error_span, Instrument};
+use tracing::{debug, error, error_span, trace, Instrument};
 
 pub use libp2p::identity::Keypair;
 pub use libp2p::{Multiaddr, PeerId};
@@ -20,11 +21,12 @@ use handle::Handle;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Channel {
     Consensus,
+    BlockParts,
 }
 
 impl Channel {
     pub fn all() -> &'static [Channel] {
-        &[Channel::Consensus]
+        &[Channel::Consensus, Channel::BlockParts]
     }
 
     pub fn to_topic(self) -> gossipsub::IdentTopic {
@@ -38,6 +40,7 @@ impl Channel {
     pub fn as_str(&self) -> &'static str {
         match self {
             Channel::Consensus => "/consensus",
+            Channel::BlockParts => "/blockparts",
         }
     }
 
@@ -50,6 +53,7 @@ impl Channel {
     pub fn from_topic_hash(topic: &gossipsub::TopicHash) -> Option<Self> {
         match topic.as_str() {
             "/consensus" => Some(Channel::Consensus),
+            "/blockparts" => Some(Channel::BlockParts),
             _ => None,
         }
     }
@@ -67,20 +71,14 @@ pub type BoxError = Box<dyn Error + Send + Sync + 'static>;
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    idle_connection_timeout: Duration,
+    pub listen_addr: Multiaddr,
+    pub persistent_peers: Vec<Multiaddr>,
+    pub idle_connection_timeout: Duration,
 }
 
 impl Config {
-    fn apply(self, cfg: swarm::Config) -> swarm::Config {
+    fn apply(&self, cfg: swarm::Config) -> swarm::Config {
         cfg.with_idle_connection_timeout(self.idle_connection_timeout)
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            idle_connection_timeout: Duration::from_secs(30),
-        }
     }
 }
 
@@ -98,7 +96,12 @@ pub enum CtrlMsg {
     Shutdown,
 }
 
-pub async fn spawn(keypair: Keypair, addr: Multiaddr, config: Config) -> Result<Handle, BoxError> {
+#[derive(Debug, Default)]
+pub struct State {
+    pub peers: HashMap<PeerId, identify::Info>,
+}
+
+pub async fn spawn(keypair: Keypair, config: Config) -> Result<Handle, BoxError> {
     let mut swarm = SwarmBuilder::with_existing_identity(keypair)
         .with_tokio()
         .with_quic()
@@ -113,27 +116,42 @@ pub async fn spawn(keypair: Keypair, addr: Multiaddr, config: Config) -> Result<
             .subscribe(&channel.to_topic())?;
     }
 
-    swarm.listen_on(addr)?;
-
     let (tx_event, rx_event) = mpsc::channel(32);
     let (tx_ctrl, rx_ctrl) = mpsc::channel(32);
 
     let peer_id = swarm.local_peer_id();
     let span = error_span!("gossip", peer = %peer_id);
-    let task_handle = tokio::task::spawn(run(swarm, rx_ctrl, tx_event).instrument(span));
+    let task_handle = tokio::task::spawn(run(config, swarm, rx_ctrl, tx_event).instrument(span));
 
     Ok(Handle::new(tx_ctrl, rx_event, task_handle))
 }
 
 async fn run(
+    config: Config,
     mut swarm: swarm::Swarm<Behaviour>,
     mut rx_ctrl: mpsc::Receiver<CtrlMsg>,
     tx_event: mpsc::Sender<Event>,
 ) {
+    if let Err(e) = swarm.listen_on(config.listen_addr.clone()) {
+        error!("Error listening on {}: {e}", config.listen_addr);
+        return;
+    };
+
+    for persistent_peer in config.persistent_peers {
+        debug!("Dialing persistent peer: {persistent_peer}");
+
+        match swarm.dial(persistent_peer.clone()) {
+            Ok(()) => (),
+            Err(e) => error!("Error dialing persistent peer {persistent_peer}: {e}"),
+        }
+    }
+
+    let mut state = State::default();
+
     loop {
         let result = tokio::select! {
             event = swarm.select_next_some() => {
-                handle_swarm_event(event, &mut swarm, &tx_event).await
+                handle_swarm_event(event, &mut swarm, &mut state, &tx_event).await
             }
 
             Some(ctrl) = rx_ctrl.recv() => {
@@ -160,7 +178,7 @@ async fn handle_ctrl_msg(msg: CtrlMsg, swarm: &mut swarm::Swarm<Behaviour>) -> C
 
             match result {
                 Ok(message_id) => {
-                    debug!("Broadcasted message {message_id} of {msg_size} bytes");
+                    trace!("Broadcasted message {message_id} of {msg_size} bytes");
                 }
                 Err(e) => {
                     error!("Error broadcasting message: {e}");
@@ -177,6 +195,7 @@ async fn handle_ctrl_msg(msg: CtrlMsg, swarm: &mut swarm::Swarm<Behaviour>) -> C
 async fn handle_swarm_event(
     event: SwarmEvent<NetworkEvent>,
     swarm: &mut swarm::Swarm<Behaviour>,
+    state: &mut State,
     tx_event: &mpsc::Sender<Event>,
 ) -> ControlFlow<()> {
     match event {
@@ -190,56 +209,65 @@ async fn handle_swarm_event(
         }
 
         SwarmEvent::Behaviour(NetworkEvent::Identify(identify::Event::Sent { peer_id })) => {
-            debug!("Sent identity to {peer_id}");
+            trace!("Sent identity to {peer_id}");
         }
 
         SwarmEvent::Behaviour(NetworkEvent::Identify(identify::Event::Received {
             peer_id,
-            info: _,
+            info,
         })) => {
-            debug!("Received identity from {peer_id}");
-        }
+            trace!(
+                "Received identity from {peer_id}: protocol={:?}",
+                info.protocol_version
+            );
 
-        SwarmEvent::Behaviour(NetworkEvent::Mdns(mdns::Event::Discovered(peers))) => {
-            for (peer_id, addr) in peers {
-                debug!("Discovered peer {peer_id} at {addr}");
+            if info.protocol_version == PROTOCOL_VERSION {
+                debug!(
+                    "Peer {peer_id} is using compatible protocol version: {:?}",
+                    info.protocol_version
+                );
+
+                state.peers.insert(peer_id, info);
+
                 swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
-
-                // if let Err(e) = tx_event.send(HandleEvent::PeerConnected(peer_id)).await {
-                //     error!("Error sending peer connected event to handle: {e}");
-                //     return ControlFlow::Break(());
-                // }
-            }
-        }
-
-        SwarmEvent::Behaviour(NetworkEvent::Mdns(mdns::Event::Expired(peers))) => {
-            for (peer_id, _addr) in peers {
-                debug!("Expired peer: {peer_id}");
-                swarm
-                    .behaviour_mut()
-                    .gossipsub
-                    .remove_explicit_peer(&peer_id);
-
-                //     if let Err(e) = tx_event.send(HandleEvent::PeerDisconnected(peer_id)).await {
-                //         error!("Error sending peer disconnected event to handle: {e}");
-                //         return ControlFlow::Break(());
-                //     }
+            } else {
+                debug!(
+                    "Peer {peer_id} is using incompatible protocol version: {:?}",
+                    info.protocol_version
+                );
             }
         }
 
         SwarmEvent::Behaviour(NetworkEvent::GossipSub(gossipsub::Event::Subscribed {
             peer_id,
-            topic: topic_hash,
+            topic,
         })) => {
-            if !Channel::has_topic(&topic_hash) {
-                debug!("Peer {peer_id} tried to subscribe to unknown topic: {topic_hash}");
+            if !Channel::has_topic(&topic) {
+                debug!("Peer {peer_id} tried to subscribe to unknown topic: {topic}");
                 return ControlFlow::Continue(());
             }
 
-            debug!("Peer {peer_id} subscribed to {topic_hash}");
+            debug!("Peer {peer_id} subscribed to {topic}");
 
             if let Err(e) = tx_event.send(Event::PeerConnected(peer_id)).await {
                 error!("Error sending peer connected event to handle: {e}");
+                return ControlFlow::Break(());
+            }
+        }
+
+        SwarmEvent::Behaviour(NetworkEvent::GossipSub(gossipsub::Event::Unsubscribed {
+            peer_id,
+            topic,
+        })) => {
+            if !Channel::has_topic(&topic) {
+                debug!("Peer {peer_id} tried to unsubscribe from unknown topic: {topic}");
+                return ControlFlow::Continue(());
+            }
+
+            debug!("Peer {peer_id} unsubscribed from {topic}");
+
+            if let Err(e) = tx_event.send(Event::PeerDisconnected(peer_id)).await {
+                error!("Error sending peer disconnected event to handle: {e}");
                 return ControlFlow::Break(());
             }
         }
@@ -250,7 +278,7 @@ async fn handle_swarm_event(
             message,
         })) => {
             let Some(channel) = Channel::from_topic_hash(&message.topic) else {
-                debug!(
+                trace!(
                     "Received message {message_id} from {peer_id} on different channel: {}",
                     message.topic
                 );
@@ -258,7 +286,7 @@ async fn handle_swarm_event(
                 return ControlFlow::Continue(());
             };
 
-            debug!(
+            trace!(
                 "Received message {message_id} from {peer_id} on channel {} of {} bytes",
                 channel,
                 message.data.len()

@@ -1,33 +1,26 @@
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use libp2p::identity::Keypair;
-use libp2p::Multiaddr;
-use malachite_gossip::Channel;
-use ractor::Actor;
 use ractor::ActorCell;
 use ractor::ActorProcessingErr;
 use ractor::ActorRef;
+use ractor::{Actor, RpcReplyPort};
 use tokio::task::JoinHandle;
 
 use malachite_gossip::handle::CtrlHandle;
-use malachite_gossip::Config;
-use malachite_gossip::Event;
+use malachite_gossip::{Channel, Config, Event, PeerId};
 
 pub struct Gossip;
 
 impl Gossip {
     pub async fn spawn(
         keypair: Keypair,
-        addr: Multiaddr,
         config: Config,
         supervisor: Option<ActorCell>,
     ) -> Result<ActorRef<Msg>, ractor::SpawnErr> {
-        let args = Args {
-            keypair,
-            addr,
-            config,
-        };
+        let args = Args { keypair, config };
 
         let (actor_ref, _) = if let Some(supervisor) = supervisor {
             Actor::spawn_linked(None, Self, args, supervisor).await?
@@ -41,13 +34,13 @@ impl Gossip {
 
 pub struct Args {
     pub keypair: Keypair,
-    pub addr: Multiaddr,
     pub config: Config,
 }
 
 pub enum State {
     Stopped,
     Running {
+        peers: BTreeSet<PeerId>,
         subscribers: Vec<ActorRef<Arc<Event>>>,
         ctrl_handle: CtrlHandle,
         recv_task: JoinHandle<()>,
@@ -61,6 +54,10 @@ pub enum Msg {
     // Internal message
     #[doc(hidden)]
     NewEvent(Event),
+    // Request for number of peers from gossip
+    GetState {
+        reply: RpcReplyPort<usize>,
+    },
 }
 
 #[async_trait]
@@ -74,7 +71,7 @@ impl Actor for Gossip {
         myself: ActorRef<Msg>,
         args: Args,
     ) -> Result<State, ActorProcessingErr> {
-        let handle = malachite_gossip::spawn(args.keypair, args.addr, args.config).await?;
+        let handle = malachite_gossip::spawn(args.keypair, args.config).await?;
         let (mut recv_handle, ctrl_handle) = handle.split();
 
         let recv_task = tokio::spawn({
@@ -86,6 +83,7 @@ impl Actor for Gossip {
         });
 
         Ok(State::Running {
+            peers: BTreeSet::new(),
             subscribers: Vec::new(),
             ctrl_handle,
             recv_task,
@@ -107,6 +105,7 @@ impl Actor for Gossip {
         state: &mut State,
     ) -> Result<(), ActorProcessingErr> {
         let State::Running {
+            peers,
             subscribers,
             ctrl_handle,
             ..
@@ -119,10 +118,27 @@ impl Actor for Gossip {
             Msg::Subscribe(subscriber) => subscribers.push(subscriber),
             Msg::Broadcast(channel, data) => ctrl_handle.broadcast(channel, data).await?,
             Msg::NewEvent(event) => {
+                match event {
+                    Event::PeerConnected(peer_id) => {
+                        peers.insert(peer_id);
+                    }
+                    Event::PeerDisconnected(peer_id) => {
+                        peers.remove(&peer_id);
+                    }
+                    _ => {}
+                }
+
                 let event = Arc::new(event);
                 for subscriber in subscribers {
                     subscriber.cast(Arc::clone(&event))?;
                 }
+            }
+            Msg::GetState { reply } => {
+                let number_peers = match state {
+                    State::Stopped => 0,
+                    State::Running { peers, .. } => peers.len(),
+                };
+                reply.send(number_peers)?;
             }
         }
 

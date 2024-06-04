@@ -11,7 +11,7 @@ message Address {
 }
 
 message Value {
-    optional bytes value = 2;
+    optional bytes value = 1;
 }
 
 message ValueId {
@@ -53,3 +53,34 @@ message SignedProposal {
     bytes signature = 2;
 }
 
+message Transaction {
+    optional bytes value = 1;
+}
+
+message TransactionBatch {
+    repeated Transaction transactions = 1;
+}
+
+message BlockMetadata {
+    bytes proof = 1;
+    Value value = 2;
+}
+
+// TODO - use oneof
+message Content {
+    TransactionBatch tx_batch = 90;
+    optional BlockMetadata metadata = 91;
+}
+
+message BlockPart {
+    Height height = 1;
+    Round round = 2;
+    uint64 sequence = 3;
+    Address validator_address = 4;
+    Content content = 5;
+}
+
+message SignedBlockPart {
+    BlockPart block_part = 1;
+    bytes signature = 2;
+}

@@ -5,11 +5,11 @@ mod util;
 use util::*;
 
 #[tokio::test]
-pub async fn one_node_fails_to_start() {
+pub async fn one_1_node_fails_to_start() {
     let nodes = Test::new(
         [
-            TestNode::faulty(5, vec![Fault::NoStart]),
             TestNode::correct(15),
+            TestNode::faulty(5, vec![Fault::NoStart]),
             TestNode::correct(10),
         ],
         0,
