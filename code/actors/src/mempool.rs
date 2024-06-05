@@ -7,22 +7,34 @@ use rand::Rng;
 use tracing::{debug, info};
 
 use malachite_common::Transaction;
-use malachite_gossip_mempool::{Channel, Event as GossipEvent, Event};
-use malachite_network_mempool::{Msg as NetworkMsg, PeerId};
+use malachite_gossip_mempool::{Channel, Event as GossipEvent, PeerId};
 
 use crate::gossip_mempool::Msg as GossipMsg;
 use crate::util::forward;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum NetworkMsg {
+    Transaction(Vec<u8>),
+}
+
+impl NetworkMsg {
+    pub fn from_network_bytes(bytes: &[u8]) -> Self {
+        NetworkMsg::Transaction(bytes.to_vec())
+    }
+
+    pub fn to_network_bytes(&self) -> Vec<u8> {
+        match self {
+            NetworkMsg::Transaction(bytes) => bytes.to_vec(),
+        }
+    }
+}
 
 pub enum Next {
     None,
     Transaction(Transaction),
 }
 
-pub struct Params {}
-
-#[allow(dead_code)]
 pub struct Mempool {
-    params: Params,
     gossip: ActorRef<GossipMsg>,
 }
 
@@ -44,16 +56,15 @@ pub struct State {
 }
 
 impl Mempool {
-    pub fn new(params: Params, gossip: ActorRef<GossipMsg>) -> Self {
-        Self { params, gossip }
+    pub fn new(gossip: ActorRef<GossipMsg>) -> Self {
+        Self { gossip }
     }
 
     pub async fn spawn(
-        params: Params,
         gossip: ActorRef<GossipMsg>,
         supervisor: Option<ActorCell>,
     ) -> Result<ActorRef<Msg>, ractor::SpawnErr> {
-        let node = Self::new(params, gossip);
+        let node = Self::new(gossip);
 
         let (actor_ref, _) = if let Some(supervisor) = supervisor {
             Actor::spawn_linked(None, node, (), supervisor).await?
@@ -81,7 +92,6 @@ impl Mempool {
                 info!("Disconnected from peer {peer_id}");
             }
             GossipEvent::Message(from, Channel::Mempool, data) => {
-                let from = PeerId::new(from.to_string());
                 let msg = NetworkMsg::from_network_bytes(data);
 
                 debug!("Mempool - Received message from peer {from}: {msg:?}");
@@ -95,7 +105,7 @@ impl Mempool {
 
     pub async fn handle_network_msg(
         &self,
-        from: PeerId,
+        from: &PeerId,
         msg: NetworkMsg,
         myself: ActorRef<Msg>,
         _state: &mut State,
@@ -108,15 +118,6 @@ impl Mempool {
             }
         }
 
-        Ok(())
-    }
-
-    pub async fn send_input(
-        &self,
-        input: Transaction,
-        state: &mut crate::mempool::State,
-    ) -> Result<(), ractor::ActorProcessingErr> {
-        state.transactions.push(input);
         Ok(())
     }
 }
@@ -159,14 +160,11 @@ impl Actor for Mempool {
     ) -> Result<(), ractor::ActorProcessingErr> {
         match msg {
             Msg::GossipEvent(event) => {
-                if let Event::Message(_, _, _) = event.as_ref() {
-                    self.handle_gossip_event(event.as_ref(), myself, state)
-                        .await?;
-                }
+                self.handle_gossip_event(&event, myself, state).await?;
             }
 
             Msg::Input(tx) => {
-                self.send_input(tx, state).await?;
+                state.transactions.push(tx);
             }
 
             Msg::Start => {
