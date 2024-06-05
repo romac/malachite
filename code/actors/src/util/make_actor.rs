@@ -5,13 +5,13 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use malachite_common::Round;
-use malachite_gossip::Keypair;
+use malachite_gossip_consensus::Keypair;
 use malachite_gossip_mempool::Config as GossipMempoolConfig;
 use malachite_node::config::Config as NodeConfig;
 use malachite_test::{Address, Height, PrivateKey, TestContext, ValidatorSet, Value};
 
 use crate::consensus::Consensus;
-use crate::gossip::Gossip;
+use crate::gossip_consensus::GossipConsensus;
 use crate::gossip_mempool::GossipMempool;
 use crate::host::Host;
 use crate::mempool::Mempool;
@@ -66,7 +66,7 @@ pub async fn make_node_actor(
     .unwrap();
 
     // Spawn consensus and its gossip
-    let config_gossip = malachite_gossip::Config {
+    let config_gossip = malachite_gossip_consensus::Config {
         listen_addr: cfg.consensus.p2p.listen_addr.clone(),
         persistent_peers: cfg.consensus.p2p.persistent_peers.clone(),
         idle_connection_timeout: Duration::from_secs(60),
@@ -74,7 +74,7 @@ pub async fn make_node_actor(
 
     let validator_keypair = Keypair::ed25519_from_bytes(validator_pk.inner().to_bytes()).unwrap();
 
-    let gossip_consensus = Gossip::spawn(validator_keypair.clone(), config_gossip, None)
+    let gossip_consensus = GossipConsensus::spawn(validator_keypair.clone(), config_gossip, None)
         .await
         .unwrap();
 

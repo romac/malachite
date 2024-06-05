@@ -8,7 +8,7 @@ use malachite_proto::Protobuf;
 use malachite_vote::ThresholdParams;
 
 use crate::consensus::Msg as ConsensusMsg;
-use crate::gossip::Msg as GossipMsg;
+use crate::gossip_consensus::Msg as GossipMsg;
 use crate::gossip_mempool::Msg as GossipMempoolMsg;
 use crate::host::Msg as HostMsg;
 use crate::mempool::Msg as MempoolMsg;
@@ -18,7 +18,7 @@ use crate::util::ValueBuilder;
 pub struct Params<Ctx: Context> {
     pub address: Ctx::Address,
     pub initial_validator_set: Ctx::ValidatorSet,
-    pub keypair: malachite_gossip::Keypair,
+    pub keypair: malachite_gossip_consensus::Keypair,
     pub start_height: Ctx::Height,
     pub threshold_params: ThresholdParams,
     pub timers_config: TimersConfig,
