@@ -188,6 +188,12 @@ fn override_config_from_env(config: &mut Config) -> Result<()> {
             .wrap_err("Invalid MALACHITE__CONSENSUS__TIMEOUT_COMMIT")?;
     }
 
+    if let Ok(tx_size) = env::var("MALACHITE__TEST__TX_SIZE") {
+        config.test.tx_size = ByteSize::from_str(&tx_size)
+            .map_err(|e| eyre!(e))
+            .wrap_err("Invalid MALACHITE__TEST__TX_SIZE")?;
+    }
+
     if let Ok(txs_per_part) = env::var("MALACHITE__TEST__TXS_PER_PART") {
         config.test.txs_per_part = txs_per_part
             .parse()

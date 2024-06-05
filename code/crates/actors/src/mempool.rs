@@ -2,7 +2,9 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bytesize::ByteSize;
 use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort};
+use rand::distributions::Uniform;
 use rand::Rng;
 use tracing::{debug, info};
 
@@ -41,11 +43,11 @@ pub struct Mempool {
 }
 
 pub enum Msg {
-    Start,
     GossipEvent(Arc<GossipEvent>),
     Input(Transaction),
     TxStream {
         height: u64,
+        tx_size: ByteSize,
         num_txes: u64,
         reply: RpcReplyPort<Vec<Transaction>>,
     },
@@ -139,18 +141,9 @@ impl Actor for Mempool {
         self.gossip_mempool
             .cast(GossipMempoolMsg::Subscribe(forward))?;
 
-        let mut transactions = vec![];
-
-        for _i in 0..2 {
-            let bytes = rand::thread_rng().gen::<[u8; 4]>();
-            transactions.push(Transaction::new(bytes.into()));
-        }
-
-        info!("Generated mempool txes: {transactions:?}");
-
         Ok(State {
             msg_queue: VecDeque::new(),
-            transactions,
+            transactions: vec![],
         })
     }
 
@@ -170,24 +163,28 @@ impl Actor for Mempool {
                 state.transactions.push(tx);
             }
 
-            Msg::Start => {
-                for tx in state.transactions.iter() {
-                    let msg = NetworkMsg::Transaction(tx.to_bytes());
-                    let bytes = msg.to_network_bytes();
-                    self.gossip_mempool
-                        .cast(GossipMempoolMsg::Broadcast(Channel::Mempool, bytes))?;
-                }
-            }
-
             Msg::TxStream {
-                reply, num_txes, ..
+                reply,
+                tx_size,
+                num_txes,
+                ..
             } => {
-                let txes_len = state.transactions.len();
-                let mut txes = vec![];
-                for _i in 0..num_txes as usize / txes_len {
-                    txes.extend(state.transactions.clone());
+                let mut transactions = vec![];
+
+                let mut rng = rand::thread_rng();
+                for _i in 0..num_txes {
+                    // Generate transaction
+                    let range = Uniform::new(32, 64);
+                    let tx: Vec<u8> = (0..tx_size.as_u64()).map(|_| rng.sample(range)).collect();
+                    // TODO - Gossip, remove on decided block
+                    // let msg = NetworkMsg::Transaction(tx.clone());
+                    // let bytes = msg.to_network_bytes();
+                    // self.gossip_mempool
+                    //     .cast(GossipMempoolMsg::Broadcast(Channel::Mempool, bytes))?;
+                    transactions.push(Transaction::new(tx));
                 }
-                reply.send(txes)?;
+
+                reply.send(transactions)?;
             }
         }
 
