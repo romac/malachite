@@ -37,10 +37,11 @@ pub trait ValueBuilder<Ctx: Context>: Send + Sync + 'static {
 }
 
 pub mod test {
+    use super::*;
 
     use std::marker::PhantomData;
 
-    use malachite_node::config::TestConfig;
+    use bytesize::ByteSize;
     use ractor::ActorRef;
 
     use malachite_common::Context;
@@ -51,30 +52,19 @@ pub mod test {
 
     use crate::mempool::Msg as MempoolMsg;
 
-    use super::*;
-
     #[derive(Copy, Clone, Debug)]
     pub struct TestParams {
+        pub max_block_size: ByteSize,
         pub txs_per_part: u64,
         pub time_allowance_factor: f32,
         pub exec_time_per_part: Duration,
     }
 
-    impl From<TestConfig> for TestParams {
-        fn from(cfg: TestConfig) -> Self {
-            Self {
-                txs_per_part: cfg.txs_per_part,
-                time_allowance_factor: cfg.time_allowance_factor,
-                exec_time_per_part: cfg.exec_time_per_part,
-            }
-        }
-    }
-
     #[derive(Clone)]
     pub struct TestValueBuilder<Ctx: Context> {
-        _phantom: PhantomData<Ctx>,
         tx_streamer: ActorRef<MempoolMsg>,
         params: TestParams,
+        _phantom: PhantomData<Ctx>,
     }
 
     impl<Ctx> TestValueBuilder<Ctx>
@@ -83,9 +73,9 @@ pub mod test {
     {
         pub fn new(tx_streamer: ActorRef<MempoolMsg>, params: TestParams) -> Self {
             Self {
-                _phantom: Default::default(),
                 tx_streamer,
                 params,
+                _phantom: PhantomData,
             }
         }
     }
@@ -107,6 +97,7 @@ pub mod test {
 
             let mut tx_batch = vec![];
             let mut sequence = 1;
+            let mut block_size = 0;
             let mut result = None;
 
             loop {
@@ -117,7 +108,7 @@ pub mod test {
                     sequence
                 );
 
-                let mut txes = self
+                let txes = self
                     .tx_streamer
                     .call(
                         |reply| MempoolMsg::TxStream {
@@ -152,12 +143,20 @@ pub mod test {
 
                 // Simulate execution
                 tokio::time::sleep(self.params.exec_time_per_part).await;
-                tx_batch.append(&mut txes);
+
+                'inner: for tx in txes {
+                    if block_size + tx.size_bytes() > self.params.max_block_size.as_u64() {
+                        break 'inner;
+                    }
+
+                    block_size += tx.size_bytes();
+                    tx_batch.push(tx);
+                }
 
                 sequence += 1;
 
                 if Instant::now() > expiration_time {
-                    error!( "Value Builder started at {now:?} but failed to complete by expiration time {expiration_time:?}");
+                    error!("Value Builder started at {now:?} but failed to complete by expiration time {expiration_time:?}");
                     result = None;
                     break;
                 }
@@ -186,13 +185,14 @@ pub mod test {
                     part_store.store(block_part.clone());
 
                     consensus
-                        .cast(ConsensusMsg::BuilderBlockPart(block_part.clone()))
+                        .cast(ConsensusMsg::BuilderBlockPart(block_part))
                         .unwrap();
 
                     info!(
-                        "Value Builder created a block with {} tx-es, block hash (consensus value) {:?} ",
+                        "Value Builder created a block with {} tx-es ({}), block hash: {:?} ",
                         tx_batch.len(),
-                        result
+                        ByteSize::b(block_size),
+                        value.id()
                     );
 
                     break;
@@ -213,7 +213,7 @@ pub mod test {
 
             part_store.store(block_part.clone());
             let num_parts = part_store.all_parts(height, round).len();
-            trace!("({num_parts}):Received block part (h: {height}, r: {round}, seq: {sequence}");
+            trace!("({num_parts}): Received block part (h: {height}, r: {round}, seq: {sequence}");
 
             // Simulate Tx execution and proof verification (assumes success)
             // TODO - add config knob for invalid blocks

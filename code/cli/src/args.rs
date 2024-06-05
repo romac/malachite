@@ -7,7 +7,9 @@
 //! `clap` parses the command-line parameters into this structure.
 
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
+use bytesize::ByteSize;
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{eyre, Context, Result};
 use directories::BaseDirs;
@@ -159,6 +161,12 @@ where
 
 fn override_config_from_env(config: &mut Config) -> Result<()> {
     use std::env;
+
+    if let Ok(max_block_size) = env::var("MALACHITE__CONSENSUS__MAX_BLOCK_SIZE") {
+        config.consensus.max_block_size = ByteSize::from_str(&max_block_size)
+            .map_err(|e| eyre!(e))
+            .wrap_err("Invalid MALACHITE__CONSENSUS__MAX_BLOCK_SIZE")?;
+    }
 
     if let Ok(timeout_propose) = env::var("MALACHITE__CONSENSUS__TIMEOUT_PROPOSE") {
         config.consensus.timeouts.timeout_propose = humantime::parse_duration(&timeout_propose)
