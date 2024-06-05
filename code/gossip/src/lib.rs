@@ -15,6 +15,7 @@ pub use libp2p::{Multiaddr, PeerId};
 
 pub mod behaviour;
 pub mod handle;
+
 use behaviour::{Behaviour, NetworkEvent};
 use handle::Handle;
 
@@ -105,6 +106,7 @@ pub async fn spawn(keypair: Keypair, config: Config) -> Result<Handle, BoxError>
     let mut swarm = SwarmBuilder::with_existing_identity(keypair)
         .with_tokio()
         .with_quic()
+        .with_dns()?
         .with_behaviour(Behaviour::new)?
         .with_swarm_config(|cfg| config.apply(cfg))
         .build();
