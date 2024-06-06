@@ -172,7 +172,7 @@ impl Actor for Mempool {
                 if state.transactions.len() < self.mempool_config.max_tx_count {
                     state.transactions.push(tx);
                 } else {
-                    debug!("Mempool is full, dropping transaction");
+                    trace!("Mempool is full, dropping transaction");
                 }
             }
 
