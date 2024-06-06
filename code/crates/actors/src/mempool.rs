@@ -2,44 +2,43 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bytesize::ByteSize;
 use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort};
 use rand::distributions::Uniform;
 use rand::Rng;
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
-use malachite_common::Transaction;
+use malachite_common::{MempoolTransactionBatch, Transaction, TransactionBatch};
 use malachite_gossip_mempool::{Channel, Event as GossipEvent, PeerId};
+use malachite_node::config::{MempoolConfig, TestConfig};
+use malachite_proto::Protobuf;
 
 use crate::gossip_mempool::{GossipMempoolRef, Msg as GossipMempoolMsg};
 use crate::util::forward;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NetworkMsg {
-    Transaction(Vec<u8>),
+    TransactionBatch(MempoolTransactionBatch),
 }
 
 impl NetworkMsg {
     pub fn from_network_bytes(bytes: &[u8]) -> Self {
-        NetworkMsg::Transaction(bytes.to_vec())
+        let batch = Protobuf::from_bytes(bytes).unwrap(); // FIXME: Error handling
+        NetworkMsg::TransactionBatch(batch)
     }
 
-    pub fn to_network_bytes(&self) -> Vec<u8> {
+    pub fn to_network_bytes(&self) -> malachite_proto::MempoolTransactionBatch {
         match self {
-            NetworkMsg::Transaction(bytes) => bytes.to_vec(),
+            NetworkMsg::TransactionBatch(batch) => batch.to_proto().unwrap(), // FXME: Error handling
         }
     }
-}
-
-pub enum Next {
-    None,
-    Transaction(Transaction),
 }
 
 pub type MempoolRef = ActorRef<Msg>;
 
 pub struct Mempool {
     gossip_mempool: GossipMempoolRef,
+    mempool_config: MempoolConfig, // todo - pick only what's needed
+    test_config: TestConfig,       // todo - pick only the mempool related
 }
 
 pub enum Msg {
@@ -47,8 +46,7 @@ pub enum Msg {
     Input(Transaction),
     TxStream {
         height: u64,
-        tx_size: ByteSize,
-        num_txes: u64,
+        num_txes: usize,
         reply: RpcReplyPort<Vec<Transaction>>,
     },
 }
@@ -60,15 +58,25 @@ pub struct State {
 }
 
 impl Mempool {
-    pub fn new(gossip_mempool: GossipMempoolRef) -> Self {
-        Self { gossip_mempool }
+    pub fn new(
+        gossip_mempool: GossipMempoolRef,
+        mempool_config: MempoolConfig,
+        test_config: TestConfig,
+    ) -> Self {
+        Self {
+            gossip_mempool,
+            mempool_config,
+            test_config,
+        }
     }
 
     pub async fn spawn(
         gossip_mempool: GossipMempoolRef,
+        mempool_config: &MempoolConfig,
+        test_config: &TestConfig,
         supervisor: Option<ActorCell>,
     ) -> Result<ActorRef<Msg>, ractor::SpawnErr> {
-        let node = Self::new(gossip_mempool);
+        let node = Self::new(gossip_mempool, mempool_config.clone(), *test_config);
 
         let (actor_ref, _) = if let Some(supervisor) = supervisor {
             Actor::spawn_linked(None, node, (), supervisor).await?
@@ -96,10 +104,9 @@ impl Mempool {
                 info!("Disconnected from peer {peer_id}");
             }
             GossipEvent::Message(from, Channel::Mempool, data) => {
+                trace!(%from, "Received message of size {} bytes", data.len());
+
                 let msg = NetworkMsg::from_network_bytes(data);
-
-                debug!("Mempool - Received message from peer {from}: {msg:?}");
-
                 self.handle_network_msg(from, msg, myself, state).await?;
             }
         }
@@ -115,10 +122,12 @@ impl Mempool {
         _state: &mut State,
     ) -> Result<(), ractor::ActorProcessingErr> {
         match msg {
-            NetworkMsg::Transaction(bytes) => {
-                info!(%from, "Received transaction: {:?}", bytes);
+            NetworkMsg::TransactionBatch(batch) => {
+                debug!(%from, "Received batch with {} transactions", batch.len());
 
-                myself.cast(Msg::Input(Transaction::new(bytes)))?;
+                for tx in batch.transaction_batch.into_transactions() {
+                    myself.cast(Msg::Input(tx))?;
+                }
             }
         }
 
@@ -147,7 +156,7 @@ impl Actor for Mempool {
         })
     }
 
-    #[tracing::instrument(name = "node", skip(self, myself, msg, state))]
+    #[tracing::instrument(name = "mempool", skip(self, myself, msg, state))]
     async fn handle(
         &self,
         myself: ActorRef<Msg>,
@@ -160,31 +169,24 @@ impl Actor for Mempool {
             }
 
             Msg::Input(tx) => {
-                state.transactions.push(tx);
+                if state.transactions.len() < self.mempool_config.max_tx_count {
+                    state.transactions.push(tx);
+                } else {
+                    debug!("Mempool is full, dropping transaction");
+                }
             }
 
             Msg::TxStream {
-                reply,
-                tx_size,
-                num_txes,
-                ..
+                reply, num_txes, ..
             } => {
-                let mut transactions = vec![];
+                let txes = generate_txes(
+                    num_txes,
+                    self.test_config.tx_size.as_u64(),
+                    self.mempool_config.gossip_batch_size,
+                    &self.gossip_mempool,
+                )?;
 
-                let mut rng = rand::thread_rng();
-                for _i in 0..num_txes {
-                    // Generate transaction
-                    let range = Uniform::new(32, 64);
-                    let tx: Vec<u8> = (0..tx_size.as_u64()).map(|_| rng.sample(range)).collect();
-                    // TODO - Gossip, remove on decided block
-                    // let msg = NetworkMsg::Transaction(tx.clone());
-                    // let bytes = msg.to_network_bytes();
-                    // self.gossip_mempool
-                    //     .cast(GossipMempoolMsg::Broadcast(Channel::Mempool, bytes))?;
-                    transactions.push(Transaction::new(tx));
-                }
-
-                reply.send(transactions)?;
+                reply.send(txes)?;
             }
         }
 
@@ -200,4 +202,34 @@ impl Actor for Mempool {
 
         Ok(())
     }
+}
+
+fn generate_txes(
+    count: usize,
+    size: u64,
+    batch_size: usize,
+    gossip_mempool: &GossipMempoolRef,
+) -> Result<Vec<Transaction>, ActorProcessingErr> {
+    let mut transactions = vec![];
+    let mut tx_batch = TransactionBatch::default();
+    let mut rng = rand::thread_rng();
+
+    for _ in 0..count {
+        // Generate transaction
+        let range = Uniform::new(32, 64);
+        let tx_bytes: Vec<u8> = (0..size).map(|_| rng.sample(range)).collect();
+        let tx = Transaction::new(tx_bytes);
+
+        // TODO: Remove tx-es on decided block
+        tx_batch.push(tx.clone());
+
+        if tx_batch.len() >= batch_size {
+            let mempool_batch = MempoolTransactionBatch::new(std::mem::take(&mut tx_batch));
+            gossip_mempool.cast(GossipMempoolMsg::Broadcast(Channel::Mempool, mempool_batch))?;
+        }
+
+        transactions.push(tx);
+    }
+
+    Ok(transactions)
 }

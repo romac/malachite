@@ -41,12 +41,11 @@ pub mod test {
     use std::marker::PhantomData;
 
     use bytesize::ByteSize;
+    use tracing::debug;
 
-    use malachite_common::Context;
+    use malachite_common::{Context, TransactionBatch};
     use malachite_driver::Validity;
-    use malachite_test::{
-        Address, BlockMetadata, BlockPart, Content, Height, TestContext, TransactionBatch, Value,
-    };
+    use malachite_test::{Address, BlockMetadata, BlockPart, Content, Height, TestContext, Value};
 
     use crate::mempool::{MempoolRef, Msg as MempoolMsg};
 
@@ -54,9 +53,9 @@ pub mod test {
     pub struct TestParams {
         pub max_block_size: ByteSize,
         pub tx_size: ByteSize,
-        pub txs_per_part: u64,
+        pub txs_per_part: usize,
         pub time_allowance_factor: f32,
-        pub exec_time_per_part: Duration,
+        pub exec_time_per_tx: Duration,
     }
 
     #[derive(Clone)]
@@ -81,6 +80,14 @@ pub mod test {
 
     #[async_trait]
     impl ValueBuilder<TestContext> for TestValueBuilder<TestContext> {
+        #[tracing::instrument(
+            name = "value_builder.locally",
+            skip_all,
+            fields(
+                height = %height,
+                round = %round,
+            )
+        )]
         async fn build_value_locally(
             &self,
             height: Height,
@@ -90,14 +97,13 @@ pub mod test {
             consensus: ConsensusRef<TestContext>,
             part_store: &mut PartStore<TestContext>,
         ) -> Option<LocallyProposedValue<TestContext>> {
-            let now = Instant::now();
-            let deadline = now + timeout_duration.mul_f32(self.params.time_allowance_factor);
-            let expiration_time = now + timeout_duration;
+            let start = Instant::now();
+            let deadline = start + timeout_duration.mul_f32(self.params.time_allowance_factor);
+            let expiration_time = start + timeout_duration;
 
             let mut tx_batch = vec![];
             let mut sequence = 1;
             let mut block_size = 0;
-            let mut result = None;
 
             loop {
                 trace!(
@@ -112,7 +118,6 @@ pub mod test {
                     .call(
                         |reply| MempoolMsg::TxStream {
                             height: height.as_u64(),
-                            tx_size: self.params.tx_size,
                             num_txes: self.params.txs_per_part,
                             reply,
                         },
@@ -123,7 +128,7 @@ pub mod test {
                     .unwrap();
 
                 if txes.is_empty() {
-                    break;
+                    return None;
                 }
 
                 // Create, store and gossip the batch in a BlockPart
@@ -141,8 +146,7 @@ pub mod test {
                     .cast(ConsensusMsg::BuilderBlockPart(block_part.clone()))
                     .unwrap();
 
-                // Simulate execution
-                tokio::time::sleep(self.params.exec_time_per_part).await;
+                let mut tx_count = 0;
 
                 'inner: for tx in txes {
                     if block_size + tx.size_bytes() > self.params.max_block_size.as_u64() {
@@ -151,21 +155,30 @@ pub mod test {
 
                     block_size += tx.size_bytes();
                     tx_batch.push(tx);
+                    tx_count += 1;
+                }
+
+                // Simulate execution of reaped txes
+                let exec_time = self.params.exec_time_per_tx * tx_count;
+                debug!("Simulating tx execution for {tx_count} tx-es, sleeping for {exec_time:?}");
+                tokio::time::sleep(exec_time).await;
+
+                if Instant::now() > expiration_time {
+                    error!(
+                            "Value Builder failed to complete in given interval ({timeout_duration:?}), took {:?}",
+                            Instant::now() - start,
+                        );
+
+                    return None;
                 }
 
                 sequence += 1;
-
-                if Instant::now() > expiration_time {
-                    error!("Value Builder started at {now:?} but failed to complete by expiration time {expiration_time:?}");
-                    result = None;
-                    break;
-                }
 
                 if Instant::now() > deadline {
                     // Create, store and gossip the BlockMetadata in a BlockPart
                     let value = Value::new_from_transactions(tx_batch.clone());
 
-                    result = Some(LocallyProposedValue {
+                    let result = Some(LocallyProposedValue {
                         height,
                         round,
                         value: Some(value),
@@ -189,19 +202,27 @@ pub mod test {
                         .unwrap();
 
                     info!(
-                        "Value Builder created a block with {} tx-es ({}), block hash: {:?} ",
+                        "Value Builder created a block with {} tx-es of size {} in {:?} with hash {:?} ",
                         tx_batch.len(),
                         ByteSize::b(block_size),
+                        Instant::now() - start,
                         value.id()
                     );
 
-                    break;
+                    return result;
                 }
             }
-
-            result
         }
 
+        #[tracing::instrument(
+            name = "value_builder.from_block_parts",
+            skip_all,
+            fields(
+                height = %block_part.height(),
+                round = %block_part.round(),
+                sequence = %block_part.sequence()
+            )
+        )]
         async fn build_value_from_block_parts(
             &self,
             block_part: BlockPart,
@@ -217,7 +238,7 @@ pub mod test {
 
             // Simulate Tx execution and proof verification (assumes success)
             // TODO - add config knob for invalid blocks
-            tokio::time::sleep(self.params.exec_time_per_part).await;
+            tokio::time::sleep(self.params.exec_time_per_tx).await;
 
             // Get the "last" part, the one with highest sequence.
             // Block parts may not be received in order.

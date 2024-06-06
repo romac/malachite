@@ -188,6 +188,18 @@ fn override_config_from_env(config: &mut Config) -> Result<()> {
             .wrap_err("Invalid MALACHITE__CONSENSUS__TIMEOUT_COMMIT")?;
     }
 
+    if let Ok(max_tx_count) = env::var("MALACHITE__MEMPOOL__MAX_TX_COUNT") {
+        config.mempool.max_tx_count = max_tx_count
+            .parse()
+            .wrap_err("Invalid MALACHITE__MEMPOOL__MAX_TX_COUNT")?;
+    }
+
+    if let Ok(gossip_batch_size) = env::var("MALACHITE__MEMPOOL__GOSSIP_BATCH_SIZE") {
+        config.mempool.gossip_batch_size = gossip_batch_size
+            .parse()
+            .wrap_err("Invalid MALACHITE__MEMPOOL__GOSSIP_BATCH_SIZE")?;
+    }
+
     if let Ok(tx_size) = env::var("MALACHITE__TEST__TX_SIZE") {
         config.test.tx_size = ByteSize::from_str(&tx_size)
             .map_err(|e| eyre!(e))
@@ -206,9 +218,9 @@ fn override_config_from_env(config: &mut Config) -> Result<()> {
             .wrap_err("Invalid MALACHITE__TEST__TIME_ALLOWANCE_FACTOR")?;
     }
 
-    if let Ok(exec_time_per_part) = env::var("MALACHITE__TEST__EXEC_TIME_PER_PART") {
-        config.test.exec_time_per_part = humantime::parse_duration(&exec_time_per_part)
-            .wrap_err("Invalid MALACHITE__TEST__EXEC_TIME_PER_PART")?;
+    if let Ok(exec_time_per_tx) = env::var("MALACHITE__TEST__EXEC_TIME_PER_TX") {
+        config.test.exec_time_per_tx = humantime::parse_duration(&exec_time_per_tx)
+            .wrap_err("Invalid MALACHITE__TEST__EXEC_TIME_PER_TX")?;
     }
 
     Ok(())

@@ -124,9 +124,7 @@ where
 
         match value {
             Some(value) => Ok(value),
-            None => {
-                todo!()
-            }
+            None => Err(eyre::eyre!("Value Builder failed to produce a value").into()),
         }
     }
 
@@ -165,6 +163,7 @@ impl<Ctx: Context> Actor for Host<Ctx> {
         })
     }
 
+    #[tracing::instrument(name = "host", skip(self, _myself, msg, state))]
     async fn handle(
         &self,
         _myself: ActorRef<Self::Msg>,
