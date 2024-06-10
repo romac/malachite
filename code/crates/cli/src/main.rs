@@ -12,6 +12,7 @@ use crate::logging::LogLevel;
 mod args;
 mod cmd;
 mod logging;
+mod metrics;
 mod priv_key;
 
 #[tokio::main(flavor = "current_thread")]
