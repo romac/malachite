@@ -79,6 +79,9 @@ impl ValueBuilder<TestContext> for TestValueBuilder<TestContext> {
         let mut sequence = 1;
         let mut block_size = 0;
 
+        // Prune the PartStore of all parts for heights lower than `height - 1`
+        self.part_store.prune(height.decrement().unwrap_or(height));
+
         loop {
             trace!(
                 "Build local value for h:{}, r:{}, s:{}",
@@ -117,7 +120,7 @@ impl ValueBuilder<TestContext> for TestValueBuilder<TestContext> {
             self.part_store.store(block_part.clone());
 
             consensus
-                .cast(ConsensusMsg::BuilderBlockPart(block_part.clone()))
+                .cast(ConsensusMsg::BuilderBlockPart(block_part))
                 .unwrap();
 
             let mut tx_count = 0;
@@ -139,9 +142,9 @@ impl ValueBuilder<TestContext> for TestValueBuilder<TestContext> {
 
             if Instant::now() > expiration_time {
                 error!(
-                            "Value Builder failed to complete in given interval ({timeout_duration:?}), took {:?}",
-                            Instant::now() - start,
-                        );
+                    "Value Builder failed to complete in given interval ({timeout_duration:?}), took {:?}",
+                    Instant::now() - start,
+                );
 
                 return None;
             }
@@ -150,7 +153,7 @@ impl ValueBuilder<TestContext> for TestValueBuilder<TestContext> {
 
             if Instant::now() > deadline {
                 // Create, store and gossip the BlockMetadata in a BlockPart
-                let value = Value::new_from_transactions(tx_batch.clone());
+                let value = Value::new_from_transactions(&tx_batch);
 
                 let result = Some(LocallyProposedValue {
                     height,
@@ -204,6 +207,9 @@ impl ValueBuilder<TestContext> for TestValueBuilder<TestContext> {
         let height = block_part.height;
         let round = block_part.round;
         let sequence = block_part.sequence;
+
+        // Prune all block parts for heights lower than `height - 1`
+        self.part_store.prune(height.decrement().unwrap_or(height));
 
         self.part_store.store(block_part.clone());
         let all_parts = self.part_store.all_parts(height, round);
