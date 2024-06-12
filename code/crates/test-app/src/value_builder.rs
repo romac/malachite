@@ -1,3 +1,4 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::marker::PhantomData;
 use std::time::{Duration, Instant};
 
@@ -78,9 +79,6 @@ impl ValueBuilder<TestContext> for TestValueBuilder<TestContext> {
         let mut tx_batch = vec![];
         let mut sequence = 1;
         let mut block_size = 0;
-
-        // Prune the PartStore of all parts for heights lower than `height - 1`
-        self.part_store.prune(height.decrement().unwrap_or(height));
 
         loop {
             trace!(
@@ -205,9 +203,6 @@ impl ValueBuilder<TestContext> for TestValueBuilder<TestContext> {
         let round = block_part.round;
         let sequence = block_part.sequence;
 
-        // Prune all block parts for heights lower than `height - 1`
-        self.part_store.prune(height.decrement().unwrap_or(height));
-
         self.part_store.store(block_part.clone());
         let all_parts = self.part_store.all_parts(height, round);
 
@@ -245,12 +240,6 @@ impl ValueBuilder<TestContext> for TestValueBuilder<TestContext> {
                         "Value Builder received last block part",
                     );
 
-                    // FIXME: At this point we don't know if this block (and its txes) will be decided on.
-                    //        So these need to be moved after the block is decided.
-                    self.metrics.block_tx_count.observe(tx_count as f64);
-                    self.metrics.block_size_bytes.observe(block_size as f64);
-                    self.metrics.finalized_txes.inc_by(tx_count as u64);
-
                     Some(ReceivedProposedValue {
                         validator_address: last_part.validator_address,
                         height: last_part.height,
@@ -282,5 +271,48 @@ impl ValueBuilder<TestContext> for TestValueBuilder<TestContext> {
             value: Some(metadata.value()),
             valid: Validity::Valid,
         })
+    }
+
+    #[tracing::instrument(
+            name = "value_builder.decided",
+            skip_all,
+            fields(
+            height = %height,
+            round = %round,
+            )
+        )]
+    async fn decided_on_value(&mut self, height: Height, round: Round, value: Value) {
+        info!("Build and store block with hash {value:?}");
+
+        let all_parts = self.part_store.all_parts(height, round);
+
+        // TODO - build the block from block parts and store it
+
+        // Update metrics
+        let block_size: usize = all_parts.iter().map(|p| p.size_bytes()).sum();
+        let tx_count: usize = all_parts
+            .iter()
+            .map(|p| p.content.tx_count().unwrap_or(0))
+            .sum();
+
+        self.metrics.block_tx_count.observe(tx_count as f64);
+        self.metrics.block_size_bytes.observe(block_size as f64);
+        self.metrics.finalized_txes.inc_by(tx_count as u64);
+
+        // Send Update to mempool to remove all the tx-es included in the block.
+        let mut tx_hashes = vec![];
+        for part in all_parts {
+            if let Content::TxBatch(transaction_batch) = part.content.as_ref() {
+                tx_hashes.extend(transaction_batch.transactions().iter().map(|tx| {
+                    let mut hash = DefaultHasher::new();
+                    tx.0.hash(&mut hash);
+                    hash.finish()
+                }));
+            }
+        }
+        let _ = self.tx_streamer.cast(MempoolMsg::Update { tx_hashes });
+
+        // Prune the PartStore of all parts for heights lower than `height - 1`
+        self.part_store.prune(height.decrement().unwrap_or(height));
     }
 }
