@@ -9,6 +9,7 @@ use std::ops::ControlFlow;
 use std::time::Duration;
 
 use futures::StreamExt;
+use libp2p::metrics::{Metrics, Recorder};
 use libp2p::swarm::{self, SwarmEvent};
 use libp2p::{gossipsub, identify, SwarmBuilder};
 use tokio::sync::mpsc;
@@ -28,6 +29,8 @@ pub use msg::NetworkMsg;
 
 use behaviour::{Behaviour, NetworkEvent};
 use handle::Handle;
+
+const METRICS_PREFIX: &str = "malachite_gossip_consensus";
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Channel {
@@ -117,19 +120,16 @@ pub async fn spawn<Ctx: Context>(
     config: Config,
     registry: SharedRegistry,
 ) -> Result<Handle<Ctx>, BoxError> {
-    let mut swarm = registry.with_prefix(
-        "malachite_gossip_consensus",
-        |registry| -> Result<_, BoxError> {
-            Ok(SwarmBuilder::with_existing_identity(keypair)
-                .with_tokio()
-                .with_quic()
-                .with_dns()?
-                .with_bandwidth_metrics(registry)
-                .with_behaviour(|kp| Behaviour::new_with_metrics(kp, registry))?
-                .with_swarm_config(|cfg| config.apply(cfg))
-                .build())
-        },
-    )?;
+    let mut swarm = registry.with_prefix(METRICS_PREFIX, |registry| -> Result<_, BoxError> {
+        Ok(SwarmBuilder::with_existing_identity(keypair)
+            .with_tokio()
+            .with_quic()
+            .with_dns()?
+            .with_bandwidth_metrics(registry)
+            .with_behaviour(|kp| Behaviour::new_with_metrics(kp, registry))?
+            .with_swarm_config(|cfg| config.apply(cfg))
+            .build())
+    })?;
 
     for channel in Channel::all() {
         swarm
@@ -138,18 +138,22 @@ pub async fn spawn<Ctx: Context>(
             .subscribe(&channel.to_topic())?;
     }
 
+    let metrics = registry.with_prefix(METRICS_PREFIX, Metrics::new);
+
     let (tx_event, rx_event) = mpsc::channel(32);
     let (tx_ctrl, rx_ctrl) = mpsc::channel(32);
 
     let peer_id = swarm.local_peer_id();
     let span = error_span!("gossip-consensus", peer = %peer_id);
-    let task_handle = tokio::task::spawn(run(config, swarm, rx_ctrl, tx_event).instrument(span));
+    let task_handle =
+        tokio::task::spawn(run(config, metrics, swarm, rx_ctrl, tx_event).instrument(span));
 
     Ok(Handle::new(tx_ctrl, rx_event, task_handle))
 }
 
 async fn run<Ctx: Context>(
     config: Config,
+    metrics: Metrics,
     mut swarm: swarm::Swarm<Behaviour>,
     mut rx_ctrl: mpsc::Receiver<CtrlMsg<Ctx>>,
     tx_event: mpsc::Sender<Event<Ctx>>,
@@ -173,7 +177,7 @@ async fn run<Ctx: Context>(
     loop {
         let result = tokio::select! {
             event = swarm.select_next_some() => {
-                handle_swarm_event(event, &mut swarm, &mut state, &tx_event).await
+                handle_swarm_event(event, &metrics, &mut swarm, &mut state, &tx_event).await
             }
 
             Some(ctrl) = rx_ctrl.recv() => {
@@ -227,10 +231,17 @@ async fn handle_ctrl_msg<Ctx: Context>(
 
 async fn handle_swarm_event<Ctx: Context>(
     event: SwarmEvent<NetworkEvent>,
+    metrics: &Metrics,
     swarm: &mut swarm::Swarm<Behaviour>,
     state: &mut State,
     tx_event: &mpsc::Sender<Event<Ctx>>,
 ) -> ControlFlow<()> {
+    if let SwarmEvent::Behaviour(NetworkEvent::GossipSub(e)) = &event {
+        metrics.record(e);
+    } else if let SwarmEvent::Behaviour(NetworkEvent::Identify(e)) = &event {
+        metrics.record(e);
+    }
+
     match event {
         SwarmEvent::NewListenAddr { address, .. } => {
             debug!("Node is listening on {address}");
@@ -336,7 +347,23 @@ async fn handle_swarm_event<Ctx: Context>(
             }
         }
 
-        _ => {}
+        SwarmEvent::Behaviour(NetworkEvent::Ping(event)) => {
+            match &event.result {
+                Ok(rtt) => {
+                    trace!("Received pong from {} in {rtt:?}", event.peer);
+                }
+                Err(e) => {
+                    trace!("Received pong from {} with error: {e}", event.peer);
+                }
+            }
+
+            // Record metric for round-trip time sending a ping and receiving a pong
+            metrics.record(&event);
+        }
+
+        swarm_event => {
+            metrics.record(&swarm_event);
+        }
     }
 
     ControlFlow::Continue(())
