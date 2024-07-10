@@ -2020,10 +2020,9 @@ dependencies = [
  "malachite-gossip-mempool",
  "malachite-metrics",
  "malachite-node",
- "malachite-proto",
+ "malachite-round",
  "malachite-vote",
  "ractor",
- "rand",
  "tokio",
  "tracing",
 ]
@@ -2058,6 +2057,10 @@ name = "malachite-common"
 version = "0.1.0"
 dependencies = [
  "derive-where",
+ "malachite-proto",
+ "prost",
+ "prost-build",
+ "prost-types",
  "signature",
 ]
 
@@ -2076,8 +2079,10 @@ name = "malachite-gossip-consensus"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "derive-where",
  "futures",
  "libp2p",
+ "malachite-common",
  "malachite-metrics",
  "malachite-proto",
  "prost",
@@ -2093,9 +2098,11 @@ dependencies = [
  "blake3",
  "futures",
  "libp2p",
- "malachite-common",
  "malachite-metrics",
  "malachite-proto",
+ "prost",
+ "prost-build",
+ "prost-types",
  "tokio",
  "tracing",
 ]
@@ -2143,9 +2150,7 @@ dependencies = [
 name = "malachite-proto"
 version = "0.1.0"
 dependencies = [
- "malachite-common",
  "prost",
- "prost-build",
  "prost-types",
  "thiserror",
 ]
@@ -2185,11 +2190,15 @@ dependencies = [
  "itertools 0.13.0",
  "malachite-actors",
  "malachite-common",
+ "malachite-gossip-mempool",
+ "malachite-node",
  "malachite-proto",
  "malachite-test",
  "prost",
  "prost-build",
+ "prost-types",
  "ractor",
+ "rand",
  "sha2 0.10.8",
  "signature",
  "subtle-encoding",
