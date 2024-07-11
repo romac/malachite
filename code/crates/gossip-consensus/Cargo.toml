@@ -22,3 +22,6 @@ prost              = { workspace = true }
 prost-types        = { workspace = true }
 tokio              = { workspace = true }
 tracing            = { workspace = true }
+
+# https://github.com/libp2p/rust-libp2p/issues/5487
+rustls = { workspace = true }

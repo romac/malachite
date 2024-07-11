@@ -2106,6 +2106,7 @@ dependencies = [
  "malachite-proto",
  "prost",
  "prost-types",
+ "rustls",
  "tokio",
  "tracing",
 ]
