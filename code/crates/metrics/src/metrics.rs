@@ -8,7 +8,7 @@ use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
-use prometheus_client::metrics::histogram::{linear_buckets, Histogram};
+use prometheus_client::metrics::histogram::{exponential_buckets, linear_buckets, Histogram};
 
 #[derive(Clone, Debug)]
 pub struct Metrics(Arc<Inner>);
@@ -81,6 +81,9 @@ pub struct Inner {
     /// Current round
     pub round: Gauge,
 
+    /// Time taken to verify a signature
+    pub signature_verification_time: Histogram,
+
     /// Internal state for measuring time taken to finalize a block
     instant_block_started: Arc<AtomicInstant>,
 
@@ -103,6 +106,7 @@ impl Metrics {
             connected_peers: Gauge::default(),
             height: Gauge::default(),
             round: Gauge::default(),
+            signature_verification_time: Histogram::new(exponential_buckets(0.001, 2.0, 10)),
             instant_block_started: Arc::new(AtomicInstant::empty()),
             instant_step_started: Arc::new(Mutex::new((Step::Unstarted, Instant::now()))),
         }))
@@ -170,6 +174,12 @@ impl Metrics {
                 "round",
                 "Current round",
                 metrics.round.clone(),
+            );
+
+            registry.register(
+                "signature_verification_time",
+                "Time taken to verify a signature, in seconds",
+                metrics.signature_verification_time.clone(),
             );
         });
 
