@@ -196,6 +196,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-recursion"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.70",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1089,6 +1100,21 @@ dependencies = [
  "pin-utils",
  "slab",
 ]
+
+[[package]]
+name = "genawaiter"
+version = "0.99.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c86bd0361bcbde39b13475e6e36cb24c329964aa2611be285289d1e4b751c1a0"
+dependencies = [
+ "genawaiter-macro",
+]
+
+[[package]]
+name = "genawaiter-macro"
+version = "0.99.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b32dfe1fdfc0bbde1f22a5da25355514b5e450c33a6af6770884c8750aedfbc"
 
 [[package]]
 name = "generic-array"
@@ -2035,6 +2061,7 @@ dependencies = [
  "derive-where",
  "libp2p",
  "malachite-common",
+ "malachite-consensus",
  "malachite-driver",
  "malachite-gossip-consensus",
  "malachite-gossip-mempool",
@@ -2084,6 +2111,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "malachite-consensus"
+version = "0.1.0"
+dependencies = [
+ "async-recursion",
+ "derive-where",
+ "genawaiter",
+ "libp2p-identity",
+ "malachite-common",
+ "malachite-driver",
+ "malachite-metrics",
+ "multiaddr",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "malachite-driver"
 version = "0.1.0"
 dependencies = [
@@ -2102,6 +2145,7 @@ dependencies = [
  "futures",
  "libp2p",
  "malachite-common",
+ "malachite-consensus",
  "malachite-metrics",
  "malachite-proto",
  "prost",

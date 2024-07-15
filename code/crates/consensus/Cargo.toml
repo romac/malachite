@@ -1,0 +1,24 @@
+[package]
+name                   = "malachite-consensus"
+version.workspace      = true
+edition.workspace      = true
+repository.workspace   = true
+license.workspace      = true
+publish.workspace      = true
+rust-version.workspace = true
+
+[dependencies]
+malachite-common.workspace  = true
+malachite-driver.workspace  = true
+malachite-metrics.workspace = true
+
+async-recursion = { workspace = true }
+genawaiter      = { workspace = true }
+derive-where    = { workspace = true }
+libp2p-identity = { workspace = true, features = ["peerid"] }
+multiaddr       = { workspace = true }
+thiserror       = { workspace = true }
+tracing         = { workspace = true }
+
+[lints]
+workspace = true
