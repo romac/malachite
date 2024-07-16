@@ -78,7 +78,7 @@ where
         // From NewRound.
         //
 
-        // L18
+        // L11/L14
         (Step::Unstarted, Input::NewRound(round)) if info.is_proposer() => {
             // Update the round
             state.round = round;
@@ -250,6 +250,7 @@ where
                 state.round,
                 TimeoutStep::Propose,
             );
+
             Transition::to(state.with_step(Step::Propose)).with_output(output)
         }
     }
