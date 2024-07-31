@@ -251,6 +251,7 @@ module votekeeper {
                             else
                                 msgsBySender
 
+
         val updatedVotesAddressesWeights =
             if (roundVotes.votesAddressesWeights.has(vote.srcAddress)) 
                 roundVotes.votesAddressesWeights
@@ -312,6 +313,59 @@ module votekeeper {
             assert(o5.output == SkipVKOutput(1)),
             assert(o6.bookkeeper.evidence != Set())
         }
+
+
+pure def validCommit (commit: Set[Vote], commitWeight: Weight, keeper: Bookkeeper) : bool = 
+    val v = chooseSome(commit)
+    all {
+        v.valueId != Nil,
+        v.voteType == Precommit,
+        commit.forall(x => all {    x.height == v.height,
+                                    x.round == v.round,
+                                    x.valueId == v.valueId,
+                                    x.voteType == Precommit}),
+        commitWeight > 2 / 3 * keeper.totalWeight, 
+    }
+
+pure def commitRound (commit: Set[Vote]) : Round = chooseSome(commit).round
+pure def commitValue (commit: Set[Vote]) : Value = chooseSome(commit).valueId
+
+pure def voteCountFromCommit (commit: Set[Vote], commitWeight: Weight) : VoteCount =
+    {
+        totalWeight: commitWeight,
+        valuesWeights: Map(commitValue(commit) -> commitWeight),
+        votesAddresses: commit.map(x => x.srcAddress),
+        receivedVotes: commit,
+    }
+
+// This takes a commit, checks for evidence, and overwrites the roundVotes with the new commit
+// TODO: add test for applyCommit with/without evidence
+pure def applyCommit(keeper: Bookkeeper, commit: Set[Vote], commitWeight: Weight, currentRound: Round): { bookkeeper: Bookkeeper, output: VoteKeeperOutput } =
+    if (not(validCommit(commit, commitWeight, keeper)))
+        { bookkeeper: keeper, output: NoVKOutput }
+    else
+        // getting the roundVotes that are touched by the commit
+        val round = commit.commitRound()
+        val roundVotes = keeper.rounds.getOrElse(round, newRoundVotes(keeper.height, round, keeper.totalWeight))
+        // compute evidence
+        val oldPrecommits = roundVotes.precommits.receivedVotes
+        val doubleVotes = commit.filter(cv => oldPrecommits.exists(ov => cv.srcAddress == ov.srcAddress and cv.valueId != ov.valueId))
+        val newEvidence = doubleVotes.map(cv => Set(cv).union(oldPrecommits.filter(ov => cv.srcAddress == ov.srcAddress)))
+        // overwrite roundvotes with commit
+        val newRoundVotes = roundVotes.with("precommits", voteCountFromCommit(commit, commitWeight))
+        val newRounds = keeper.rounds.set(commit.commitRound(), newRoundVotes)
+        // compute the new bookkeeper state with evidence and updated roundvotes
+        val newkeeper = keeper
+                            .with("evidence", keeper.evidence.union(newEvidence))
+                            .with("rounds", newRounds)
+        match commit.commitValue() {
+            | Val(v) => { bookkeeper: newkeeper, output: PrecommitValueVKOutput((round, v)) }
+            | Nil => { bookkeeper: keeper, output: NoVKOutput } // already done in validity check in the top-level if, but 
+                                                                // currently needed to have the match complete
+        }
+        
+        
+
 
     // Called by the driver to check if there is a specific threshold for a given round and voteType.
     // TO DISCUSS:
