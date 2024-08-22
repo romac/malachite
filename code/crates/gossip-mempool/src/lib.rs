@@ -171,7 +171,7 @@ async fn run(
     loop {
         let result = tokio::select! {
             event = swarm.select_next_some() => {
-                handle_swarm_event(event, &mut swarm, &mut state, &tx_event).await
+                handle_swarm_event(event, &mut state, &tx_event).await
             }
 
             Some(ctrl) = rx_ctrl.recv() => {
@@ -214,7 +214,6 @@ async fn handle_ctrl_msg(msg: CtrlMsg, swarm: &mut swarm::Swarm<Behaviour>) -> C
 
 async fn handle_swarm_event(
     event: SwarmEvent<NetworkEvent>,
-    swarm: &mut swarm::Swarm<Behaviour>,
     state: &mut State,
     tx_event: &mpsc::Sender<Event>,
 ) -> ControlFlow<()> {
@@ -251,8 +250,6 @@ async fn handle_swarm_event(
                 );
 
                 state.peers.insert(peer_id, info);
-
-                swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
             } else {
                 trace!(
                     "Peer {peer_id} is using incompatible protocol version: {:?}",

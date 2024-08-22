@@ -48,9 +48,9 @@ where
     ///
     /// The method follows these steps:
     ///
-    /// 1. Check that there is an ongoing round, otherwise return `None`
+    /// 1. Store the proposal.
     ///
-    /// 2. Check that the proposal's height matches the current height, otherwise return `None`.
+    /// 2. Check that there is an ongoing round, otherwise return `None`
     ///
     /// 3. If the proposal is invalid, the method follows these steps:
     ///    a. If we are at propose step and the proposal's proof-of-lock (POL) round is `Nil`, return
@@ -58,9 +58,6 @@ where
     ///    b. If we are at propose step and there is a polka for a prior-round proof-of-lock (POL),
     ///       return `RoundInput::InvalidProposalAndPolkaPrevious`.
     ///    c. For other steps or if there is no prior-round POL, return `None`.
-    ///
-    /// 4. Checks that the proposed value has already not already been decided, after storing the
-    ///    proposal, but before further processing.
     ///
     /// 5. If a quorum of precommit votes is met for the proposal's value,
     ///    return `RoundInput::ProposalAndPrecommitValue` including the proposal.
@@ -81,30 +78,26 @@ where
         proposal: Ctx::Proposal,
         validity: Validity,
     ) -> Option<RoundInput<Ctx>> {
+        // Should only receive proposals for our height.
+        assert_eq!(self.round_state.height, proposal.height());
+
+        // Store the proposal
+        // TODO - store validity as well
+        self.proposal_keeper.apply_proposal(proposal.clone());
+
         // Check that there is an ongoing round
         if self.round_state.round == Round::Nil {
             return None;
         }
 
-        // Check that the proposal is for the current height
-        if self.round_state.height != proposal.height() {
-            return None;
-        }
-
-        // Store the proposal
-        self.proposal = Some(proposal.clone());
-
-        // Determine if there is a polka for the proposal
-        let polka_for_pol = self.vote_keeper.is_threshold_met(
-            &proposal.pol_round(),
-            VoteType::Prevote,
-            Threshold::Value(proposal.value().id()),
-        );
-
         // Determine if the polka is for a previous round
         let polka_previous = proposal.pol_round().is_defined()
-            && polka_for_pol
-            && proposal.pol_round() < self.round_state.round;
+            && proposal.pol_round() < self.round_state.round
+            && self.vote_keeper.is_threshold_met(
+                &proposal.pol_round(),
+                VoteType::Prevote,
+                Threshold::Value(proposal.value().id()),
+            );
 
         // Handle invalid proposal
         if !validity.is_valid() {
@@ -134,8 +127,10 @@ where
             return Some(RoundInput::ProposalAndPrecommitValue(proposal));
         }
 
-        // If the proposal is for a different round, drop the proposal
-        if self.round_state.round != proposal.round() {
+        // If the proposal is for a different round, drop the proposal.
+        // This check must be after the L49 check above because a commit quorum from any round
+        // should result in a decision.
+        if self.round_state.round > proposal.round() {
             return None;
         }
 
@@ -160,13 +155,14 @@ where
         Some(RoundInput::Proposal(proposal))
     }
 
-    /// After a vote threshold change, check if we have a polka for nil, some value or any,
+    /// After a vote threshold change for a given round, check if we have a polka for nil, some value or any,
     /// based on the type of threshold and the current proposal.
     pub fn multiplex_vote_threshold(
         &self,
         new_threshold: VKOutput<ValueId<Ctx>>,
+        threshold_round: Round,
     ) -> RoundInput<Ctx> {
-        if let Some(proposal) = &self.proposal {
+        if let Some(proposal) = self.proposal_keeper.get_proposal_for_round(threshold_round) {
             match new_threshold {
                 VKOutput::PolkaAny => RoundInput::PolkaAny,
                 VKOutput::PolkaNil => RoundInput::PolkaNil,
@@ -213,12 +209,15 @@ where
 
             // After a step change to prevote, check if we have a polka for nil, some value or any,
             // and return the corresponding input for the round state machine.
+            // TODO - review this code again
             Step::Prevote => {
                 if has_polka_nil(&self.vote_keeper, round) {
                     Some(RoundInput::PolkaNil)
-                } else if let Some(proposal) =
-                    has_polka_value(&self.vote_keeper, round, self.proposal.as_ref())
-                {
+                } else if let Some(proposal) = has_polka_value(
+                    &self.vote_keeper,
+                    round,
+                    self.proposal_keeper.get_proposal_for_round(round),
+                ) {
                     Some(RoundInput::ProposalAndPolkaCurrent(proposal.clone()))
                 } else if has_polka_any(&self.vote_keeper, round) {
                     Some(RoundInput::PolkaAny)
