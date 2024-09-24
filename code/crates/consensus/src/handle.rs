@@ -1,6 +1,7 @@
 use async_recursion::async_recursion;
 use tracing::{debug, error, info, warn};
 
+use malachite_common::Value;
 use malachite_common::*;
 use malachite_driver::Input as DriverInput;
 use malachite_driver::Output as DriverOutput;
@@ -300,16 +301,22 @@ where
             apply_driver_input(co, state, metrics, DriverInput::Vote(signed_vote.message)).await
         }
 
-        DriverOutput::Decide(round, value) => {
+        DriverOutput::Decide(consensus_round, proposal) => {
             // TODO: Remove proposal, votes, block for the round
-            info!("Decided on value {}", value.id());
+            info!(
+                "Decided in round {} on proposal {:?}",
+                consensus_round, proposal
+            );
 
             // Store value decided on for retrieval when timeout commit elapses
             state
                 .decision
-                .insert((state.driver.height(), round), value.clone());
+                .insert((state.driver.height(), consensus_round), proposal.clone());
 
-            perform!(co, Effect::ScheduleTimeout(Timeout::commit(round)));
+            perform!(
+                co,
+                Effect::ScheduleTimeout(Timeout::commit(consensus_round))
+            );
 
             Ok(())
         }
@@ -368,25 +375,32 @@ async fn decide<Ctx>(
     co: &Co<Ctx>,
     state: &mut State<Ctx>,
     metrics: &Metrics,
-    height: Ctx::Height,
     round: Round,
-    value: Ctx::Value,
+    proposal: Ctx::Proposal,
 ) -> Result<(), Error<Ctx>>
 where
     Ctx: Context,
 {
+    let height = proposal.height();
+    let proposal_round = proposal.round();
+    let value = proposal.value();
     // Remove the block information as it is not needed anymore
-    state.remove_received_block(height, round);
+    let block_round = if proposal.pol_round().is_defined() {
+        proposal.pol_round()
+    } else {
+        proposal.round()
+    };
+    state.remove_received_block(proposal.height(), block_round);
 
     // Restore the commits. Note that they will be removed from `state`
-    let commits = state.restore_precommits(height, round, &value);
+    let commits = state.restore_precommits(height, proposal_round, value);
 
     perform!(
         co,
         Effect::Decide {
             height,
-            round,
-            value,
+            round: proposal_round,
+            value: value.clone(),
             commits
         }
     );
@@ -397,9 +411,12 @@ where
 
     metrics.block_end();
     metrics.finalized_blocks.inc();
+
+    metrics.consensus_round.observe(round.as_i64() as f64);
+
     metrics
-        .rounds_per_block
-        .observe((round.as_i64() + 1) as f64);
+        .proposal_round
+        .observe(proposal_round.as_i64() as f64);
 
     Ok(())
 }
@@ -631,12 +648,12 @@ where
     apply_driver_input(co, state, metrics, DriverInput::TimeoutElapsed(timeout)).await?;
 
     if timeout.step == TimeoutStep::Commit {
-        let value = state
+        let proposal = state
             .decision
             .remove(&(height, round))
             .ok_or_else(|| Error::DecidedValueNotFound(height, round))?;
 
-        decide(co, state, metrics, height, round, value).await?;
+        decide(co, state, metrics, round, proposal).await?;
     }
 
     Ok(())
