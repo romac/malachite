@@ -11,17 +11,21 @@ mod params;
 pub use params::{Params, ThresholdParams};
 
 mod effect;
-pub use effect::{Effect, Resume};
+pub use effect::Effect;
 
 mod types;
 pub use types::*;
 
-pub mod gen;
-pub mod handle;
-
 mod full_proposal;
+mod handle;
 mod macros;
 mod util;
+
+#[doc(hidden)]
+pub mod gen;
+
+#[doc(hidden)]
+pub use handle::handle;
 
 #[doc(hidden)]
 pub use full_proposal::{FullProposal, FullProposalKeeper};

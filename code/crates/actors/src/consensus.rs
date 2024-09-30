@@ -6,11 +6,10 @@ use eyre::eyre;
 use libp2p::PeerId;
 use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef};
 use tokio::sync::mpsc;
-use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 
 use malachite_common::{Context, NilOrVal, Round, Timeout, TimeoutStep, ValidatorSet, VoteType};
-use malachite_consensus::{Effect, Resume};
+use malachite_consensus::Effect;
 use malachite_metrics::Metrics;
 use malachite_node::config::TimeoutConfig;
 
@@ -446,28 +445,28 @@ where
         timers: &mut Timers<Ctx>,
         timeouts: &mut Timeouts,
         effect: Effect<Ctx>,
-    ) -> Result<Resume<Ctx>, ActorProcessingErr> {
+    ) -> Result<(), ActorProcessingErr> {
         match effect {
             Effect::ResetTimeouts => {
                 timeouts.reset(self.timeout_config);
-                Ok(Resume::Continue)
+                Ok(())
             }
 
             Effect::CancelAllTimeouts => {
                 timers.cancel_all();
-                Ok(Resume::Continue)
+                Ok(())
             }
 
             Effect::CancelTimeout(timeout) => {
                 timers.cancel(&timeout);
-                Ok(Resume::Continue)
+                Ok(())
             }
 
             Effect::ScheduleTimeout(timeout) => {
                 let duration = timeouts.duration_for(timeout.step);
                 timers.start_timer(timeout, duration);
 
-                Ok(Resume::Continue)
+                Ok(())
             }
 
             Effect::StartRound(height, round, proposer) => {
@@ -477,24 +476,7 @@ where
                     proposer,
                 })?;
 
-                Ok(Resume::Continue)
-            }
-
-            Effect::VerifySignature(msg, pk) => {
-                use malachite_consensus::ConsensusMsg as Msg;
-
-                let start = Instant::now();
-
-                let valid = match msg.message {
-                    Msg::Vote(v) => self.ctx.verify_signed_vote(&v, &msg.signature, &pk),
-                    Msg::Proposal(p) => self.ctx.verify_signed_proposal(&p, &msg.signature, &pk),
-                };
-
-                self.metrics
-                    .signature_verification_time
-                    .observe(start.elapsed().as_secs_f64());
-
-                Ok(Resume::SignatureValidity(valid))
+                Ok(())
             }
 
             Effect::Broadcast(gossip_msg) => {
@@ -502,7 +484,7 @@ where
                     .cast(GossipConsensusMsg::BroadcastMsg(gossip_msg))
                     .map_err(|e| eyre!("Error when broadcasting gossip message: {e:?}"))?;
 
-                Ok(Resume::Continue)
+                Ok(())
             }
 
             Effect::GetValue(height, round, timeout) => {
@@ -511,7 +493,7 @@ where
                 self.get_value(myself, height, round, timeout_duration)
                     .map_err(|e| eyre!("Error when asking for value to be built: {e:?}"))?;
 
-                Ok(Resume::Continue)
+                Ok(())
             }
 
             Effect::Decide {
@@ -534,7 +516,7 @@ where
                     })
                     .map_err(|e| eyre!("Error when sending decided value to host: {e:?}"))?;
 
-                Ok(Resume::Continue)
+                Ok(())
             }
         }
     }

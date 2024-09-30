@@ -6,15 +6,14 @@ use malachite_driver::Input as DriverInput;
 use malachite_driver::Output as DriverOutput;
 use malachite_metrics::Metrics;
 
-use crate::effect::{Effect, Resume};
+use crate::effect::Effect;
 use crate::error::Error;
 use crate::gen::Co;
 use crate::msg::Msg;
+use crate::perform;
 use crate::state::State;
-use crate::types::GossipMsg;
+use crate::types::{GossipMsg, ProposedValue};
 use crate::util::pretty::{PrettyProposal, PrettyVal, PrettyVote};
-use crate::ConsensusMsg;
-use crate::{perform, ProposedValue};
 
 pub async fn handle<Ctx>(
     co: Co<Ctx>,
@@ -459,9 +458,11 @@ where
         return Ok(());
     };
 
-    let signed_msg = signed_vote.clone().map(ConsensusMsg::Vote);
-    let verify_sig = Effect::VerifySignature(signed_msg, validator.public_key().clone());
-    if !perform!(co, verify_sig, Resume::SignatureValidity(valid) => valid) {
+    let valid = metrics.time_signature_verification(|| {
+        Ctx::verify_signed_vote(&signed_vote, validator.public_key())
+    });
+
+    if !valid {
         warn!(
             validator = %validator_address,
             "Received invalid vote: {}", PrettyVote::<Ctx>(&signed_vote.message)
@@ -540,9 +541,20 @@ where
         return Ok(());
     };
 
-    let signed_msg = signed_proposal.clone().map(ConsensusMsg::Proposal);
-    let verify_sig = Effect::VerifySignature(signed_msg, proposer.public_key().clone());
-    if !perform!(co, verify_sig, Resume::SignatureValidity(valid) => valid) {
+    if proposal_height != state.driver.height() {
+        warn!(
+            "Ignoring proposal for height {proposal_height}, current height: {}",
+            state.driver.height()
+        );
+
+        return Ok(());
+    }
+
+    let valid = metrics.time_signature_verification(|| {
+        Ctx::verify_signed_proposal(&signed_proposal, proposer.public_key())
+    });
+
+    if !valid {
         error!(
             "Received invalid signature for proposal: {}",
             PrettyProposal::<Ctx>(&signed_proposal.message)
