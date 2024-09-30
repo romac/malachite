@@ -2,11 +2,11 @@ use derive_where::derive_where;
 
 use malachite_common::*;
 
-use crate::types::GossipMsg;
+use crate::types::SignedConsensusMsg;
 
 /// An effect which may be yielded by a consensus process.
 ///
-/// Effects are handled by the caller using [`process`][process].
+/// Effects are handled by the caller using [`process!`][process].
 /// After that the consensus computation is then resumed.
 ///
 /// [process]: crate::process
@@ -32,7 +32,7 @@ where
     StartRound(Ctx::Height, Round, Ctx::Address),
 
     /// Broadcast a message
-    Broadcast(GossipMsg<Ctx>),
+    Broadcast(SignedConsensusMsg<Ctx>),
 
     /// Get a value to propose at the given height and round, within the given timeout
     GetValue(Ctx::Height, Round, Timeout),
