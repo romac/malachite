@@ -20,6 +20,13 @@ where
     // Clean proposals and values
     state.remove_full_proposals(height);
 
+    #[cfg(feature = "debug")]
+    {
+        for trace in state.driver.round_state.get_traces() {
+            debug!("Consensus trace: {trace}");
+        }
+    }
+
     perform!(
         co,
         Effect::Decide {
