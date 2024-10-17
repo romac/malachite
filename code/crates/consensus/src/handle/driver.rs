@@ -74,7 +74,7 @@ where
 
     // If the step has changed, update the metrics
     if prev_step != new_step {
-        debug!("Transitioned from {prev_step:?} to {new_step:?}");
+        debug!(step.previous = ?prev_step, step.new = ?new_step, "Transitioned to new step");
         if let Some(valid) = &state.driver.valid_value() {
             if state.driver.step_is_propose() {
                 info!(
