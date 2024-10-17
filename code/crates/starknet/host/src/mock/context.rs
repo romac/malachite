@@ -119,8 +119,7 @@ impl Context for MockContext {
         value_id: NilOrVal<BlockHash>,
         address: Address,
     ) -> Vote {
-        let fork_id = 1; // FIXME: p2p-types
-        Vote::new_prevote(height, round, fork_id, value_id, address)
+        Vote::new_prevote(height, round, value_id, address)
     }
 
     fn new_precommit(
@@ -129,7 +128,6 @@ impl Context for MockContext {
         value_id: NilOrVal<BlockHash>,
         address: Address,
     ) -> Vote {
-        let fork_id = 1; // FIXME: p2p-types
-        Vote::new_precommit(height, round, fork_id, value_id, address)
+        Vote::new_precommit(height, round, value_id, address)
     }
 }
