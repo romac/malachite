@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 
-use malachite_common::{Context, Round, Timeout, TimeoutStep, ValidatorSet};
+use malachite_common::{Context, Extension, Round, Timeout, TimeoutStep, ValidatorSet};
 use malachite_consensus::{Effect, Resume};
 use malachite_metrics::Metrics;
 use malachite_node::config::TimeoutConfig;
@@ -52,9 +52,9 @@ pub enum Msg<Ctx: Context> {
     TimeoutElapsed(TimeoutElapsed<Timeout>),
 
     /// The proposal builder has built a value and can be used in a new proposal consensus message
-    ProposeValue(Ctx::Height, Round, Ctx::Value),
+    ProposeValue(Ctx::Height, Round, Ctx::Value, Extension),
 
-    /// Received and sssembled the full value proposed by a validator
+    /// Received and assembled the full value proposed by a validator
     ReceivedProposedValue(ProposedValue<Ctx>),
 }
 
@@ -204,12 +204,12 @@ where
                 Ok(())
             }
 
-            Msg::ProposeValue(height, round, value) => {
+            Msg::ProposeValue(height, round, value, extension) => {
                 let result = self
                     .process_input(
                         &myself,
                         state,
-                        ConsensusInput::ProposeValue(height, round, value),
+                        ConsensusInput::ProposeValue(height, round, value, extension),
                     )
                     .await;
 
@@ -379,7 +379,12 @@ where
             },
             myself,
             |proposed: LocallyProposedValue<Ctx>| {
-                Msg::<Ctx>::ProposeValue(proposed.height, proposed.round, proposed.value)
+                Msg::<Ctx>::ProposeValue(
+                    proposed.height,
+                    proposed.round,
+                    proposed.value,
+                    proposed.extension,
+                )
             },
             None,
         )?;

@@ -1,4 +1,5 @@
-use malachite_common::{NilOrVal, Round, VoteType};
+use bytes::Bytes;
+use malachite_common::{Extension, NilOrVal, Round, VoteType};
 use malachite_proto as proto;
 use malachite_starknet_p2p_proto as p2p_proto;
 
@@ -11,6 +12,7 @@ pub struct Vote {
     pub round: Round,
     pub block_hash: NilOrVal<BlockHash>,
     pub voter: Address,
+    pub extension: Option<Extension>,
 }
 
 impl Vote {
@@ -26,6 +28,7 @@ impl Vote {
             round,
             block_hash,
             voter,
+            extension: None,
         }
     }
 
@@ -41,10 +44,28 @@ impl Vote {
             round,
             block_hash: value,
             voter: address,
+            extension: None,
         }
     }
 
-    pub fn to_sign_bytes(&self) -> Vec<u8> {
+    pub fn new_precommit_with_extension(
+        height: Height,
+        round: Round,
+        value: NilOrVal<BlockHash>,
+        address: Address,
+        extension: Extension,
+    ) -> Self {
+        Self {
+            vote_type: VoteType::Precommit,
+            height,
+            round,
+            block_hash: value,
+            voter: address,
+            extension: Some(extension),
+        }
+    }
+
+    pub fn to_sign_bytes(&self) -> Bytes {
         malachite_proto::Protobuf::to_bytes(self).unwrap()
     }
 }
@@ -67,6 +88,7 @@ impl proto::Protobuf for Vote {
                     .voter
                     .ok_or_else(|| proto::Error::missing_field::<Self::Proto>("voter"))?,
             )?,
+            extension: proto.extension.map(Extension::from),
         })
     }
 
@@ -82,6 +104,7 @@ impl proto::Protobuf for Vote {
                 NilOrVal::Val(v) => Some(v.to_proto()?),
             },
             voter: Some(self.voter.to_proto()?),
+            extension: self.extension.as_ref().map(|e| e.data.clone()),
         })
     }
 }

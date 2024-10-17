@@ -1,4 +1,4 @@
-use malachite_common::{self as common, NilOrVal, Round, VoteType, VotingPower};
+use malachite_common::{self as common, Extension, NilOrVal, Round, VoteType, VotingPower};
 use malachite_starknet_p2p_types::{
     Address, BlockHash, Height, PartType, Proposal, ProposalPart, PublicKey, Validator,
     ValidatorSet, Vote,
@@ -65,6 +65,17 @@ impl common::Vote<MockContext> for Vote {
 
     fn validator_address(&self) -> &Address {
         &self.voter
+    }
+
+    fn extension(&self) -> Option<&Extension> {
+        self.extension.as_ref()
+    }
+
+    fn extend(self, extension: Extension) -> Self {
+        Self {
+            extension: Some(extension),
+            ..self
+        }
     }
 }
 

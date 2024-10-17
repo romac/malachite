@@ -2454,6 +2454,7 @@ dependencies = [
 name = "malachite-common"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "derive-where",
 ]
 
@@ -2615,6 +2616,7 @@ name = "malachite-starknet-host"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "bytesize",
  "derive-where",
  "eyre",
@@ -2645,6 +2647,7 @@ dependencies = [
 name = "malachite-starknet-p2p-types"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "malachite-common",
  "malachite-proto",
  "malachite-starknet-p2p-proto",
@@ -2676,6 +2679,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "bytes",
  "bytesize",
  "ed25519-consensus",
  "hex",

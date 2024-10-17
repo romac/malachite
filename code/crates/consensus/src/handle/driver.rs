@@ -1,7 +1,6 @@
+use crate::prelude::*;
 use malachite_driver::Input as DriverInput;
 use malachite_driver::Output as DriverOutput;
-
-use crate::prelude::*;
 
 use crate::handle::on_proposal;
 use crate::types::SignedConsensusMsg;
@@ -156,7 +155,8 @@ where
                 "Voting",
             );
 
-            let signed_vote = state.ctx.sign_vote(vote);
+            let extended_vote = extend_vote(vote, state);
+            let signed_vote = state.ctx.sign_vote(extended_vote);
 
             perform!(
                 co,
@@ -203,4 +203,25 @@ where
             Ok(())
         }
     }
+}
+
+fn extend_vote<Ctx: Context>(vote: Ctx::Vote, state: &mut State<Ctx>) -> Ctx::Vote {
+    let VoteType::Precommit = vote.vote_type() else {
+        return vote;
+    };
+
+    let NilOrVal::Val(val_id) = vote.value() else {
+        return vote;
+    };
+
+    let Some(full_proposal) = state.full_proposal_keeper.full_proposal_at_round_and_value(
+        &vote.height(),
+        vote.round(),
+        val_id,
+    ) else {
+        return vote;
+    };
+
+    let extension = full_proposal.extension.clone();
+    vote.extend(extension)
 }

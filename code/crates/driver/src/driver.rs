@@ -199,7 +199,7 @@ where
         Ok(())
     }
 
-    /// Convert an output of the round state machine to the output type of the driver.
+    /// Convert the output of the round state machine to the output type of the driver.
     fn lift_output(&mut self, round_output: RoundOutput<Ctx>, outputs: &mut Vec<Output<Ctx>>) {
         match round_output {
             RoundOutput::NewRound(round) => outputs.push(Output::NewRound(self.height(), round)),
