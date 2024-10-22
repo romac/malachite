@@ -51,7 +51,7 @@ if set -q _flag_lldb
     set lldb true
 end
 
-set -x MALACHITE__CONSENSUS__P2P__PROTOCOL "gossipsub"
+set -x MALACHITE__CONSENSUS__P2P__PROTOCOL__TYPE "gossipsub"
 set -x MALACHITE__CONSENSUS__MAX_BLOCK_SIZE "1MiB"
 set -x MALACHITE__CONSENSUS__TIMEOUT_PROPOSE "5s"
 set -x MALACHITE__CONSENSUS__TIMEOUT_PREVOTE "3s"
