@@ -6,7 +6,7 @@ use derive_where::derive_where;
 use libp2p::identity::Keypair;
 use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
 use tokio::task::JoinHandle;
-use tracing::{debug, error, error_span, Instrument};
+use tracing::{debug, error};
 
 use malachite_common::{Context, SignedProposal, SignedVote};
 use malachite_consensus::SignedConsensusMsg;
@@ -127,17 +127,14 @@ where
 
         let (mut recv_handle, ctrl_handle) = handle.split();
 
-        let recv_task = tokio::spawn(
-            async move {
-                while let Some(event) = recv_handle.recv().await {
-                    if let Err(e) = myself.cast(Msg::NewEvent(event)) {
-                        error!("Actor has died, stopping gossip consensus: {e:?}");
-                        break;
-                    }
+        let recv_task = tokio::spawn(async move {
+            while let Some(event) = recv_handle.recv().await {
+                if let Err(e) = myself.cast(Msg::NewEvent(event)) {
+                    error!("Actor has died, stopping gossip consensus: {e:?}");
+                    break;
                 }
             }
-            .instrument(error_span!("gossip.consensus")),
-        );
+        });
 
         Ok(State::Running {
             peers: BTreeSet::new(),
@@ -156,7 +153,6 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(name = "gossip.consensus", skip(self, _myself, msg, state))]
     async fn handle(
         &self,
         _myself: ActorRef<Msg<Ctx>>,
