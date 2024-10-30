@@ -117,7 +117,6 @@ impl<const N: usize> Test<N> {
         for i in 0..N {
             let mut config = make_node_config(self, i, app);
 
-            config.mempool.gossip_batch_size = 0;
             config.consensus.max_block_size = test_params.block_size;
             config.consensus.p2p.protocol = test_params.protocol;
             config.test.tx_size = test_params.tx_size;
