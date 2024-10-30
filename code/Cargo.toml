@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
   "crates/actors",
+  "crates/blocksync",
   "crates/cli",
   "crates/common",
   "crates/config",
@@ -15,10 +16,15 @@ members = [
   "crates/node",
   "crates/proto",
   "crates/round",
-  "crates/starknet/*",
+  "crates/vote",
+
+  # Test
   "crates/test",
   "crates/test/mbt",
-  "crates/vote",
+
+  # Starknet
+  "crates/starknet/*",
+  "crates/starknet/*"
 ]
 
 [workspace.package]
@@ -27,7 +33,10 @@ edition      = "2021"
 repository   = "https://github.com/informalsystems/malachite"
 license      = "Apache-2.0"
 publish      = false
-rust-version = "1.77"
+rust-version = "1.82"
+
+[profile.dev]
+opt-level = 1
 
 [profile.release]
 lto = "thin"
@@ -42,6 +51,7 @@ unused_crate_dependencies = "warn"
 
 [workspace.dependencies]
 malachite-actors           = { version = "0.1.0", path = "crates/actors" }
+malachite-blocksync        = { version = "0.1.0", path = "crates/blocksync" }
 malachite-cli              = { version = "0.1.0", path = "crates/cli" }
 malachite-common           = { version = "0.1.0", path = "crates/common" }
 malachite-config           = { version = "0.1.0", path = "crates/config" }
@@ -72,11 +82,13 @@ async-recursion    = "1.1"
 async-trait        = "0.1.83"
 axum               = "0.7"
 base64             = "0.22.0"
+bon                = "2.3.0"
 bytesize           = "1.3"
 bytes              = { version = "1", default-features = false }
 clap               = "4.5"
 color-eyre         = "0.6"
 config             = { version = "0.14", features = ["toml"], default-features = false }
+dashmap            = "6.1.0"
 derive-where       = "1.2.7"
 displaydoc         = { version = "0.2", default-features = false }
 directories        = "5.0.1"
