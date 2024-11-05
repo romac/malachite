@@ -1,9 +1,9 @@
-use crate::prelude::*;
 use malachite_driver::Input as DriverInput;
 use malachite_driver::Output as DriverOutput;
 
 use crate::handle::on_proposal;
 use crate::handle::vote::on_vote;
+use crate::prelude::*;
 use crate::types::SignedConsensusMsg;
 use crate::util::pretty::PrettyVal;
 
@@ -140,12 +140,16 @@ where
 
             let signed_proposal = state.ctx.sign_proposal(proposal.clone());
 
-            perform!(
-                co,
-                Effect::Broadcast(SignedConsensusMsg::Proposal(signed_proposal.clone()))
-            );
+            // Proposal messages should not be broadcasted if they are implicit,
+            // instead they should be inferred from the block parts.
+            if state.params.value_payload.include_proposal() {
+                perform!(
+                    co,
+                    Effect::Broadcast(SignedConsensusMsg::Proposal(signed_proposal.clone()))
+                );
+            }
 
-            if let Round::Some(_vr) = signed_proposal.pol_round() {
+            if signed_proposal.pol_round().is_defined() {
                 perform!(
                     co,
                     Effect::RestreamValue(

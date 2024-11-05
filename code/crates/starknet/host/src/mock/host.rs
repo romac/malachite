@@ -3,16 +3,17 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bytesize::ByteSize;
-use malachite_config::VoteExtensionsConfig;
+use malachite_consensus::ValuePayload;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 use tracing::Instrument;
 
-use crate::part_store::PartStore;
 use malachite_common::{Round, SignedVote};
+use malachite_config::VoteExtensionsConfig;
 
 use crate::mempool::MempoolRef;
 use crate::mock::context::MockContext;
+use crate::part_store::PartStore;
 use crate::types::*;
 use crate::Host;
 
@@ -22,6 +23,7 @@ use build_proposal::{build_proposal_task, repropose_task};
 #[derive(Copy, Clone, Debug)]
 pub struct MockParams {
     pub max_block_size: ByteSize,
+    pub value_payload: ValuePayload,
     pub tx_size: ByteSize,
     pub txs_per_part: usize,
     pub time_allowance_factor: f32,
@@ -31,10 +33,10 @@ pub struct MockParams {
 }
 
 pub struct MockHost {
-    params: MockParams,
-    mempool: MempoolRef,
-    address: Address,
-    validator_set: ValidatorSet,
+    pub params: MockParams,
+    pub mempool: MempoolRef,
+    pub address: Address,
+    pub validator_set: ValidatorSet,
     pub part_store: PartStore<MockContext>,
 }
 
@@ -52,10 +54,6 @@ impl MockHost {
             validator_set,
             part_store: Default::default(),
         }
-    }
-
-    pub fn params(&self) -> MockParams {
-        self.params
     }
 }
 

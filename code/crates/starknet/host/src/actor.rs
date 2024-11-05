@@ -104,8 +104,8 @@ impl HostState {
 
         trace!(parts.len = %parts.len(), "Building proposal content from parts");
 
-        let extension = self.host.params().vote_extensions.enabled.then(|| {
-            let size = self.host.params().vote_extensions.size.as_u64() as usize;
+        let extension = self.host.params.vote_extensions.enabled.then(|| {
+            let size = self.host.params.vote_extensions.size.as_u64() as usize;
             debug!(%size, "Vote extensions are enabled" );
 
             let mut bytes = vec![0u8; size];
@@ -162,7 +162,7 @@ impl HostState {
             // Simulate Tx execution and proof verification (assumes success)
             // TODO: Add config knob for invalid blocks
             let num_txes = part.tx_count() as u32;
-            let exec_time = self.host.params().exec_time_per_tx * num_txes;
+            let exec_time = self.host.params.exec_time_per_tx * num_txes;
             tokio::time::sleep(exec_time).await;
 
             trace!("Simulation took {exec_time:?} to execute {num_txes} txes");
@@ -236,7 +236,7 @@ impl StarknetHost {
     }
     async fn prune_block_store(&self, state: &mut HostState) {
         let max_height = state.block_store.last_height().unwrap_or_default();
-        let max_retain_blocks = state.host.params().max_retain_blocks as u64;
+        let max_retain_blocks = state.host.params.max_retain_blocks as u64;
 
         // Compute the height to retain blocks higher than
         let retain_height = max_height.as_u64().saturating_sub(max_retain_blocks);
@@ -310,22 +310,28 @@ impl Actor for StarknetHost {
 
                 while let Some(part) = rx_part.recv().await {
                     state.host.part_store.store(height, round, part.clone());
+                    if state.host.params.value_payload.include_parts() {
+                        debug!(%stream_id, %sequence, "Broadcasting proposal part");
 
-                    debug!(%stream_id, %sequence, "Broadcasting proposal part");
+                        let msg = StreamMessage::new(
+                            stream_id,
+                            sequence,
+                            StreamContent::Data(part.clone()),
+                        );
 
-                    let msg =
-                        StreamMessage::new(stream_id, sequence, StreamContent::Data(part.clone()));
-
-                    self.gossip_consensus
-                        .cast(GossipConsensusMsg::PublishProposalPart(msg))?;
+                        self.gossip_consensus
+                            .cast(GossipConsensusMsg::PublishProposalPart(msg))?;
+                    }
 
                     sequence += 1;
                 }
 
-                let msg = StreamMessage::new(stream_id, sequence, StreamContent::Fin(true));
+                if state.host.params.value_payload.include_parts() {
+                    let msg = StreamMessage::new(stream_id, sequence, StreamContent::Fin(true));
 
-                self.gossip_consensus
-                    .cast(GossipConsensusMsg::PublishProposalPart(msg))?;
+                    self.gossip_consensus
+                        .cast(GossipConsensusMsg::PublishProposalPart(msg))?;
+                }
 
                 let block_hash = rx_hash.await?;
                 debug!(%block_hash, "Assembled block");
@@ -337,8 +343,8 @@ impl Actor for StarknetHost {
 
                 let parts = state.host.part_store.all_parts(height, round);
 
-                let extension = state.host.params().vote_extensions.enabled.then(|| {
-                    let size = state.host.params().vote_extensions.size.as_u64() as usize;
+                let extension = state.host.params.vote_extensions.enabled.then(|| {
+                    let size = state.host.params.vote_extensions.size.as_u64() as usize;
                     debug!(%size, "Vote extensions are enabled");
 
                     let mut bytes = vec![0u8; size];
