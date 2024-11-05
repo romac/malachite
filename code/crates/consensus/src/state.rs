@@ -134,7 +134,9 @@ where
     pub fn store_value(&mut self, new_value: &ProposedValue<Ctx>) {
         // Values for higher height should have been cached for future processing
         assert_eq!(new_value.height, self.driver.height());
-        self.full_proposal_keeper.store_value(new_value)
+
+        // Store the value at both round and valid_round
+        self.full_proposal_keeper.store_value(new_value);
     }
 
     pub fn remove_full_proposals(&mut self, height: Ctx::Height) {

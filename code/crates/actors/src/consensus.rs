@@ -231,7 +231,7 @@ where
                     .process_input(
                         &myself,
                         state,
-                        ConsensusInput::ProposeValue(height, round, value, extension),
+                        ConsensusInput::ProposeValue(height, round, Round::Nil, value, extension),
                     )
                     .await;
 
@@ -546,6 +546,20 @@ where
                     .ok();
 
                 Ok(Resume::ValidatorSet(height, validator_set))
+            }
+
+            Effect::RestreamValue(height, round, valid_round, address, value_id) => {
+                self.host
+                    .cast(HostMsg::RestreamValue {
+                        height,
+                        round,
+                        valid_round,
+                        address,
+                        value_id,
+                    })
+                    .map_err(|e| eyre!("Error when sending decided value to host: {e:?}"))?;
+
+                Ok(Resume::Continue)
             }
 
             Effect::Decide { proposal, commits } => {
