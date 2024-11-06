@@ -10,7 +10,9 @@ pub mod block_store;
 pub mod codec;
 pub mod mempool;
 pub mod mock;
+pub mod node;
 pub mod part_store;
+pub mod spawn;
 pub mod streaming;
 
 pub mod proto {
