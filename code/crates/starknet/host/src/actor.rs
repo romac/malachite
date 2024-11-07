@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use eyre::eyre;
+
 use itertools::Itertools;
+use malachite_starknet_p2p_types::Block;
 use ractor::{async_trait, Actor, ActorProcessingErr, SpawnErr};
 use rand::RngCore;
 use sha3::Digest;
@@ -14,7 +16,7 @@ use malachite_actors::gossip_consensus::{GossipConsensusMsg, GossipConsensusRef}
 use malachite_actors::host::{LocallyProposedValue, ProposedValue};
 use malachite_actors::util::streaming::{StreamContent, StreamId, StreamMessage};
 use malachite_blocksync::SyncedBlock;
-use malachite_common::{Extension, Proposal, Round, Validity, Value};
+use malachite_common::{Extension, Round, Validity};
 use malachite_metrics::Metrics;
 
 use crate::block_store::BlockStore;
@@ -529,11 +531,10 @@ impl Actor for StarknetHost {
             }
 
             HostMsg::Decide {
-                proposal,
-                commits,
+                certificate,
                 consensus,
             } => {
-                let (height, round) = (proposal.height, proposal.round);
+                let (height, round) = (certificate.height, certificate.round);
 
                 let mut all_parts = state.host.part_store.all_parts(height, round);
 
@@ -545,18 +546,16 @@ impl Actor for StarknetHost {
                     }
                 }
 
-                // Build the block from proposal parts and commits and store it
-                if let Err(e) = state
-                    .block_store
-                    .store(&proposal, &all_txes, &commits)
-                    .await
-                {
+                // Build the block from transaction parts and certificate, and store it
+                if let Err(e) = state.block_store.store(&certificate, &all_txes).await {
                     error!(%e, %height, %round, "Failed to store the block");
                 }
 
                 // Update metrics
                 let block_size: usize = all_parts.iter().map(|p| p.size_bytes()).sum();
-                let extension_size: usize = commits
+                let extension_size: usize = certificate
+                    .aggregated_signature
+                    .signatures
                     .iter()
                     .map(|c| c.extension.as_ref().map(|e| e.size_bytes()).unwrap_or(0))
                     .sum();
@@ -589,10 +588,7 @@ impl Actor for StarknetHost {
                 self.mempool.cast(MempoolMsg::Update { tx_hashes })?;
 
                 // Notify Starknet Host of the decision
-                state
-                    .host
-                    .decision(proposal.block_hash, commits, height)
-                    .await;
+                state.host.decision(certificate).await;
 
                 // Start the next height
                 consensus.cast(ConsensusMsg::StartHeight(state.height.increment()))?;
@@ -612,9 +608,9 @@ impl Actor for StarknetHost {
 
                         reply_to.send(None)?;
                     }
+
                     Ok(Some(block)) => {
                         let block = SyncedBlock {
-                            proposal: block.proposal,
                             block_bytes: block.block.to_bytes().unwrap(),
                             certificate: block.certificate,
                         };
@@ -632,28 +628,26 @@ impl Actor for StarknetHost {
             }
 
             HostMsg::ProcessSyncedBlockBytes {
-                proposal,
+                height,
+                round,
+                validator_address,
                 block_bytes,
                 reply_to,
             } => {
-                // TODO - process and check that block_bytes match the proposal
-                let _block_hash = {
-                    let mut block_hasher = sha3::Keccak256::new();
-                    block_hasher.update(block_bytes);
-                    BlockHash::new(block_hasher.finalize().into())
-                };
+                let maybe_block = Block::from_bytes(block_bytes.as_ref());
+                if let Ok(block) = maybe_block {
+                    let proposed_value = ProposedValue {
+                        height,
+                        round,
+                        valid_round: Round::Nil,
+                        validator_address,
+                        value: block.block_hash,
+                        validity: Validity::Valid,
+                        extension: None,
+                    };
 
-                let proposal = ProposedValue {
-                    height: proposal.height(),
-                    round: proposal.round(),
-                    valid_round: proposal.pol_round(),
-                    validator_address: proposal.validator_address().clone(),
-                    value: proposal.value().id(),
-                    validity: Validity::Valid,
-                    extension: None,
-                };
-
-                reply_to.send(proposal)?;
+                    reply_to.send(proposed_value)?;
+                }
 
                 Ok(())
             }

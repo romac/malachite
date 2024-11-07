@@ -7,7 +7,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 use tracing::Instrument;
 
-use malachite_common::{Round, SignedVote};
+use malachite_common::{CommitCertificate, Round, SignedVote};
 use malachite_config::VoteExtensionsConfig;
 use malachite_consensus::ValuePayload;
 
@@ -177,14 +177,8 @@ impl Host for MockHost {
     /// - brock_hash - The ID of the content which has been decided.
     /// - precommits - The list of precommits from the round the decision was made (both for and against).
     /// - height     - The height of the decision.
-    #[tracing::instrument(skip_all, fields(height = %_height, block_hash = %_block_hash))]
-    async fn decision(
-        &self,
-        _block_hash: Self::BlockHash,
-        _precommits: Vec<Self::Precommit>,
-        _height: Self::Height,
-    ) {
-    }
+    #[tracing::instrument(skip_all, fields(height = %_certificate.height, block_hash = %_certificate.value_id))]
+    async fn decision(&self, _certificate: CommitCertificate<MockContext>) {}
 }
 
 pub fn compute_proposal_hash(init: &ProposalInit, block_hash: &BlockHash) -> Hash {

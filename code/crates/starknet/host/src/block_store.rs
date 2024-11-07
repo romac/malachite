@@ -2,31 +2,30 @@ use std::ops::RangeBounds;
 use std::path::Path;
 use std::sync::Arc;
 
+use malachite_blocksync::SyncedBlock;
+use malachite_common::CommitCertificate;
+use malachite_proto::Protobuf;
+
 use prost::Message;
 use redb::ReadableTable;
 use thiserror::Error;
 
-use malachite_blocksync::SyncedBlock;
-use malachite_common::{Certificate, Proposal, SignedProposal, SignedVote, Value};
-
 use crate::codec::{decode_sync_block, encode_synced_block};
 use crate::mock::context::MockContext;
-use crate::proto::{self as proto, Error as ProtoError, Protobuf};
+use crate::proto::{self as proto, Error as ProtoError};
 use crate::types::{Block, Height, Transaction, Transactions};
 
 #[derive(Clone, Debug)]
 pub struct DecidedBlock {
     pub block: Block,
-    pub proposal: SignedProposal<MockContext>,
-    pub certificate: Certificate<MockContext>,
+    pub certificate: CommitCertificate<MockContext>,
 }
 
 impl DecidedBlock {
     fn into_bytes(self) -> Result<Vec<u8>, ProtoError> {
         let synced_block = SyncedBlock {
-            block_bytes: self.block.to_bytes()?,
-            proposal: self.proposal,
-            certificate: self.certificate,
+            certificate: self.certificate.clone(),
+            block_bytes: self.block.to_bytes().unwrap(),
         };
 
         let proto = encode_synced_block(synced_block)?;
@@ -40,7 +39,6 @@ impl DecidedBlock {
 
         Some(Self {
             block,
-            proposal: synced_block.proposal,
             certificate: synced_block.certificate,
         })
     }
@@ -227,24 +225,18 @@ impl BlockStore {
 
     pub async fn store(
         &self,
-        proposal: &SignedProposal<MockContext>,
+        certificate: &CommitCertificate<MockContext>,
         txes: &[Transaction],
-        commits: &[SignedVote<MockContext>],
     ) -> Result<(), StoreError> {
-        let block_id = proposal.value().id();
-
-        let certificate = Certificate {
-            commits: commits.to_vec(),
-        };
+        let block_id = certificate.value_id;
 
         let decided_block = DecidedBlock {
             block: Block {
-                height: proposal.height(),
+                height: certificate.height,
                 block_hash: block_id,
                 transactions: Transactions::new(txes.to_vec()),
             },
-            proposal: proposal.clone(),
-            certificate,
+            certificate: certificate.clone(),
         };
 
         let db = Arc::clone(&self.db);
