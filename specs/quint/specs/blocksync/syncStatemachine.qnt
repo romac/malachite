@@ -85,8 +85,8 @@ module syncStatemachine {
   }
 
   /// Client v runs a protocol step
-  action syncStepClient(v, out) = all {
-    clientLogic(v, out),
+  action syncStepClient(v, out, full) = all {
+    clientLogic(v, out, full),
     unchangedServer,
   }
 

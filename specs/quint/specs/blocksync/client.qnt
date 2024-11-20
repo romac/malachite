@@ -3,6 +3,7 @@
 // Blocksync protocol: client side.
 
 module bsync_client {
+
   import blocksync.* from "./blocksync"
 
   /// The state of the synchronizer
@@ -23,6 +24,7 @@ module bsync_client {
   type BsyncClientOutput =
     | SOCertificate(Set[Vote])
     | SOBlock(Proposal)
+    | SOBlockStoreEntry(BlockStoreEntry)
     | SONoOutput
 
   //
@@ -83,10 +85,18 @@ module bsync_client {
           so: SOBlock(p),
           req: None}
 
+  /// we have received a blockstore entry (block and certificate).
+  /// now we need to  generate a block output
+  pure def syncHandleBlockStoreEntry (s: BsyncClient, b: BlockStoreEntry) : ClientResult =
+    {   sync: {...s,    openRequests: Set(), // If we have parallelization we need to remove one element,
+                        lastSyncedHeight: s.height }, // blockheight,
+        so: SOBlockStoreEntry(b),
+        req: None}
+
   /// step of a client:
   /// 1. update peer statuses, 2. if there is no open request, request something
   /// 3. otherwise check whether we have a response and act accordingly
-  pure def bsyncClientLogic (s: BsyncClient) : ClientResult =
+  pure def bsyncClientLogic (s: BsyncClient, fullEntries: bool) : ClientResult =
       val newPeerStates = updatePeerStatus(s.peerStatus, s.statusMsgs)
       val newS = { ...s, peerStatus: newPeerStates}
       if (s.lastSyncedHeight >= s.height)
@@ -102,7 +112,10 @@ module bsync_client {
                   // we start the sync "round" by asking for a certificate
                   val req = { client: s.id,
                               server: goodPeers.fold("", (acc, i) => i), //chooseSome(),
-                              rtype: SyncCertificate,
+                              rtype:  if (fullEntries)
+                                        SyncBlockStoreEntry
+                                      else
+                                        SyncCertificate,
                               height: s.height}
                   {   sync: {... newS, openRequests: s.openRequests.union(Set(req))},
                       so: SONoOutput,
@@ -112,10 +125,12 @@ module bsync_client {
                   // we issued a request before, let's see whether there is a response
                   if (s.responseMsgs.size()> 0)
                       val resp = s.responseMsgs.fold(emptyResponseMsg, (acc, i) => i) //chooseSome() // in the future there might be parallelization
+                      val ns = {... newS, responseMsgs: newS.responseMsgs.exclude(Set(resp))}
                       match resp.response {
                           | RespBlock(prop) => syncHandleBlock(newS, prop)
                           | RespCertificate(cert) => syncHandleCertificate(newS, cert, goodPeers.fold("", (s,x) => x))
-                      }
+                          | RespBlockStoreEntry(b) => syncHandleBlockStoreEntry(ns, b)
+                     }
                   else
                       // I don't have response
                       // this might be timeout logic
@@ -207,8 +222,8 @@ module bsync_client {
   }
 
   // Client v takes a step
-  action clientLogic(v, outputAction) = all {
-    val result = bsyncClientLogic(bsyncClients.get(v))
+  action clientLogic(v, outputAction, full) = all {
+    val result = bsyncClientLogic(bsyncClients.get(v), full)
     all {
       // updates the client's state
       applyClientUpdate(v, result),
