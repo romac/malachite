@@ -1,27 +1,24 @@
 // -*- mode: Bluespec; -*-
+//
+// Blocksync executable model running with a mocked consensus logic.
+//
 
-module bsyncMock {
+module bsyncWithMockedConsensus {
 
-  import blocksync.* from "./blocksync"
-  import bsync_client.* from "./client"
-  import bsync_server.* from "./server"
-  import syncStatemachine.* from "./syncStatemachine"
+  import bsyncStatemachine.* from "./bsyncStatemachine"
 
   val validators = Set("v1", "v2", "v3", "v4")
   val Correct = Set("v2", "v3", "v4")
   val validatorSet = Set("v1", "v2", "v3", "v4").mapBy(x => 1)
 
-  type Output = {
-    v : Address,
-    out: BsyncClientOutput
-  }
+  // State machine
 
-  var outputs: List[Output]
+  var outputs: Address -> List[BsyncClientOutput]
   var chains: Address -> List[BlockStoreEntry]
 
   /// initialize consensus and synchronizer
   action initMockedConsensus = all {
-    outputs' = [],
+    outputs' = validators.mapBy(_ => []),
     chains' = Correct.mapBy(_ => []),
     syncInit(validators)
   }
@@ -67,7 +64,8 @@ module bsyncMock {
   }
 
   action writeAction(v, so) = all {
-    outputs' = outputs.append({v: v, out: so}),
+    val updateOutput = outputs.get(v).append(so)
+    outputs' = outputs.put(v, updateOutput),
     chains' = chains,
   }
 
@@ -104,7 +102,7 @@ module bsyncMock {
         { decision: mkProposal( "", i, 0, "", 0),
           commit: Set() } ))
     ),
-    outputs' = [],
+    outputs' = validators.mapBy(_ => []),
     syncInit(validators)
    }
 
