@@ -26,7 +26,3 @@ malachite-node.workspace = true
 
 [lints]
 workspace = true
-
-[dev-dependencies]
-malachite-test.workspace = true
-rand.workspace = true

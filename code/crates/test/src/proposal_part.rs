@@ -3,11 +3,10 @@ use std::sync::Arc;
 use bytes::Bytes;
 use malachite_common::Round;
 use malachite_proto::{Error as ProtoError, Protobuf};
-use serde::{Deserialize, Serialize};
 
 use crate::{Address, Height, TestContext, Value};
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockMetadata {
     proof: Vec<u8>,
     value: Value,
@@ -55,7 +54,7 @@ impl Protobuf for BlockMetadata {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Content {
     metadata: BlockMetadata,
 }
@@ -88,21 +87,10 @@ impl Protobuf for Content {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "Round")]
-pub enum RoundDef {
-    /// No round, ie. `-1`
-    Nil,
-
-    /// Some round `r` where `r >= 0`
-    Some(u32),
-}
-
 /// A part of a value for a height, round. Identified in this scope by the sequence.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProposalPart {
     pub height: Height,
-    #[serde(with = "RoundDef")]
     pub round: Round,
     pub sequence: u64,
     pub content: Arc<Content>,
