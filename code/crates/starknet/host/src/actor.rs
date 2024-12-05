@@ -9,7 +9,7 @@ use rand::rngs::StdRng;
 use rand::{RngCore, SeedableRng};
 use sha3::Digest;
 use tokio::time::Instant;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use malachite_actors::consensus::ConsensusMsg;
 use malachite_actors::gossip_consensus::{GossipConsensusMsg, GossipConsensusRef};
@@ -386,6 +386,17 @@ impl Actor for StarknetHost {
                 address: _,
                 reply_to,
             } => {
+                // If we have already built a block for this height and round, return it
+                // This may happen when we are restarting after a crash and replaying the WAL.
+                if let Some(block) = state.block_store.get_undecided_block(height, round).await? {
+                    info!(%height, %round, hash = %block.block_hash, "Returning previously built block");
+
+                    let value = LocallyProposedValue::new(height, round, block.block_hash, None);
+                    reply_to.send(value)?;
+
+                    return Ok(());
+                }
+
                 let deadline = Instant::now() + timeout_duration;
 
                 debug!(%height, %round, "Building new proposal...");
