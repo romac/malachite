@@ -8,24 +8,26 @@ use tracing::{debug, info, trace};
 
 use malachite_config::{MempoolConfig, TestConfig};
 use malachite_test_mempool::types::MempoolTransactionBatch;
-use malachite_test_mempool::{Event as GossipEvent, NetworkMsg, PeerId};
+use malachite_test_mempool::{Event as NetworkEvent, NetworkMsg, PeerId};
 
-use crate::gossip_mempool::{GossipMempoolRef, Msg as GossipMempoolMsg};
 use crate::proto::Protobuf;
 use crate::types::{Hash, Transaction, Transactions};
+
+pub mod network;
+use network::{MempoolNetworkMsg, MempoolNetworkRef};
 
 pub type MempoolMsg = Msg;
 pub type MempoolRef = ActorRef<Msg>;
 
 pub struct Mempool {
-    gossip_mempool: GossipMempoolRef,
-    mempool_config: MempoolConfig, // todo - pick only what's needed
-    test_config: TestConfig,       // todo - pick only the mempool related
+    network: MempoolNetworkRef,
+    config: MempoolConfig,   // todo - pick only what's needed
+    test_config: TestConfig, // todo - pick only the mempool related
     span: tracing::Span,
 }
 
 pub enum Msg {
-    GossipEvent(Arc<GossipEvent>),
+    NetworkEvent(Arc<NetworkEvent>),
     Input(Transaction),
     Reap {
         height: u64,
@@ -37,9 +39,9 @@ pub enum Msg {
     },
 }
 
-impl From<Arc<GossipEvent>> for Msg {
-    fn from(event: Arc<GossipEvent>) -> Self {
-        Self::GossipEvent(event)
+impl From<Arc<NetworkEvent>> for Msg {
+    fn from(event: Arc<NetworkEvent>) -> Self {
+        Self::NetworkEvent(event)
     }
 }
 
@@ -72,48 +74,48 @@ impl Default for State {
 
 impl Mempool {
     pub fn new(
-        gossip_mempool: GossipMempoolRef,
+        mempool_network: MempoolNetworkRef,
         mempool_config: MempoolConfig,
         test_config: TestConfig,
         span: tracing::Span,
     ) -> Self {
         Self {
-            gossip_mempool,
-            mempool_config,
+            network: mempool_network,
+            config: mempool_config,
             test_config,
             span,
         }
     }
 
     pub async fn spawn(
-        gossip_mempool: GossipMempoolRef,
+        mempool_network: MempoolNetworkRef,
         mempool_config: MempoolConfig,
         test_config: TestConfig,
         span: tracing::Span,
     ) -> Result<MempoolRef, ractor::SpawnErr> {
-        let node = Self::new(gossip_mempool, mempool_config, test_config, span);
+        let node = Self::new(mempool_network, mempool_config, test_config, span);
 
         let (actor_ref, _) = Actor::spawn(None, node, ()).await?;
         Ok(actor_ref)
     }
 
-    pub async fn handle_gossip_event(
+    pub async fn handle_network_event(
         &self,
-        event: &GossipEvent,
+        event: &NetworkEvent,
         myself: MempoolRef,
         state: &mut State,
     ) -> Result<(), ractor::ActorProcessingErr> {
         match event {
-            GossipEvent::Listening(address) => {
+            NetworkEvent::Listening(address) => {
                 info!(%address, "Listening");
             }
-            GossipEvent::PeerConnected(peer_id) => {
+            NetworkEvent::PeerConnected(peer_id) => {
                 info!(%peer_id, "Connected to peer");
             }
-            GossipEvent::PeerDisconnected(peer_id) => {
+            NetworkEvent::PeerDisconnected(peer_id) => {
                 info!(%peer_id, "Disconnected from peer");
             }
-            GossipEvent::Message(_channel, from, _msg_id, msg) => {
+            NetworkEvent::Message(_channel, from, _msg_id, msg) => {
                 trace!(%from, size = msg.size_bytes(), "Received message");
 
                 trace!(%from, "Received message");
@@ -162,10 +164,10 @@ impl Actor for Mempool {
         myself: MempoolRef,
         _args: (),
     ) -> Result<State, ractor::ActorProcessingErr> {
-        self.gossip_mempool.link(myself.get_cell());
+        self.network.link(myself.get_cell());
 
-        self.gossip_mempool
-            .cast(GossipMempoolMsg::Subscribe(Box::new(myself.clone())))?;
+        self.network
+            .cast(MempoolNetworkMsg::Subscribe(Box::new(myself.clone())))?;
 
         Ok(State::new())
     }
@@ -178,12 +180,12 @@ impl Actor for Mempool {
         state: &mut State,
     ) -> Result<(), ractor::ActorProcessingErr> {
         match msg {
-            Msg::GossipEvent(event) => {
-                self.handle_gossip_event(&event, myself, state).await?;
+            Msg::NetworkEvent(event) => {
+                self.handle_network_event(&event, myself, state).await?;
             }
 
             Msg::Input(tx) => {
-                if state.transactions.len() < self.mempool_config.max_tx_count {
+                if state.transactions.len() < self.config.max_tx_count {
                     state.add_tx(&tx);
                 } else {
                     trace!("Mempool is full, dropping transaction");
@@ -196,9 +198,9 @@ impl Actor for Mempool {
                 let txes = generate_and_broadcast_txes(
                     num_txes,
                     self.test_config.tx_size.as_u64() as usize,
-                    &self.mempool_config,
+                    &self.config,
                     state,
-                    &self.gossip_mempool,
+                    &self.network,
                 )?;
 
                 reply.send(txes)?;
@@ -231,7 +233,7 @@ fn generate_and_broadcast_txes(
     size: usize,
     config: &MempoolConfig,
     _state: &mut State,
-    gossip_mempool: &GossipMempoolRef,
+    mempool_network: &MempoolNetworkRef,
 ) -> Result<Vec<Transaction>, ActorProcessingErr> {
     debug!(%count, %size, "Generating transactions");
 
@@ -268,7 +270,7 @@ fn generate_and_broadcast_txes(
             };
 
             let mempool_batch = MempoolTransactionBatch::new(tx_batch_any);
-            gossip_mempool.cast(GossipMempoolMsg::BroadcastMsg(mempool_batch))?;
+            mempool_network.cast(MempoolNetworkMsg::BroadcastMsg(mempool_batch))?;
         }
     }
 

@@ -38,7 +38,7 @@ use behaviour::{Behaviour, NetworkEvent};
 use handle::Handle;
 
 const PROTOCOL: &str = "/malachite-consensus/v1beta1";
-const METRICS_PREFIX: &str = "malachite_gossip_consensus";
+const METRICS_PREFIX: &str = "malachite_network";
 const DISCOVERY_METRICS_PREFIX: &str = "malachite_discovery";
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -123,7 +123,7 @@ pub enum TransportProtocol {
 
 /// sync event details:
 ///
-/// peer1: sync               peer2: gossip_consensus       peer2: sync           peer1: gossip_consensus
+/// peer1: sync               peer2: network       peer2: sync           peer1: network
 ///                                                                or consensus
 /// CtrlMsg::SyncRequest       --> Event::Sync      -----------> CtrlMsg::SyncReply ------> Event::Sync
 /// (peer_id, height)             (RawMessage::Request           (request_id, height)       RawMessage::Response
@@ -206,7 +206,7 @@ pub async fn spawn(
     let state = State::new(discovery);
 
     let peer_id = PeerId::from_libp2p(swarm.local_peer_id());
-    let span = error_span!("gossip.consensus", peer = %peer_id);
+    let span = error_span!("network", peer = %peer_id);
     let task_handle =
         tokio::task::spawn(run(config, metrics, state, swarm, rx_ctrl, tx_event).instrument(span));
 
