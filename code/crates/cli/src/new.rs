@@ -1,5 +1,7 @@
 //! key and configuration generation
 
+use std::time::Duration;
+
 use bytesize::ByteSize;
 use itertools::Itertools;
 use rand::prelude::StdRng;
@@ -66,6 +68,11 @@ pub fn generate_config(
     total: usize,
     runtime: RuntimeConfig,
     enable_discovery: bool,
+    bootstrap_protocol: BootstrapProtocol,
+    selector: Selector,
+    num_outbound_peers: usize,
+    num_inbound_peers: usize,
+    ephemeral_connection_timeout_ms: u64,
     transport: TransportProtocol,
     logging: LoggingConfig,
 ) -> Config {
@@ -106,6 +113,13 @@ pub fn generate_config(
                 },
                 discovery: DiscoveryConfig {
                     enabled: enable_discovery,
+                    bootstrap_protocol,
+                    selector,
+                    num_outbound_peers,
+                    num_inbound_peers,
+                    ephemeral_connection_timeout: Duration::from_millis(
+                        ephemeral_connection_timeout_ms,
+                    ),
                 },
                 transport,
                 ..Default::default()
@@ -119,7 +133,16 @@ pub fn generate_config(
                     .filter(|j| *j != index)
                     .map(|j| transport.multiaddr("127.0.0.1", MEMPOOL_BASE_PORT + j))
                     .collect(),
-                discovery: DiscoveryConfig { enabled: true },
+                discovery: DiscoveryConfig {
+                    enabled: false,
+                    bootstrap_protocol,
+                    selector,
+                    num_outbound_peers,
+                    num_inbound_peers,
+                    ephemeral_connection_timeout: Duration::from_millis(
+                        ephemeral_connection_timeout_ms,
+                    ),
+                },
                 transport,
                 ..Default::default()
             },

@@ -10,14 +10,13 @@ use std::time::Duration;
 use futures::StreamExt;
 use libp2p::metrics::{Metrics, Recorder};
 use libp2p::request_response::{InboundRequestId, OutboundRequestId};
-use libp2p::swarm::dial_opts::DialOpts;
 use libp2p::swarm::{self, SwarmEvent};
 use libp2p::{gossipsub, identify, quic, SwarmBuilder};
 use libp2p_broadcast as broadcast;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, error_span, trace, Instrument};
+use tracing::{debug, error, error_span, trace, warn, Instrument};
 
-use malachite_discovery::{self as discovery, ConnectionData};
+use malachite_discovery::{self as discovery};
 use malachite_metrics::SharedRegistry;
 use malachite_sync::{self as sync};
 
@@ -85,6 +84,8 @@ impl Default for GossipSubConfig {
 pub type BoxError = Box<dyn Error + Send + Sync + 'static>;
 
 pub type DiscoveryConfig = discovery::Config;
+pub type BootstrapProtocol = discovery::config::BootstrapProtocol;
+pub type Selector = discovery::config::Selector;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -152,11 +153,11 @@ pub enum CtrlMsg {
 #[derive(Debug)]
 pub struct State {
     pub sync_channels: HashMap<InboundRequestId, sync::ResponseChannel>,
-    pub discovery: discovery::Discovery,
+    pub discovery: discovery::Discovery<Behaviour>,
 }
 
 impl State {
-    fn new(discovery: discovery::Discovery) -> Self {
+    fn new(discovery: discovery::Discovery<Behaviour>) -> Self {
         Self {
             sync_channels: Default::default(),
             discovery,
@@ -225,22 +226,7 @@ async fn run(
         return;
     }
 
-    for peer in &config.persistent_peers {
-        if config.discovery.enabled {
-            state
-                .discovery
-                .add_to_dial_queue(&swarm, ConnectionData::new(None, peer.clone()));
-        } else {
-            let opts = DialOpts::unknown_peer_id()
-                .address(peer.clone())
-                .allocate_new_port()
-                .build();
-
-            if let Err(e) = swarm.dial(opts) {
-                error!("Error dialing persistent peer {peer}: {e}");
-            }
-        }
-    }
+    state.discovery.dial_bootstrap_nodes(&swarm);
 
     if let Err(e) = pubsub::subscribe(&mut swarm, config.pubsub_protocol, Channel::consensus()) {
         error!("Error subscribing to consensus channels: {e}");
@@ -258,13 +244,23 @@ async fn run(
                 handle_swarm_event(event, &config, &metrics, &mut swarm, &mut state, &tx_event).await
             }
 
-            Some(connection_data) = state.discovery.rx_dial.recv(), if state.discovery.can_dial() => {
+            Some(connection_data) = state.discovery.controller.dial.recv(), if state.discovery.can_dial() => {
                 state.discovery.dial_peer(&mut swarm, connection_data);
                 ControlFlow::Continue(())
             }
 
-            Some(request_data) = state.discovery.rx_request.recv(), if state.discovery.can_request() => {
-                state.discovery.request_peer(&mut swarm, request_data);
+            Some(request_data) = state.discovery.controller.peers_request.recv(), if state.discovery.can_peers_request() => {
+                state.discovery.peers_request_peer(&mut swarm, request_data);
+                ControlFlow::Continue(())
+            }
+
+            Some(request_data) = state.discovery.controller.connect_request.recv(), if state.discovery.can_connect_request() => {
+                state.discovery.connect_request_peer(&mut swarm, request_data);
+                ControlFlow::Continue(())
+            }
+
+            Some((peer_id, connection_id)) = state.discovery.controller.close.recv(), if state.discovery.can_close() => {
+                state.discovery.close_connection(&mut swarm, peer_id, connection_id);
                 ControlFlow::Continue(())
             }
 
@@ -346,7 +342,7 @@ async fn handle_ctrl_msg(
 
 async fn handle_swarm_event(
     event: SwarmEvent<NetworkEvent>,
-    config: &Config,
+    _config: &Config,
     metrics: &Metrics,
     swarm: &mut swarm::Swarm<Behaviour>,
     state: &mut State,
@@ -374,11 +370,11 @@ async fn handle_swarm_event(
             endpoint,
             ..
         } => {
-            if config.discovery.enabled {
-                state
-                    .discovery
-                    .handle_connection(peer_id, connection_id, endpoint);
-            }
+            trace!("Connected to {peer_id} with connection id {connection_id}",);
+
+            state
+                .discovery
+                .handle_connection(swarm, peer_id, connection_id, endpoint);
         }
 
         SwarmEvent::OutgoingConnectionError {
@@ -388,9 +384,9 @@ async fn handle_swarm_event(
         } => {
             error!("Error dialing peer: {error}");
 
-            if config.discovery.enabled {
-                state.discovery.handle_failed_connection(connection_id);
-            }
+            state
+                .discovery
+                .handle_failed_connection(swarm, connection_id);
         }
 
         SwarmEvent::ConnectionClosed {
@@ -400,13 +396,14 @@ async fn handle_swarm_event(
             ..
         } => {
             if let Some(cause) = cause {
-                error!("Connection closed with {peer_id}, reason: {cause}");
+                warn!("Connection closed with {peer_id}, reason: {cause}");
             } else {
-                error!("Connection closed with {peer_id}, reason: unknown");
+                warn!("Connection closed with {peer_id}, reason: unknown");
             }
-            if config.discovery.enabled {
-                state.discovery.remove_peer(peer_id, connection_id);
-            }
+
+            state
+                .discovery
+                .handle_closed_connection(swarm, peer_id, connection_id);
 
             if let Err(e) = tx_event
                 .send(Event::PeerDisconnected(PeerId::from_libp2p(&peer_id)))
@@ -439,15 +436,17 @@ async fn handle_swarm_event(
                     info.protocol_version
                 );
 
-                if config.discovery.enabled {
-                    state
-                        .discovery
-                        .handle_new_peer(connection_id, peer_id, info)
-                }
+                state
+                    .discovery
+                    .handle_new_peer(swarm, connection_id, peer_id, info);
 
-                let _ = tx_event
+                if let Err(e) = tx_event
                     .send(Event::PeerConnected(PeerId::from_libp2p(&peer_id)))
-                    .await;
+                    .await
+                {
+                    error!("Error sending peer connected event to handle: {e}");
+                    return ControlFlow::Break(());
+                }
             } else {
                 trace!(
                     "Peer {peer_id} is using incompatible protocol version: {:?}",
@@ -482,8 +481,8 @@ async fn handle_swarm_event(
             return handle_sync_event(event, metrics, swarm, state, tx_event).await;
         }
 
-        SwarmEvent::Behaviour(NetworkEvent::RequestResponse(event)) => {
-            state.discovery.on_event(event, swarm);
+        SwarmEvent::Behaviour(NetworkEvent::Discovery(network_event)) => {
+            state.discovery.on_network_event(swarm, network_event);
         }
 
         swarm_event => {

@@ -65,6 +65,36 @@ pub struct TestnetCmd {
     #[clap(long, default_value = "false")]
     pub enable_discovery: bool,
 
+    /// Bootstrap protocol
+    /// The protocol used to bootstrap the discovery mechanism
+    /// Possible values:
+    /// - "kademlia": Kademlia
+    /// - "full": Full mesh (default)
+    #[clap(long, default_value = "full", verbatim_doc_comment)]
+    pub bootstrap_protocol: BootstrapProtocol,
+
+    /// Selector
+    /// The selection strategy used to select persistent peers
+    /// Possible values:
+    /// - "kademlia": Kademlia-based selection, only available with the Kademlia bootstrap protocol
+    /// - "random": Random selection (default)
+    #[clap(long, default_value = "random", verbatim_doc_comment)]
+    pub selector: Selector,
+
+    /// Number of outbound peers
+    #[clap(long, default_value = "20", verbatim_doc_comment)]
+    pub num_outbound_peers: usize,
+
+    /// Number of inbound peers
+    /// Must be greater than or equal to the number of outbound peers
+    #[clap(long, default_value = "20", verbatim_doc_comment)]
+    pub num_inbound_peers: usize,
+
+    /// Ephemeral connection timeout
+    /// The duration in milliseconds an ephemeral connection is kept alive
+    #[clap(long, default_value = "5000", verbatim_doc_comment)]
+    pub ephemeral_connection_timeout_ms: u64,
+
     /// The transport protocol to use for P2P communication
     /// Possible values:
     /// - "quic": QUIC (default)
@@ -90,6 +120,11 @@ impl TestnetCmd {
             home_dir,
             runtime,
             self.enable_discovery,
+            self.bootstrap_protocol,
+            self.selector,
+            self.num_outbound_peers,
+            self.num_inbound_peers,
+            self.ephemeral_connection_timeout_ms,
             self.transport,
             logging,
             self.deterministic,
@@ -105,6 +140,11 @@ pub fn testnet<N>(
     home_dir: &Path,
     runtime: RuntimeConfig,
     enable_discovery: bool,
+    bootstrap_protocol: BootstrapProtocol,
+    selector: Selector,
+    num_outbound_peers: usize,
+    num_inbound_peers: usize,
+    ephemeral_connection_timeout_ms: u64,
     transport: TransportProtocol,
     logging: LoggingConfig,
     deterministic: bool,
@@ -138,7 +178,19 @@ where
         // Save config
         save_config(
             &args.get_config_file_path()?,
-            &crate::new::generate_config(i, nodes, runtime, enable_discovery, transport, logging),
+            &crate::new::generate_config(
+                i,
+                nodes,
+                runtime,
+                enable_discovery,
+                bootstrap_protocol,
+                selector,
+                num_outbound_peers,
+                num_inbound_peers,
+                ephemeral_connection_timeout_ms,
+                transport,
+                logging,
+            ),
         )?;
 
         // Save private key

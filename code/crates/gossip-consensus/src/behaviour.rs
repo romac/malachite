@@ -1,7 +1,7 @@
 use std::time::Duration;
 
+use libp2p::kad::{Addresses, KBucketKey, KBucketRef};
 use libp2p::request_response::{OutboundRequestId, ResponseChannel};
-use libp2p::swarm::behaviour::toggle::Toggle;
 use libp2p::swarm::NetworkBehaviour;
 use libp2p::{gossipsub, identify, ping};
 use libp2p_broadcast as broadcast;
@@ -22,7 +22,7 @@ pub enum NetworkEvent {
     GossipSub(gossipsub::Event),
     Broadcast(broadcast::Event),
     Sync(sync::Event),
-    RequestResponse(discovery::Event),
+    Discovery(discovery::NetworkEvent),
 }
 
 impl From<identify::Event> for NetworkEvent {
@@ -55,9 +55,9 @@ impl From<sync::Event> for NetworkEvent {
     }
 }
 
-impl From<discovery::Event> for NetworkEvent {
-    fn from(event: discovery::Event) -> Self {
-        Self::RequestResponse(event)
+impl From<discovery::NetworkEvent> for NetworkEvent {
+    fn from(network_event: discovery::NetworkEvent) -> Self {
+        Self::Discovery(network_event)
     }
 }
 
@@ -69,15 +69,35 @@ pub struct Behaviour {
     pub gossipsub: gossipsub::Behaviour,
     pub broadcast: broadcast::Behaviour,
     pub sync: sync::Behaviour,
-    pub discovery: Toggle<discovery::Behaviour>,
+    pub discovery: discovery::Behaviour,
 }
 
-impl discovery::SendRequestResponse for Behaviour {
-    fn send_request(&mut self, peer_id: &PeerId, req: discovery::Request) -> OutboundRequestId {
+/// Dummy implementation of Debug for Behaviour.
+impl std::fmt::Debug for Behaviour {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Behaviour").finish()
+    }
+}
+
+impl discovery::DiscoveryClient for Behaviour {
+    fn add_address(&mut self, peer: &PeerId, address: Multiaddr) -> libp2p::kad::RoutingUpdate {
         self.discovery
+            .kademlia
             .as_mut()
-            .expect("Discovery behaviour should be available")
-            .send_request(peer_id, req)
+            .expect("Kademlia behaviour should be available")
+            .add_address(peer, address)
+    }
+
+    fn kbuckets(&mut self) -> impl Iterator<Item = KBucketRef<'_, KBucketKey<PeerId>, Addresses>> {
+        self.discovery
+            .kademlia
+            .as_mut()
+            .expect("Kademlia behaviour should be available")
+            .kbuckets()
+    }
+
+    fn send_request(&mut self, peer_id: &PeerId, req: discovery::Request) -> OutboundRequestId {
+        self.discovery.request_response.send_request(peer_id, req)
     }
 
     fn send_response(
@@ -85,10 +105,7 @@ impl discovery::SendRequestResponse for Behaviour {
         ch: ResponseChannel<discovery::Response>,
         rs: discovery::Response,
     ) -> Result<(), discovery::Response> {
-        self.discovery
-            .as_mut()
-            .expect("Discovery behaviour should be available")
-            .send_response(ch, rs)
+        self.discovery.request_response.send_response(ch, rs)
     }
 }
 
@@ -147,7 +164,7 @@ impl Behaviour {
             registry.sub_registry_with_prefix("sync"),
         );
 
-        let discovery = Toggle::from(config.discovery.enabled.then(discovery::new_behaviour));
+        let discovery = discovery::Behaviour::new(keypair, config.discovery);
 
         Self {
             identify,
