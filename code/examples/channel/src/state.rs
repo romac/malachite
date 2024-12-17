@@ -13,7 +13,7 @@ use malachite_app_channel::app::types::codec::Codec;
 use malachite_app_channel::app::types::core::{CommitCertificate, Round, Validity};
 use malachite_app_channel::app::types::sync::DecidedValue;
 use malachite_test::codec::proto::ProtobufCodec;
-use malachite_test::{Address, BlockMetadata, Content, Height, ProposalPart, TestContext, Value};
+use malachite_test::{Address, Content, Height, ProposalPart, TestContext, Value};
 
 /// Decodes a Value from its byte representation using ProtobufCodec
 pub fn decode_value(bytes: Bytes) -> Value {
@@ -34,7 +34,7 @@ pub struct State {
 
     earliest_height: Height,
     address: Address,
-    sequence: u64,
+    stream_id: u64,
     undecided_proposals: HashMap<Height, ProposedValue<TestContext>>,
     decided_proposals: HashMap<Height, ProposedValue<TestContext>>,
     blocks: HashMap<Height, DecidedValue<TestContext>>,
@@ -50,7 +50,7 @@ impl State {
             current_round: Round::new(0),
             current_proposer: None,
             address,
-            sequence: 0,
+            stream_id: 0,
             undecided_proposals: HashMap::new(),
             decided_proposals: HashMap::new(),
             blocks: HashMap::new(),
@@ -80,13 +80,13 @@ impl State {
         {
             assert!(proposal_part.fin); // we only implemented 1 part === 1 proposal
 
-            let value = proposal_part.content.metadata.value();
+            let value = proposal_part.content.value;
 
             let proposal = ProposedValue {
                 height: proposal_part.height,
                 round: proposal_part.round,
                 valid_round: Round::Nil,
-                validator_address: proposal_part.validator_address,
+                proposer: proposal_part.proposer,
                 value,
                 validity: Validity::Valid,
                 extension: None,
@@ -106,9 +106,9 @@ impl State {
         self.blocks.get(height)
     }
 
-    /// Commits a block with the given certificate, updating internal state
+    /// Commits a value with the given certificate, updating internal state
     /// and moving to the next height
-    pub fn commit_block(&mut self, certificate: CommitCertificate<TestContext>) {
+    pub fn commit(&mut self, certificate: CommitCertificate<TestContext>) {
         // Sort out proposals
         for (height, value) in self.undecided_proposals.clone() {
             if height > self.current_height {
@@ -122,17 +122,12 @@ impl State {
             self.undecided_proposals.remove(&height);
         }
 
-        // Commit block transactions to "database"
-        // TODO: retrieve all transactions from block parts
         let value = self.decided_proposals.get(&certificate.height).unwrap();
         let value_bytes = encode_value(&value.value);
 
         self.blocks.insert(
             self.current_height,
-            DecidedValue {
-                value_bytes,
-                certificate,
-            },
+            DecidedValue::new(value_bytes, certificate),
         );
 
         // Move to next height
@@ -163,7 +158,7 @@ impl State {
                 height: *height,
                 round: self.current_round,
                 valid_round: Round::Nil,
-                validator_address: self.address,
+                proposer: self.address,
                 value,
                 validity: Validity::Valid,
                 extension: None,
@@ -176,34 +171,30 @@ impl State {
         }
     }
 
-    /// Creates a broadcast message containing a proposal part
-    /// Updates internal sequence number and current proposal
-    pub fn create_broadcast_message(
+    /// Creates a stream message containing a proposal part.
+    /// Updates internal sequence number and current proposal.
+    pub fn create_stream_message(
         &mut self,
         value: LocallyProposedValue<TestContext>,
     ) -> StreamMessage<ProposalPart> {
-        // TODO: create proof properly.
-        let fake_proof = [
-            self.current_height.as_u64().to_le_bytes().to_vec(),
-            self.current_round.as_u32().unwrap().to_le_bytes().to_vec(),
-        ]
-        .concat();
+        // Only a single proposal part
+        let sequence = 0;
 
-        let content = Content::new(&BlockMetadata::new(fake_proof.into(), value.value));
+        let content = Content::new(value.value);
 
         let proposal_part = ProposalPart::new(
             self.current_height,
             self.current_round,
-            self.sequence,
+            sequence,
             self.address,
             content,
-            true, // each proposal part is a full proposal
+            true, // full proposal is emitted as a single proposal part
         );
 
         let stream_content = StreamContent::Data(proposal_part);
-        let msg = StreamMessage::new(self.sequence, self.sequence, stream_content);
+        let msg = StreamMessage::new(self.stream_id, sequence, stream_content);
 
-        self.sequence += 1;
+        self.stream_id += 1;
         self.current_proposal = Some(msg.clone());
 
         msg
