@@ -43,7 +43,7 @@ version      = "0.0.1"
 edition      = "2021"
 repository   = "https://github.com/informalsystems/malachite"
 license      = "Apache-2.0"
-publish      = false
+publish      = true
 rust-version = "1.82"
 
 [profile.dev]
