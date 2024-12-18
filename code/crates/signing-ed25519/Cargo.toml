@@ -6,6 +6,10 @@ repository.workspace = true
 license.workspace = true
 rust-version.workspace = true
 publish = false
+readme = "../../../README.md"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [features]
 std = []
