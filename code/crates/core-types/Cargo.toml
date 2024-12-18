@@ -1,7 +1,6 @@
 [package]
 name = "informalsystems-malachitebft-core-types"
-description = "Common datatypes and interfaces for the Malachite consensus engine"
-
+description = "Core type definitions and interfaces for the Malachite BFT consensus engine"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true

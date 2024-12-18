@@ -1,5 +1,6 @@
 [package]
 name = "informalsystems-malachitebft-metrics"
+description = "Metrics for the Malachite BFT consensus engine"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true

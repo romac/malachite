@@ -1,7 +1,6 @@
 [package]
 name = "informalsystems-malachitebft-core-votekeeper"
-description = "Voting system for the Malachite consensus engine"
-
+description = "Voting system for the Malachite BFT consensus engine"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true

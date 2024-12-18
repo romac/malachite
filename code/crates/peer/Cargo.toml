@@ -1,5 +1,6 @@
 [package]
 name = "informalsystems-malachitebft-peer"
+description = "Peer definition for the Malachite BFT consensus engine"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true

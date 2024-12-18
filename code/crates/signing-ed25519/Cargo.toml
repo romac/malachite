@@ -1,5 +1,6 @@
 [package]
 name = "informalsystems-malachitebft-signing-ed25519"
+description = "Ed25519 signing scheme for the Malachite BFT consensus engine"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
