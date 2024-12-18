@@ -632,7 +632,7 @@ mod tests {
 
     #[test]
     fn parse_default_config_file() {
-        let file = include_str!("../../../config.toml");
+        let file = include_str!("../../../examples/channel/config.toml");
         let config = toml::from_str::<Config>(file).unwrap();
         assert_eq!(config.consensus.timeouts, TimeoutConfig::default());
         assert_eq!(config.test, TestConfig::default());
