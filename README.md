@@ -23,18 +23,40 @@
 
 ## About
 
-Malachite is a Byzantine-fault tolerant (BFT) consensus library implemented in Rust.
-The goal is to enable developers to decentralize whatever the future may bring—sequencers, social networks, Layer 1s, etc.
-
-Bundled with Malachite comes a state-of-the-art implementation of the Tendermint consensus algorithm.
-Tendermint is a BFT consensus algorithm that is [optimistically responsive][responsive] and therefore exhibits high-performance.
-Additionally, this algorithm found adoption in many decentralized systems through its implementation in Go as part of [CometBFT](https://github.com/cometbft/cometbft/).
-CometBFT has been battle-tested for years, and many of the lessons and experiences of maintaining CometBFT inspired key [design decisions][announcement] that we took in Malachite.
+Malachite is a Byzantine-fault tolerant (BFT) consensus engine implemented in Rust.
 
 > [!IMPORTANT]
 > Malachite is pre-alpha software and still under heavy development.
 > At this stage, it is not meant for use in production.
-> The software is provided "as is" and has not been externally audited, use at your own risk.
+> The software is provided "as is" and has not been externally audited; use at your own risk.
+
+### Goals
+
+The goal is for Malachite to enable developers to decentralize whatever the future may bring—sequencers, social networks, Layer 1s, etc.
+Therefore, Malachite addresses a particular void in the market: The lack of flexible, reliable, and high-performance distributed systems foundations, such as BFT consensus libraries.
+
+### Features
+
+#### Tendermint as a Library
+Bundled with Malachite comes a state-of-the-art implementation of the Tendermint BFT consensus algorithm.
+Tendermint is an [optimistically responsive][responsive] consensus algorithm, and therefore exhibits high-performance, and has found adoption in many decentralized systems through its implementation in Go as part of [CometBFT](https://github.com/cometbft/cometbft/).
+
+#### Design
+Key [design decisions][announcement] in Malachite are heavily inspired by lessons and experiences of maintaining CometBFT throughout the years.
+Malachite addresses numerous points of technical debt in the design of consensus engines, resulting in a lean, flexible, and reliable solution that performs at the highest level.
+
+#### Reliability and Performance
+Parts of Malachite were co-designed with their formal specification and model checking, notably for the Tendermint algorithm, which improved the confidence and reliability of this core library.
+
+Early [experiments][announcement] with Malachite show an average finalization latency of 780 ms at a scale of 100 validators with 1MB blocks.
+Depending on the setup, Malachite can clear up to 2.5 blocks per second or finalize up to 13.5 MB/s (around 50,000 transactions per second).
+
+#### Use-cases
+Malachite originated as a consensus core for the Starknet L2 decentralized sequencer.
+It will serve as the core consensus library in the [Madara][madara] and [Pathfinder][pathfinder] Starknet clients.
+Malachite is also being used for Farcaster’s newest backend layer called [Snapchain](https://github.com/farcasterxyz/snapchain-v0/).
+Thanks to its flexible design, Malachite is amenable to a broad range of environments, and a number of other teams are building and exploring in private.
+Please reach-out if interested, we would love to speak with more teams.
 
 ## Overview
 
@@ -134,6 +156,8 @@ Unless required by applicable law or agreed to in writing, software distributed 
 [tg-badge]: https://img.shields.io/badge/Malachite-Engine-blue.svg?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDI0YzYuNjI3IDAgMTItNS4zNzMgMTItMTJTMTguNjI3IDAgMTIgMCAwIDUuMzczIDAgMTJzNS4zNzMgMTIgMTIgMTJaIiBmaWxsPSJ1cmwoI2EpIi8+PHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik01LjQyNSAxMS44NzFhNzk2LjQxNCA3OTYuNDE0IDAgMCAxIDYuOTk0LTMuMDE4YzMuMzI4LTEuMzg4IDQuMDI3LTEuNjI4IDQuNDc3LTEuNjM4LjEgMCAuMzIuMDIuNDcuMTQuMTIuMS4xNS4yMy4xNy4zMy4wMi4xLjA0LjMxLjAyLjQ3LS4xOCAxLjg5OC0uOTYgNi41MDQtMS4zNiA4LjYyMi0uMTcuOS0uNSAxLjE5OS0uODE5IDEuMjI5LS43LjA2LTEuMjI5LS40Ni0xLjg5OC0uOS0xLjA2LS42ODktMS42NDktMS4xMTktMi42NzgtMS43OTgtMS4xOS0uNzgtLjQyLTEuMjA5LjI2LTEuOTA4LjE4LS4xOCAzLjI0Ny0yLjk3OCAzLjMwNy0zLjIyOC4wMS0uMDMuMDEtLjE1LS4wNi0uMjEtLjA3LS4wNi0uMTctLjA0LS4yNS0uMDItLjExLjAyLTEuNzg4IDEuMTQtNS4wNTYgMy4zNDgtLjQ4LjMzLS45MDkuNDktMS4yOTkuNDgtLjQzLS4wMS0xLjI0OC0uMjQtMS44NjgtLjQ0LS43NS0uMjQtMS4zNDktLjM3LTEuMjk5LS43OS4wMy0uMjIuMzMtLjQ0Ljg5LS42NjlaIiBmaWxsPSIjZmZmIi8+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJhIiB4MT0iMTEuOTkiIHkxPSIwIiB4Mj0iMTEuOTkiIHkyPSIyMy44MSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPjxzdG9wIHN0b3AtY29sb3I9IiMyQUFCRUUiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMyMjlFRDkiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48L3N2Zz4K
 [responsive]: https://informal.systems/blog/tendermint-responsiveness
 [announcement]: https://informal.systems/blog/malachite-decentralize-whatever
+[madara]: https://github.com/madara-alliance/madara
+[pathfinder]: https://github.com/eqlabs/pathfinder
 
 [//]: # (crates.io and docs.rs: links and badges)
 [core-consensus-crate-image]: https://img.shields.io/crates/v/informalsystems-malachitebft-core-consensus
