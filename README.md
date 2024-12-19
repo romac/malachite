@@ -101,7 +101,7 @@ We invite all contributors.
 
 Malachite is developed by [Informal Systems](https://informal.systems).
 
-If you'd like to work full-time on challenging problems of and distributed systems and decentralization,
+If you'd like to work full-time on challenging problems of distributed systems and decentralization,
 [we're always looking for talented people to join](https://informal.systems/careers)!
 
 
