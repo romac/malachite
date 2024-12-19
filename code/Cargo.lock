@@ -2252,7 +2252,6 @@ dependencies = [
  "informalsystems-malachitebft-metrics",
  "informalsystems-malachitebft-network",
  "informalsystems-malachitebft-sync",
- "informalsystems-malachitebft-test-mempool",
  "informalsystems-malachitebft-wal",
  "libp2p",
  "ractor",

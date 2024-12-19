@@ -23,7 +23,6 @@ malachitebft-core-types.workspace = true
 malachitebft-network.workspace = true
 malachitebft-metrics.workspace = true
 malachitebft-sync.workspace = true
-malachitebft-test-mempool.workspace = true
 malachitebft-wal.workspace = true
 
 async-trait = { workspace = true }
