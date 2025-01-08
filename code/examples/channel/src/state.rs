@@ -32,6 +32,7 @@ pub struct State {
     pub current_height: Height,
     pub current_round: Round,
     pub current_proposer: Option<Address>,
+    pub peers: HashSet<PeerId>,
 
     undecided_proposals: HashMap<(Height, Round), ProposedValue<TestContext>>,
     decided_proposals: HashMap<Height, ProposedValue<TestContext>>,
@@ -41,7 +42,6 @@ pub struct State {
     streams_map: PartStreamsMap,
 
     rng: StdRng,
-    pub peers: HashSet<PeerId>,
 }
 
 // Make up a seed for the rng based on our address in
