@@ -714,15 +714,57 @@ deadlocks and ensure liveness.
 ### Timeouts
 
 The `schedule` primitive is adopted in the pseudo-code to schedule the
-execution of `OnTimeout<Step>(height, round)` functions, where `<Step>` is one
-of `Propose`, `Prevote`, and `Precommit` (i.e., the three [round steps](#round-steps)),
-to the current time plus the duration returned by the corresponding functions
-`timeout<Step>(round)`.
+execution of `OnTimeout<Step>(height, round)` functions to after the duration
+returned by `timeout<Step>(round)`,
+where `<Step>` is one of `Propose`, `Prevote`, and `Precommit` - the three
+[round steps](#round-steps).
 
-> TODO: assumptions regarding timeouts, they should increase over time, GST, etc.
+The `OnTimeout<Step>` functions define the actions taken upon an unsuccessful
+corresponding round step: the process votes `nil` or abandons the current round.
+These functions are guarded by conditions that verify if the state, in
+particular the round step, has not changed since when their execution was
+scheduled.
+If the state has changed, the execution may not produce any action.
 
-> TODO: most timeouts can be cancelled when the associated conditions are not
-> any longer observed (round or height changed, round step changed).
+> Implementations could cancel scheduled timeouts when the conditions that
+> guard the scheduled functions are no longer observed.
+
+The `timeout<Step>(round)` functions return a duration, the minimum amount of
+time from when `schedule` was called, for the scheduled timeout.
+The function receives the current `round` as parameter because it is assumed
+that the **duration of timeouts should increase over rounds**.
+In other words, the implementation should ensure that
+`timeout<Step>(round + 1) > timeout<Step>(round)`.
+
+Tendermint is designed for the [partially synchronous][partially-synchronous]
+distributed system model.
+This model assumes that there is an (possibly unknown) upper-bound for the
+end-to-end communication delays `∆`, as happens in synchronous systems.
+But `∆` is not always observed by the system, which may operate asynchronously
+for an arbitrary amount of time.
+There is, however, a (possibly unknown) Global Stabilization Time (`GST`), a
+time from which the system becomes synchronous and `∆` is observed for all
+messages sent by correct processes.
+
+In practical systems, `GST` is usually unknown, although it is assumed that the
+system eventually stabilizes.
+The same applies to `∆`, which however can be stipulated from the observation
+of the behavior of a particular system.
+The timeout durations should represent safe or conservative stipulations for `∆`,
+specific for each round step.
+Since any stipulation can be wrong, the timeout durations increase over rounds,
+so that they eventually reach the actual `∆` observed in the system when it
+stabilizes - namely, after `GST`.
+
+The **Gossip communication** property presented in the [Network](#network)
+section includes, in addition to the reliable communication assumptions, the
+requirement of timely delivery of messages from `GST`.
+Namely, a message broadcast by a correct process at time `t >= GST` is received
+by every correct process by `t + ∆`.
+But observe that it also requires all correct process to receive by `GST + ∆`
+messages broadcast or received by correct processes at times `t < GST`.
+Which renders this property even more complex to achieve, since it imposes
+conditions for messages sent or received _before_ `GST`.
 
 [^1]: This document adopts _process_ to refer to the active participants of the
   consensus algorithm, which can propose and vote for values.
@@ -737,3 +779,4 @@ to the current time plus the duration returned by the corresponding functions
 [starkware-proofs]: ../starknet/proofs-scheduling/README.md
 [synchronization-issue]: https://github.com/informalsystems/malachite/issues/260
 [synchronization-spec]: ../synchronization/README.md
+[partially-synchronous]: https://dl.acm.org/doi/10.1145/42282.42283
