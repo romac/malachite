@@ -651,11 +651,65 @@ be implemented by the processes running the consensus protocol.
 
 The only network primitive adopted in the pseudo-code is the `broadcast`
 primitive, which should send a given [consensus message](#messages) to all
-processes, thus implementing a 1-to-n communication primitive.
+processes.
+But a closer look to the [Tendermint paper][tendermint-arxiv] reveals that the
+`broadcast` primitive is associated to a stronger assumption:
 
-> TODO: reliable broadcast properties needed for consensus messages, and the
-> more comprehensive and strong properties required for certificates (sets of
-> 2f + 1 identical votes), and certified proposals.
+- **Gossip communication**: If a correct process `p` sends some message `m` at
+  time `t`, all correct processes will receive `m` before `max{t, GST} + ∆`.
+  Furthermore, if a correct process `p` receives some message `m` at time `t`,
+  all correct processes will receive `m` before `max{t, GST} + ∆`.
+
+If we ignore for now (they are covered later) the timing parameters (`t`, `∆`,
+and `GST`), the assumption comprises two liveness properties:
+
+1. If a correct process sends a message, then every correct process eventually
+   delivers that message
+2. If a correct process delivers a message, then every correct process
+   eventually delivers that message
+
+Property 1 defines that the `broadcast` primitive must reliably ship messages
+among correct processes.
+Property 2, however, also affects messages potentially produced by Byzantine
+processes.
+As previously described, Byzantine processes may produce and disseminate
+equivocating [proposals](#byzantine-proposers) and [votes](#byzantine-voters).
+Namely, produce for the same round step conflicting messages `m` and `m'` and
+try to get delivered to some processes `m` and to others `m'`.
+What Property 2 defines is that if any correct process receives and processes
+`m`, then all correct processes must eventually receive `m` as well;
+the same applies to the conflicting message `m'`.
+This property is not trivial to ensure.
+
+> Property 1 can be ensured in a fully-connected network, where every pair of
+> processes is connected via a reliable channel.
+> In this case, if the sender of the message is correct, then every correct
+> destination eventually receives the message.
+>
+> In the same environment, ensuring Property 2 requires correct to relay the
+> received messages.
+> In this way, if the sender crashes and the message is received by some
+> correct processes but not received by other correct processes, then the ones
+> that received the message will relay it to those that did not.
+> In the same way, if the sender is Byzantine and purposely does not send the
+> message to a subset of processes, the message will be relayed to them.
+>
+> The complexity added by Property 2 is the need for a protocol for reliably
+> broadcasting messages in a Byzantine setup.
+> In other words, the `broadcast` primitive cannot be just implemented by
+> sending the same message (via "unicast") to every process.
+
+Fortunately, it turns out that the Gossip communication property does not need
+to be ensured for _every_ broadcast message.
+As discussed in [#260][synchronization-issue], only messages whose reception
+produce a relevant action in the consensus state-machine (in particular,
+produce a valid, locked, or decided value) need to be eventually received by
+all correct processes.
+This opens up the possibility of implementing the `broadcast` primitive using a
+best-effort protocol, that does not guarantee Property 2, while resorting on
+the generically called [synchronization protocols][synchronization-spec] to
+ensure Property 2 for particular subsets of messages required to get out from
+deadlocks and ensure liveness.
 
 ### Timeouts
 
@@ -671,12 +725,15 @@ to the current time plus the duration returned by the corresponding functions
 > any longer observed (round or height changed, round step changed).
 
 [^1]: This document adopts _process_ to refer to the active participants of the
-  consensus algorithm, which can propose and vote for values. In the blockchain
-  terminology, a _process_ would be a _validator_. In the specification both
-  names are adopted and are equivalent.
+  consensus algorithm, which can propose and vote for values.
+  In the blockchain terminology, a _process_ would be an active _validator_.
+  In this document we prefer the first and more generic name, although in this
+  specification _validator_ is also used.
 
 [pseudo-code]: ./pseudo-code.md
 [tendermint-arxiv]: https://arxiv.org/abs/1807.04938
 [accountable-tendermint]: ./misbehavior.md#misbehavior-detection-and-verification-in-accountable-tendermint
 [cometbft-proposer]: https://github.com/cometbft/cometbft/blob/main/spec/consensus/proposer-selection.md
 [starkware-proofs]: ../starknet/proofs-scheduling/README.md
+[synchronization-issue]: https://github.com/informalsystems/malachite/issues/260
+[synchronization-spec]: ../synchronization/README.md
