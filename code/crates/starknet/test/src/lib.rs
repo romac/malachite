@@ -289,15 +289,11 @@ impl<State> TestNode<State> {
 
     pub fn full_node(&mut self) -> &mut Self {
         self.voting_power = 0;
-        // Ensure full nodes never participate in consensus
-        self.on_vote(|_vote, _state| {
-            panic!("Full nodes should never vote");
-        });
-
-        self.on_proposed_value(|_proposal, _state| {
-            panic!("Full nodes should never propose values");
-        });
         self
+    }
+
+    pub fn is_full_node(&self) -> bool {
+        self.voting_power == 0
     }
 }
 
@@ -355,8 +351,7 @@ where
 {
     pub fn new(nodes: Vec<TestNode<S>>) -> Self {
         // Only include nodes with non-zero voting power in the validator set
-        let vals_and_keys = make_validators(voting_powers(&nodes));
-        let (validators, private_keys): (Vec<_>, Vec<_>) = vals_and_keys.into_iter().unzip();
+        let (validators, private_keys) = make_validators(voting_powers(&nodes));
         let validator_set = ValidatorSet::new(validators);
         let id = unique_id();
         let base_port = 20_000 + id * 1000;
@@ -498,6 +493,7 @@ async fn run_node<S>(
 
     let decisions = Arc::new(AtomicUsize::new(0));
     let current_height = Arc::new(AtomicUsize::new(0));
+    let is_full_node = node.is_full_node();
 
     let spawn_bg = |mut rx: RxEvent<MockContext>| {
         tokio::spawn({
@@ -512,6 +508,9 @@ async fn run_node<S>(
                         }
                         Event::Decided(_) => {
                             decisions.fetch_add(1, Ordering::SeqCst);
+                        }
+                        Event::Published(msg) if is_full_node => {
+                            panic!("Full nodes unexpectedly publish a consensus message: {msg:?}");
                         }
                         _ => (),
                     }
@@ -658,9 +657,9 @@ pub fn init_logging(test_module: &str) {
         .any(|(k, v)| std::env::var(k).as_deref() == Ok(v));
 
     let directive = if enable_debug {
-        format!("{test_module}=debug,ractor=error,debug")
+        format!("informalsystems=info,{test_module}=debug,ractor=error,debug")
     } else {
-        format!("{test_module}=debug,ractor=error,warn")
+        format!("informalsystems=debug,{test_module}=debug,ractor=error,warn")
     };
 
     let filter = EnvFilter::builder().parse(directive).unwrap();
@@ -754,25 +753,27 @@ pub fn make_node_config<S>(test: &Test<S>, i: usize) -> NodeConfig {
 }
 
 fn voting_powers<S>(nodes: &[TestNode<S>]) -> Vec<VotingPower> {
-    nodes
-        .iter()
-        .filter(|node| node.voting_power > 0)
-        .map(|node| node.voting_power)
-        .collect()
+    nodes.iter().map(|node| node.voting_power).collect()
 }
 
-pub fn make_validators(voting_powers: Vec<VotingPower>) -> Vec<(Validator, PrivateKey)> {
+pub fn make_validators(voting_powers: Vec<VotingPower>) -> (Vec<Validator>, Vec<PrivateKey>) {
     let mut rng = StdRng::seed_from_u64(0x42);
 
     let mut validators = Vec::with_capacity(voting_powers.len());
+    let mut private_keys = Vec::with_capacity(voting_powers.len());
 
     for vp in voting_powers {
         let sk = PrivateKey::generate(&mut rng);
         let val = Validator::new(sk.public_key(), vp);
-        validators.push((val, sk));
+
+        private_keys.push(sk);
+
+        if vp > 0 {
+            validators.push(val);
+        }
     }
 
-    validators
+    (validators, private_keys)
 }
 
 use axum::routing::get;
