@@ -1,7 +1,12 @@
 name: Docs
+
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+    paths:
+      - code/**
+      - .github/workflows/todo-tracking.yml
 
 permissions:
   contents: read
