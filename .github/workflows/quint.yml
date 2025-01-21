@@ -26,7 +26,7 @@ jobs:
   quint-typecheck:
     name: Typecheck
     needs: changes
-    if: ${{ needs.changes.outputs.specs == 'true' }}
+    if: ${{ needs.changes.outputs.specs == 'true' || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
   quint-test:
     name: Test
     needs: changes
-    if: ${{ needs.changes.outputs.specs == 'true' }}
+    if: ${{ needs.changes.outputs.specs == 'true' || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     env:
       MAX_SAMPLES: 100
