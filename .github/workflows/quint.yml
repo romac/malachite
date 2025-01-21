@@ -15,6 +15,7 @@ jobs:
     outputs:
       specs: ${{ steps.filter.outputs.specs }}
     steps:
+      - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
         with:
