@@ -1,3 +1,5 @@
+use bytes::Bytes;
+
 use malachitebft_core_types::{Context, NilOrVal, Round, ValidatorSet as _};
 
 use crate::{
@@ -24,6 +26,7 @@ impl Context for MockContext {
     type Validator = Validator;
     type Value = BlockHash;
     type Vote = Vote;
+    type Extension = Bytes;
     type SigningScheme = Ecdsa;
 
     fn select_proposer<'a>(
