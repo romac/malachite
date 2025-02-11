@@ -11,11 +11,15 @@ use malachitebft_app_channel::app::types::sync::RawDecidedValue;
 use malachitebft_app_channel::app::types::ProposedValue;
 use malachitebft_app_channel::{AppMsg, Channels, ConsensusMsg, NetworkMsg};
 use malachitebft_test::codec::proto::ProtobufCodec;
-use malachitebft_test::{Height, TestContext};
+use malachitebft_test::{Genesis, Height, TestContext};
 
 use crate::state::{decode_value, State};
 
-pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyre::Result<()> {
+pub async fn run(
+    genesis: Genesis,
+    state: &mut State,
+    channels: &mut Channels<TestContext>,
+) -> eyre::Result<()> {
     while let Some(msg) = channels.consensus.recv().await {
         match msg {
             // The first message to handle is the `ConsensusReady` message, signaling to the app
@@ -33,11 +37,11 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
                 sleep(Duration::from_millis(200)).await;
 
                 // We can simply respond by telling the engine to start consensus
-                // at the current height, which is initially 1
+                // at the next height, and provide it with the genesis validator set
                 if reply
                     .send(ConsensusMsg::StartHeight(
                         start_height,
-                        state.get_validator_set().clone(),
+                        genesis.validator_set.clone(),
                     ))
                     .is_err()
                 {
@@ -94,40 +98,18 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
                     error!("Failed to send GetValue reply");
                 }
 
+                if !state.config.consensus.value_payload.include_parts() {
+                    return Ok(());
+                }
+
                 // Now what's left to do is to break down the value to propose into parts,
                 // and send those parts over the network to our peers, for them to re-assemble the full value.
                 for stream_message in state.stream_proposal(proposal) {
                     info!(%height, %round, "Streaming proposal part: {stream_message:?}");
-
                     channels
                         .network
                         .send(NetworkMsg::PublishProposalPart(stream_message))
                         .await?;
-                }
-            }
-
-            AppMsg::ExtendVote {
-                height: _,
-                round: _,
-                value_id: _,
-                reply,
-            } => {
-                // TODO
-                if reply.send(None).is_err() {
-                    error!("Failed to send ExtendVote reply");
-                }
-            }
-
-            AppMsg::VerifyVoteExtension {
-                height: _,
-                round: _,
-                value_id: _,
-                extension: _,
-                reply,
-            } => {
-                // TODO
-                if reply.send(Ok(())).is_err() {
-                    error!("Failed to send VerifyVoteExtension reply");
                 }
             }
 
@@ -158,7 +140,7 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
             // In our case, our validator set stays constant between heights so we can
             // send back the validator set found in our genesis state.
             AppMsg::GetValidatorSet { height: _, reply } => {
-                if reply.send(state.get_validator_set().clone()).is_err() {
+                if reply.send(genesis.validator_set.clone()).is_err() {
                     error!("Failed to send GetValidatorSet reply");
                 }
             }
@@ -170,24 +152,25 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
             // ie. the precommits together with their (aggregated) signatures.
             AppMsg::Decided {
                 certificate,
-                extensions,
+                extensions: _,
                 reply,
             } => {
                 info!(
-                    height = %certificate.height,
-                    round = %certificate.round,
+                    height = %certificate.height, round = %certificate.round,
                     value = %certificate.value_id,
                     "Consensus has decided on value"
                 );
 
                 // When that happens, we store the decided value in our store
-                state.commit(certificate, extensions).await?;
+                state.commit(certificate).await?;
+
+                sleep(Duration::from_millis(500)).await;
 
                 // And then we instruct consensus to start the next height
                 if reply
                     .send(ConsensusMsg::StartHeight(
                         state.current_height,
-                        state.get_validator_set().clone(),
+                        genesis.validator_set.clone(),
                     ))
                     .is_err()
                 {
@@ -212,17 +195,18 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
 
                 let value = decode_value(value_bytes);
 
-                if reply
-                    .send(ProposedValue {
-                        height,
-                        round,
-                        valid_round: Round::Nil,
-                        proposer,
-                        value,
-                        validity: Validity::Valid,
-                    })
-                    .is_err()
-                {
+                let proposal = ProposedValue {
+                    height,
+                    round,
+                    valid_round: Round::Nil,
+                    proposer,
+                    value,
+                    validity: Validity::Valid,
+                };
+
+                state.store_synced_value(proposal.clone()).await?;
+
+                if reply.send(proposal).is_err() {
                     error!("Failed to send ProcessSyncedValue reply");
                 }
             }
@@ -240,7 +224,7 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
 
                 let raw_decided_value = decided_value.map(|decided_value| RawDecidedValue {
                     certificate: decided_value.certificate,
-                    value_bytes: ProtobufCodec.encode(&decided_value.value).unwrap(),
+                    value_bytes: ProtobufCodec.encode(&decided_value.value).unwrap(), // FIXME: unwrap
                 });
 
                 if reply.send(raw_decided_value).is_err() {
@@ -265,18 +249,22 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
                 address,
                 value_id,
             } => {
-                info!(%height, %round, "Restreaming existing proposal...");
+                if !state.config.consensus.value_payload.include_parts() {
+                    return Ok(());
+                }
+
+                info!(%height, %round, %value_id, "Restreaming existing proposal...");
 
                 let Some(proposal) = state
                     .get_proposal(height, round, valid_round, address, value_id)
                     .await
                 else {
-                    error!(%height, %round, "Failed to find proposal to restream");
+                    error!(%height, %round, %value_id, "Failed to find proposal to restream");
                     return Ok(());
                 };
 
                 for stream_message in state.stream_proposal(proposal) {
-                    info!(%height, %round, "Publishing proposal part: {stream_message:?}");
+                    info!(%height, %round, %value_id, "Publishing proposal part: {stream_message:?}");
 
                     channels
                         .network
@@ -297,6 +285,18 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
 
                 // Remove the peer from tracking
                 state.peers.remove(&peer_id);
+            }
+
+            AppMsg::ExtendVote { reply, .. } => {
+                if reply.send(None).is_err() {
+                    error!("Failed to send ExtendVote reply");
+                }
+            }
+
+            AppMsg::VerifyVoteExtension { reply, .. } => {
+                if reply.send(Ok(())).is_err() {
+                    error!("Failed to send VerifyVoteExtension reply");
+                }
             }
         }
     }

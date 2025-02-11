@@ -128,6 +128,7 @@ impl PartStreamsMap {
         msg: StreamMessage<ProposalPart>,
     ) -> Option<ProposalParts> {
         let stream_id = msg.stream_id.clone();
+
         let state = self
             .streams
             .entry((peer_id, stream_id.clone()))

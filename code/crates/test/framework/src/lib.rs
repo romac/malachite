@@ -11,8 +11,9 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
+use tokio::time::error::Elapsed;
 use tokio::time::{sleep, Duration};
-use tracing::{debug, error, error_span, info, Instrument, Span};
+use tracing::{debug, error, error_span, info, Instrument};
 
 use malachitebft_config::{
     Config as NodeConfig, Config, DiscoveryConfig, LoggingConfig, PubSubProtocol, SyncConfig,
@@ -21,12 +22,8 @@ use malachitebft_config::{
 use malachitebft_core_consensus::{LocallyProposedValue, SignedConsensusMsg};
 use malachitebft_core_types::{SignedVote, VotingPower};
 use malachitebft_engine::util::events::{Event, RxEvent, TxEvent};
-use malachitebft_starknet_host::spawn::spawn_node_actor;
-use malachitebft_starknet_host::types::MockContext;
-use malachitebft_starknet_host::types::{Height, PrivateKey, Validator, ValidatorSet};
-
-#[cfg(test)]
-pub mod tests;
+use malachitebft_test::{Height, PrivateKey, TestContext, Validator, ValidatorSet};
+use malachitebft_test_app::node::App;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Expected {
@@ -122,7 +119,7 @@ pub enum HandlerResult {
 }
 
 pub type EventHandler<S> =
-    Box<dyn Fn(Event<MockContext>, &mut S) -> Result<HandlerResult, eyre::Report> + Send + Sync>;
+    Box<dyn Fn(Event<TestContext>, &mut S) -> Result<HandlerResult, eyre::Report> + Send + Sync>;
 
 pub type NodeId = usize;
 
@@ -147,7 +144,7 @@ impl<State> TestNode<State> {
         Self {
             id,
             voting_power: 1,
-            start_height: Height::new(1, 1),
+            start_height: Height::new(1),
             start_delay: Duration::from_secs(0),
             steps: vec![],
             state,
@@ -173,7 +170,7 @@ impl<State> TestNode<State> {
     }
 
     pub fn start_after(&mut self, height: u64, delay: Duration) -> &mut Self {
-        self.start_height.block_number = height;
+        self.start_height = Height::new(height);
         self.start_delay = delay;
         self
     }
@@ -205,7 +202,7 @@ impl<State> TestNode<State> {
 
     pub fn on_event<F>(&mut self, on_event: F) -> &mut Self
     where
-        F: Fn(Event<MockContext>, &mut State) -> Result<HandlerResult, eyre::Report>
+        F: Fn(Event<TestContext>, &mut State) -> Result<HandlerResult, eyre::Report>
             + Send
             + Sync
             + 'static,
@@ -248,7 +245,7 @@ impl<State> TestNode<State> {
 
     pub fn on_proposed_value<F>(&mut self, f: F) -> &mut Self
     where
-        F: Fn(LocallyProposedValue<MockContext>, &mut State) -> Result<HandlerResult, eyre::Report>
+        F: Fn(LocallyProposedValue<TestContext>, &mut State) -> Result<HandlerResult, eyre::Report>
             + Send
             + Sync
             + 'static,
@@ -264,7 +261,7 @@ impl<State> TestNode<State> {
 
     pub fn on_vote<F>(&mut self, f: F) -> &mut Self
     where
-        F: Fn(SignedVote<MockContext>, &mut State) -> Result<HandlerResult, eyre::Report>
+        F: Fn(SignedVote<TestContext>, &mut State) -> Result<HandlerResult, eyre::Report>
             + Send
             + Sync
             + 'static,
@@ -351,7 +348,6 @@ where
     S: Send + Sync + 'static,
 {
     pub fn new(nodes: Vec<TestNode<S>>) -> Self {
-        // Only include nodes with non-zero voting power in the validator set
         let (validators, private_keys) = make_validators(voting_powers(&nodes));
         let validator_set = ValidatorSet::new(validators);
         let id = unique_id();
@@ -405,49 +401,47 @@ where
         {
             let validator_set = self.validator_set.clone();
 
-            let home_dir =
-                tempfile::TempDir::with_prefix(format!("malachitebft-starknet-test-{}", self.id))
-                    .unwrap()
-                    .into_path();
+            let home_dir = tempfile::TempDir::with_prefix(format!(
+                "informalsystems-malachitebft-starknet-test-{}",
+                self.id
+            ))
+            .unwrap()
+            .into_path();
+
+            let id = node.id;
+            let task = run_node(node, home_dir, config, validator_set, private_key);
 
             set.spawn(
                 async move {
-                    let id = node.id;
-                    let result = run_node(node, home_dir, config, validator_set, private_key).await;
+                    let result = tokio::time::timeout(timeout, task).await;
                     (id, result)
                 }
                 .in_current_span(),
             );
         }
 
-        let metrics = tokio::spawn(serve_metrics("127.0.0.1:0".parse().unwrap()));
-        let results = tokio::time::timeout(timeout, set.join_all()).await;
-        metrics.abort();
-
-        match results {
-            Ok(results) => {
-                check_results(results);
-            }
-            Err(_) => {
-                error!("Test timed out after {timeout:?}");
-                std::process::exit(1);
-            }
-        }
+        let results = set.join_all().await;
+        check_results(results);
     }
 }
 
-fn check_results(results: Vec<(NodeId, TestResult)>) {
+fn check_results(results: Vec<(NodeId, Result<TestResult, Elapsed>)>) {
     let mut errors = 0;
 
     for (id, result) in results {
         let _span = tracing::error_span!("node", %id).entered();
+
         match result {
-            TestResult::Success(reason) => {
+            Ok(TestResult::Success(reason)) => {
                 info!("Test succeeded: {reason}");
             }
-            TestResult::Failure(reason) => {
+            Ok(TestResult::Failure(reason)) => {
                 errors += 1;
                 error!("Test failed: {reason}");
+            }
+            Err(_) => {
+                errors += 1;
+                error!("Test timed out");
             }
         }
     }
@@ -458,6 +452,7 @@ fn check_results(results: Vec<(NodeId, TestResult)>) {
     }
 }
 
+#[derive(Debug)]
 pub enum TestResult {
     Success(String),
     Failure(String),
@@ -475,27 +470,25 @@ async fn run_node<S>(
 
     info!("Spawning node with voting power {}", node.voting_power);
 
-    let tx_event = TxEvent::new();
-    let mut rx_event = tx_event.subscribe();
-    let rx_event_bg = tx_event.subscribe();
-
-    let (mut actor_ref, _handle) = spawn_node_actor(
-        config.clone(),
-        home_dir.clone(),
-        validator_set.clone(),
+    let app = App {
+        config,
+        home_dir: home_dir.clone(),
         private_key,
-        Some(node.start_height),
-        tx_event,
-        Span::current(),
-    )
-    .await;
+        validator_set,
+        start_height: Some(node.start_height),
+    };
+
+    let mut handles = app.start().await.unwrap();
+
+    let mut rx_event = handles.tx_event.subscribe();
+    let rx_event_bg = handles.tx_event.subscribe();
 
     let decisions = Arc::new(AtomicUsize::new(0));
     let current_height = Arc::new(AtomicUsize::new(0));
     let failure = Arc::new(Mutex::new(None));
     let is_full_node = node.is_full_node();
 
-    let spawn_bg = |mut rx: RxEvent<MockContext>| {
+    let spawn_bg = |mut rx: RxEvent<TestContext>| {
         tokio::spawn({
             let decisions = Arc::clone(&decisions);
             let current_height = Arc::clone(&current_height);
@@ -511,15 +504,14 @@ async fn run_node<S>(
                             decisions.fetch_add(1, Ordering::SeqCst);
                         }
                         Event::Published(msg) if is_full_node => {
-                            failure.lock().await.replace(format!(
+                            error!("Full node unexpectedly published a consensus message: {msg:?}");
+                            *failure.lock().await = Some(format!(
                                 "Full node unexpectedly published a consensus message: {msg:?}"
                             ));
                         }
                         Event::WalReplayError(e) => {
-                            failure
-                                .lock()
-                                .await
-                                .replace(format!("WAL replay error: {e}"));
+                            error!("WAL replay error: {e}");
+                            *failure.lock().await = Some(format!("WAL replay error: {e}"));
                         }
                         _ => (),
                     }
@@ -543,12 +535,18 @@ async fn run_node<S>(
                 info!("Waiting until node reaches height {target_height}");
 
                 'inner: while let Ok(event) = rx_event.recv().await {
-                    if let Event::StartedHeight(height) = &event {
-                        info!("Node started height {height}");
+                    if let Some(failure) = failure.lock().await.take() {
+                        return TestResult::Failure(failure);
+                    }
 
-                        if height.as_u64() == target_height {
-                            break 'inner;
-                        }
+                    let Event::StartedHeight(height) = event else {
+                        continue 'inner;
+                    };
+
+                    info!("Node started height {height}");
+
+                    if height.as_u64() == target_height {
+                        break 'inner;
                     }
                 }
             }
@@ -559,15 +557,23 @@ async fn run_node<S>(
                 info!("Node will crash at height {height}");
                 sleep(after).await;
 
-                actor_ref.kill_and_wait(None).await.expect("Node must stop");
+                handles
+                    .engine
+                    .actor
+                    .kill_and_wait(None)
+                    .await
+                    .expect("Node must stop");
+
                 bg.abort();
+                handles.app.abort();
+                handles.engine.handle.abort();
             }
 
             Step::ResetDb => {
                 info!("Resetting database");
 
                 let db_path = home_dir.join("db");
-                remove_dir_all(&db_path).expect("Database must be removed");
+                let _ = remove_dir_all(&db_path);
                 create_dir_all(&db_path).expect("Database must be created");
             }
 
@@ -581,23 +587,12 @@ async fn run_node<S>(
                 let new_rx_event_bg = tx_event.subscribe();
 
                 info!("Spawning node");
-
-                let (new_actor_ref, _) = spawn_node_actor(
-                    config.clone(),
-                    home_dir.clone(),
-                    validator_set.clone(),
-                    private_key,
-                    Some(node.start_height),
-                    tx_event,
-                    tracing::Span::current(),
-                )
-                .await;
+                let new_handles = app.start().await.unwrap();
 
                 info!("Spawned");
 
                 bg = spawn_bg(new_rx_event_bg);
-
-                actor_ref = new_actor_ref;
+                handles = new_handles;
                 rx_event = new_rx_event;
             }
 
@@ -611,8 +606,10 @@ async fn run_node<S>(
                             break 'inner;
                         }
                         Err(e) => {
-                            actor_ref.stop(Some("Test failed".to_string()));
                             bg.abort();
+                            handles.engine.actor.stop(Some("Test failed".to_string()));
+                            handles.app.abort();
+                            handles.engine.handle.abort();
 
                             return TestResult::Failure(e.to_string());
                         }
@@ -623,13 +620,13 @@ async fn run_node<S>(
             Step::Expect(expected) => {
                 let actual = decisions.load(Ordering::SeqCst);
 
-                actor_ref.stop(Some("Test is over".to_string()));
                 bg.abort();
+                handles.engine.actor.stop(Some("Test failed".to_string()));
+                handles.app.abort();
+                handles.engine.handle.abort();
 
                 if expected.check(actual) {
-                    return TestResult::Success(format!(
-                        "Correct number of decisions: got {actual}, expected: {expected}"
-                    ));
+                    break;
                 } else {
                     return TestResult::Failure(format!(
                         "Incorrect number of decisions: got {actual}, expected: {expected}"
@@ -642,8 +639,10 @@ async fn run_node<S>(
             }
 
             Step::Fail(reason) => {
-                actor_ref.stop(Some("Test failed".to_string()));
                 bg.abort();
+                handles.engine.actor.stop(Some("Test failed".to_string()));
+                handles.app.abort();
+                handles.engine.handle.abort();
 
                 return TestResult::Failure(reason);
             }
@@ -668,9 +667,9 @@ pub fn init_logging(test_module: &str) {
         .any(|(k, v)| std::env::var(k).as_deref() == Ok(v));
 
     let directive = if enable_debug {
-        format!("{test_module}=debug,ractor=error,informalsystems_malachitebft=debug")
+        format!("{test_module}=debug,informalsystems_malachitebft=trace,informalsystems_malachitebft_discovery=error,libp2p=warn,ractor=warn")
     } else {
-        format!("{test_module}=debug,ractor=error,informalsystems_malachitefbft=info")
+        format!("{test_module}=debug,informalsystems_malachitebft=info,informalsystems_malachitebft_discovery=error,libp2p=warn,ractor=warn")
     };
 
     let filter = EnvFilter::builder().parse(directive).unwrap();
@@ -775,13 +774,13 @@ pub fn make_validators(voting_powers: Vec<VotingPower>) -> (Vec<Validator>, Vec<
 
     for vp in voting_powers {
         let sk = PrivateKey::generate(&mut rng);
-        let val = Validator::new(sk.public_key(), vp);
-
-        private_keys.push(sk);
 
         if vp > 0 {
+            let val = Validator::new(sk.public_key(), vp);
             validators.push(val);
         }
+
+        private_keys.push(sk);
     }
 
     (validators, private_keys)
