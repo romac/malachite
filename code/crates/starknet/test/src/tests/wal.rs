@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use eyre::bail;
+use malachitebft_test_framework::init_logging;
 use tracing::info;
 
 use malachitebft_config::ValuePayload;
@@ -9,7 +10,7 @@ use malachitebft_core_types::SignedVote;
 use malachitebft_engine::util::events::Event;
 use malachitebft_starknet_host::types::MockContext;
 
-use crate::{init_logging, HandlerResult, TestBuilder, TestParams};
+use crate::{HandlerResult, TestBuilder, TestParams};
 
 #[tokio::test]
 async fn proposer_crashes_after_proposing_parts_only() {
@@ -41,8 +42,6 @@ async fn proposer_crashes_after_proposing_proposal_only() {
 }
 
 async fn proposer_crashes_after_proposing(params: TestParams) {
-    init_logging(module_path!());
-
     #[derive(Clone, Debug, Default)]
     struct State {
         first_proposed_value: Option<LocallyProposedValue<MockContext>>,
@@ -95,7 +94,7 @@ async fn proposer_crashes_after_proposing(params: TestParams) {
         .success();
 
     test.build()
-        .run_with_custom_config(
+        .run_with_params(
             Duration::from_secs(60),
             TestParams {
                 enable_sync: false,
@@ -135,8 +134,6 @@ async fn non_proposer_crashes_after_voting_proposal_only() {
 }
 
 async fn non_proposer_crashes_after_voting(params: TestParams) {
-    init_logging(module_path!());
-
     #[derive(Clone, Debug, Default)]
     struct State {
         first_vote: Option<SignedVote<MockContext>>,
@@ -187,7 +184,7 @@ async fn non_proposer_crashes_after_voting(params: TestParams) {
     test.add_node().with_voting_power(10).start().success();
 
     test.build()
-        .run_with_custom_config(
+        .run_with_params(
             Duration::from_secs(60),
             TestParams {
                 enable_sync: false,
@@ -199,7 +196,7 @@ async fn non_proposer_crashes_after_voting(params: TestParams) {
 
 #[tokio::test]
 pub async fn node_crashes_after_vote_set_request() {
-    init_logging(module_path!());
+    init_logging();
 
     const HEIGHT: u64 = 3;
 
@@ -221,7 +218,7 @@ pub async fn node_crashes_after_vote_set_request() {
         .success();
 
     test.build()
-        .run_with_custom_config(
+        .run_with_params(
             Duration::from_secs(60),
             TestParams {
                 enable_sync: true,

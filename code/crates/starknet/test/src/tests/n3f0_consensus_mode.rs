@@ -2,11 +2,9 @@ use std::time::Duration;
 
 use malachitebft_config::ValuePayload;
 
-use crate::{init_logging, TestBuilder, TestParams};
+use crate::{TestBuilder, TestParams};
 
 async fn run_test(params: TestParams) {
-    init_logging(module_path!());
-
     const HEIGHT: u64 = 5;
 
     let mut test = TestBuilder::<()>::new();
@@ -16,7 +14,7 @@ async fn run_test(params: TestParams) {
     test.add_node().start().wait_until(HEIGHT).success();
 
     test.build()
-        .run_with_custom_config(Duration::from_secs(30), params)
+        .run_with_params(Duration::from_secs(30), params)
         .await
 }
 
