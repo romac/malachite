@@ -15,9 +15,7 @@ use malachitebft_test_framework::HasTestRunner;
 use malachitebft_test_framework::{NodeRunner, TestNode};
 
 pub use malachitebft_test_framework::TestBuilder as GenTestBuilder;
-pub use malachitebft_test_framework::{
-    init_logging, EngineHandle, HandlerResult, Node, NodeId, TestParams,
-};
+pub use malachitebft_test_framework::{EngineHandle, HandlerResult, Node, NodeId, TestParams};
 
 use tempfile::TempDir;
 

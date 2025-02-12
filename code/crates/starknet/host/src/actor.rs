@@ -11,9 +11,7 @@ use tokio::time::Instant;
 use tracing::{debug, error, info, trace, warn};
 
 use malachitebft_core_consensus::{PeerId, VoteExtensionError};
-use malachitebft_core_types::{
-    CommitCertificate, Round, Validity, ValueId, ValueOrigin, VoteExtensions,
-};
+use malachitebft_core_types::{CommitCertificate, Round, Validity, ValueId, ValueOrigin};
 use malachitebft_engine::consensus::{ConsensusMsg, ConsensusRef};
 use malachitebft_engine::host::{LocallyProposedValue, ProposedValue};
 use malachitebft_engine::network::{NetworkMsg, NetworkRef};
@@ -186,19 +184,9 @@ impl Host {
 
             HostMsg::Decided {
                 certificate,
-                extensions,
                 consensus,
-            } => {
-                on_decided(
-                    state,
-                    &consensus,
-                    &self.mempool,
-                    certificate,
-                    extensions,
-                    &self.metrics,
-                )
-                .await
-            }
+                ..
+            } => on_decided(state, &consensus, &self.mempool, certificate, &self.metrics).await,
 
             HostMsg::GetDecidedValue { height, reply_to } => {
                 on_get_decided_block(height, state, reply_to).await
@@ -341,24 +329,20 @@ async fn on_get_value(
     while let Some(part) = rx_part.recv().await {
         state.host.part_store.store(height, round, part.clone());
 
-        if state.host.params.value_payload.include_parts() {
-            debug!(%stream_id, %sequence, "Broadcasting proposal part");
+        debug!(%stream_id, %sequence, "Broadcasting proposal part");
 
-            let msg = StreamMessage::new(
-                stream_id.clone(),
-                sequence,
-                StreamContent::Data(part.clone()),
-            );
-            network.cast(NetworkMsg::PublishProposalPart(msg))?;
-        }
+        let msg = StreamMessage::new(
+            stream_id.clone(),
+            sequence,
+            StreamContent::Data(part.clone()),
+        );
+        network.cast(NetworkMsg::PublishProposalPart(msg))?;
 
         sequence += 1;
     }
 
-    if state.host.params.value_payload.include_parts() {
-        let msg = StreamMessage::new(stream_id, sequence, StreamContent::Fin);
-        network.cast(NetworkMsg::PublishProposalPart(msg))?;
-    }
+    let msg = StreamMessage::new(stream_id, sequence, StreamContent::Fin);
+    network.cast(NetworkMsg::PublishProposalPart(msg))?;
 
     let block_hash = rx_hash.await?;
     debug!(%block_hash, "Assembled block");
@@ -478,16 +462,13 @@ async fn on_restream_proposal(
 
         state.host.part_store.store(height, round, new_part.clone());
 
-        if state.host.params.value_payload.include_parts() {
-            debug!(%stream_id, %sequence, "Broadcasting proposal part");
+        debug!(%stream_id, %sequence, "Broadcasting proposal part");
 
-            let msg =
-                StreamMessage::new(stream_id.clone(), sequence, StreamContent::Data(new_part));
+        let msg = StreamMessage::new(stream_id.clone(), sequence, StreamContent::Data(new_part));
 
-            network.cast(NetworkMsg::PublishProposalPart(msg))?;
+        network.cast(NetworkMsg::PublishProposalPart(msg))?;
 
-            sequence += 1;
-        }
+        sequence += 1;
     }
 
     Ok(())
@@ -633,7 +614,6 @@ async fn on_decided(
     consensus: &ConsensusRef<MockContext>,
     mempool: &MempoolRef,
     certificate: CommitCertificate<MockContext>,
-    extensions: VoteExtensions<MockContext>,
     metrics: &Metrics,
 ) -> Result<(), ActorProcessingErr> {
     let (height, round) = (certificate.height, certificate.round);
@@ -659,9 +639,7 @@ async fn on_decided(
 
     // Update metrics
     let tx_count: usize = all_parts.iter().map(|p| p.tx_count()).sum();
-    let parts_size: usize = all_parts.iter().map(|p| p.size_bytes()).sum();
-    let extensions_size = extensions.size_bytes();
-    let block_size = parts_size + extensions_size;
+    let block_size: usize = all_parts.iter().map(|p| p.size_bytes()).sum();
 
     metrics.block_tx_count.observe(tx_count as f64);
     metrics.block_size_bytes.observe(block_size as f64);
@@ -686,7 +664,6 @@ async fn on_decided(
     mempool.cast(MempoolMsg::Update { tx_hashes })?;
 
     // Notify Starknet Host of the decision
-    // TODO: Pass extensions along as well?
     state.host.decision(certificate).await;
 
     // Start the next height

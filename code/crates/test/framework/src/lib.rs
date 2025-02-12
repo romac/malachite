@@ -15,7 +15,7 @@ pub use malachitebft_app::{EngineHandle, Node, NodeHandle};
 pub use malachitebft_engine::util::events::{Event, RxEvent, TxEvent};
 
 mod logging;
-pub use logging::init_logging;
+use logging::init_logging;
 
 mod node;
 pub use node::{HandlerResult, NodeId, TestNode};

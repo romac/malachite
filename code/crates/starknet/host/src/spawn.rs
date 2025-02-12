@@ -2,23 +2,23 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use libp2p_identity::ecdsa;
-use malachitebft_engine::util::events::TxEvent;
-use malachitebft_engine::wal::{Wal, WalRef};
-use malachitebft_starknet_p2p_types::EcdsaProvider;
 use tokio::task::JoinHandle;
+use tracing::warn;
 
 use malachitebft_config::{
     self as config, Config as NodeConfig, MempoolConfig, SyncConfig, TestConfig, TransportProtocol,
 };
-use malachitebft_core_consensus::ValuePayload;
+use malachitebft_core_types::ValuePayload;
 use malachitebft_engine::consensus::{Consensus, ConsensusParams, ConsensusRef};
 use malachitebft_engine::host::HostRef;
 use malachitebft_engine::network::{Network, NetworkRef};
 use malachitebft_engine::node::{Node, NodeRef};
 use malachitebft_engine::sync::{Params as SyncParams, Sync, SyncRef};
-use malachitebft_metrics::Metrics;
-use malachitebft_metrics::SharedRegistry;
+use malachitebft_engine::util::events::TxEvent;
+use malachitebft_engine::wal::{Wal, WalRef};
+use malachitebft_metrics::{Metrics, SharedRegistry};
 use malachitebft_network::Keypair;
+use malachitebft_starknet_p2p_types::EcdsaProvider;
 use malachitebft_sync as sync;
 use malachitebft_test_mempool::Config as MempoolNetworkConfig;
 
@@ -165,18 +165,12 @@ async fn spawn_consensus_actor(
     tx_event: TxEvent<MockContext>,
     span: &tracing::Span,
 ) -> ConsensusRef<MockContext> {
-    let value_payload = match cfg.test.value_payload {
-        malachitebft_config::ValuePayload::PartsOnly => ValuePayload::PartsOnly,
-        malachitebft_config::ValuePayload::ProposalOnly => ValuePayload::ProposalOnly,
-        malachitebft_config::ValuePayload::ProposalAndParts => ValuePayload::ProposalAndParts,
-    };
-
     let consensus_params = ConsensusParams {
         initial_height,
         initial_validator_set,
         address,
         threshold_params: Default::default(),
-        value_payload,
+        value_payload: ValuePayload::PartsOnly,
     };
 
     Consensus::spawn(
@@ -321,21 +315,20 @@ async fn spawn_host_actor(
     metrics: Metrics,
     span: &tracing::Span,
 ) -> HostRef<MockContext> {
-    let value_payload = match cfg.test.value_payload {
-        malachitebft_config::ValuePayload::PartsOnly => ValuePayload::PartsOnly,
-        malachitebft_config::ValuePayload::ProposalOnly => ValuePayload::ProposalOnly,
-        malachitebft_config::ValuePayload::ProposalAndParts => ValuePayload::ProposalAndParts,
-    };
+    if cfg.test.value_payload != config::ValuePayload::PartsOnly {
+        warn!(
+            "`value_payload` must be set to `PartsOnly` for Starknet app, ignoring current configuration `{:?}`",
+            cfg.test.value_payload
+        );
+    }
 
     let mock_params = StarknetParams {
-        value_payload,
         max_block_size: cfg.test.max_block_size,
         tx_size: cfg.test.tx_size,
         txs_per_part: cfg.test.txs_per_part,
         time_allowance_factor: cfg.test.time_allowance_factor,
         exec_time_per_tx: cfg.test.exec_time_per_tx,
         max_retain_blocks: cfg.test.max_retain_blocks,
-        // vote_extensions: cfg.test.vote_extensions,
     };
 
     let mock_host = StarknetHost::new(

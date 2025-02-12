@@ -26,7 +26,7 @@ use malachitebft_test_framework::HasTestRunner;
 use malachitebft_test_framework::{NodeRunner, TestNode};
 
 pub use malachitebft_test_framework::TestBuilder as GenTestBuilder;
-pub use malachitebft_test_framework::{init_logging, HandlerResult, NodeId, TestParams};
+pub use malachitebft_test_framework::{HandlerResult, NodeId, TestParams};
 
 use informalsystems_malachitebft_test::{Height, TestContext, Validator, ValidatorSet};
 
