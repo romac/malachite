@@ -155,7 +155,10 @@ impl Node for App {
             tokio::spawn(metrics::serve(self.config.metrics.listen_addr));
         }
 
-        let store = Store::open(self.get_home_dir().join("store.db"), metrics)?;
+        let db_dir = self.get_home_dir().join("db");
+        std::fs::create_dir_all(&db_dir)?;
+
+        let store = Store::open(db_dir.join("store.db"), metrics)?;
         let start_height = self.start_height.unwrap_or(Height::INITIAL);
         let mut state = State::new(ctx, signing_provider, genesis, address, start_height, store);
 
