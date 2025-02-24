@@ -141,6 +141,9 @@ impl TestRunner {
             moniker: format!("node-{}", node),
             logging: LoggingConfig::default(),
             consensus: ConsensusConfig {
+                vote_sync: VoteSyncConfig {
+                    mode: VoteSyncMode::Rebroadcast,
+                },
                 timeouts: TimeoutConfig::default(),
                 p2p: P2pConfig {
                     transport,
@@ -168,7 +171,7 @@ impl TestRunner {
                 max_tx_count: 10000,
                 gossip_batch_size: 100,
             },
-            sync: SyncConfig {
+            value_sync: ValueSyncConfig {
                 enabled: true,
                 status_update_interval: Duration::from_secs(2),
                 request_timeout: Duration::from_secs(5),

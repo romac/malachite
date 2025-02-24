@@ -5,8 +5,10 @@ use tokio::task::JoinHandle;
 use tracing::warn;
 
 use malachitebft_config::{
-    self as config, Config as NodeConfig, MempoolConfig, SyncConfig, TestConfig, TransportProtocol,
+    self as config, Config as NodeConfig, MempoolConfig, TestConfig, TransportProtocol,
+    ValueSyncConfig, VoteSyncConfig,
 };
+use malachitebft_core_consensus::VoteSyncMode;
 use malachitebft_core_types::ValuePayload;
 use malachitebft_engine::consensus::{Consensus, ConsensusParams, ConsensusRef};
 use malachitebft_engine::host::HostRef;
@@ -73,7 +75,8 @@ pub async fn spawn_node_actor(
         ctx,
         network.clone(),
         host.clone(),
-        &cfg.sync,
+        &cfg.value_sync,
+        &cfg.consensus.vote_sync,
         &registry,
         &span,
     )
@@ -127,11 +130,12 @@ async fn spawn_sync_actor(
     ctx: MockContext,
     network: NetworkRef<MockContext>,
     host: HostRef<MockContext>,
-    config: &SyncConfig,
+    config: &ValueSyncConfig,
+    vote_sync: &VoteSyncConfig,
     registry: &SharedRegistry,
     span: &tracing::Span,
 ) -> Option<SyncRef<MockContext>> {
-    if !config.enabled {
+    if !config.enabled && vote_sync.mode != config::VoteSyncMode::RequestResponse {
         return None;
     }
 
@@ -170,6 +174,10 @@ async fn spawn_consensus_actor(
         address,
         threshold_params: Default::default(),
         value_payload: ValuePayload::PartsOnly,
+        vote_sync_mode: match cfg.consensus.vote_sync.mode {
+            config::VoteSyncMode::RequestResponse => VoteSyncMode::RequestResponse,
+            config::VoteSyncMode::Rebroadcast => VoteSyncMode::Rebroadcast,
+        },
     };
 
     Consensus::spawn(
