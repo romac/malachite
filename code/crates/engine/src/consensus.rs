@@ -627,7 +627,7 @@ where
         match result {
             Ok(None) => {
                 // Nothing to replay
-                info!(%height, "No WAL entries to replay");
+                debug!(%height, "No WAL entries to replay");
             }
             Ok(Some(entries)) => {
                 info!("Found {} WAL entries to replay", entries.len());
