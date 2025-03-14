@@ -31,7 +31,7 @@ use alloc::vec::Vec;
 
 use malachitebft_core_state_machine::input::Input as RoundInput;
 use malachitebft_core_state_machine::state::Step;
-use malachitebft_core_types::{CommitCertificate, SignedProposal};
+use malachitebft_core_types::{CommitCertificate, PolkaCertificate, SignedProposal};
 use malachitebft_core_types::{Context, Proposal, Round, Validity, Value, ValueId, VoteType};
 use malachitebft_core_votekeeper::keeper::Output as VKOutput;
 use malachitebft_core_votekeeper::keeper::VoteKeeper;
@@ -91,14 +91,21 @@ where
             return None;
         }
 
-        // Determine if there is a polka for a previous round
+        // Find the polka certificate for the pol_round
+        let polka_certificate_for_previous = self
+            .polka_certificates
+            .iter()
+            .find(|cert| cert.round == proposal.pol_round());
+
+        // Determine if there is a polka for a previous round, either from the vote keeper or from the polka certificate
         let polka_previous = proposal.pol_round().is_defined()
             && proposal.pol_round() < self.round_state.round
-            && self.vote_keeper.is_threshold_met(
-                &proposal.pol_round(),
-                VoteType::Prevote,
-                Threshold::Value(proposal.value().id()),
-            );
+            && (polka_certificate_for_previous.is_some()
+                || self.vote_keeper.is_threshold_met(
+                    &proposal.pol_round(),
+                    VoteType::Prevote,
+                    Threshold::Value(proposal.value().id()),
+                ));
 
         // Handle invalid proposal
         if !validity.is_valid() {
@@ -121,7 +128,7 @@ where
         // L49
         if self.round_state.decision.is_none()
             && self
-                .get_certificate(proposal.round(), proposal.value().id())
+                .commit_certificate(proposal.round(), proposal.value().id())
                 .is_some()
         {
             return Some(RoundInput::ProposalAndPrecommitValue(proposal));
@@ -143,11 +150,19 @@ where
             return None;
         }
 
-        let polka_for_current = self.vote_keeper.is_threshold_met(
-            &proposal.round(),
-            VoteType::Prevote,
-            Threshold::Value(proposal.value().id()),
-        );
+        // Find the polka certificate for the current round
+        let polka_certificate_for_current = self
+            .polka_certificates
+            .iter()
+            .find(|cert| cert.round == proposal.round());
+
+        // Determine if there is a polka for the current round, either from the vote keeper or from the polka certificate
+        let polka_for_current = polka_certificate_for_current.is_some()
+            || self.vote_keeper.is_threshold_met(
+                &proposal.round(),
+                VoteType::Prevote,
+                Threshold::Value(proposal.value().id()),
+            );
 
         let polka_current = polka_for_current && self.round_state.step >= Step::Prevote;
 
@@ -190,7 +205,7 @@ where
         self.multiplex_proposal(proposal, validity)
     }
 
-    pub(crate) fn store_and_multiplex_certificate(
+    pub(crate) fn store_and_multiplex_commit_certificate(
         &mut self,
         certificate: CommitCertificate<Ctx>,
     ) -> Option<RoundInput<Ctx>> {
@@ -201,7 +216,7 @@ where
         let certificate_value_id = certificate.value_id.clone();
 
         // Store the certificate
-        self.certificates.push(certificate);
+        self.commit_certificates.push(certificate);
 
         if let Some((signed_proposal, validity)) = self
             .proposal_keeper
@@ -214,6 +229,61 @@ where
         }
 
         None
+    }
+
+    /// Store the polka certificate and multiplex the proposal.
+    /// Returns the round and the input to the round state machine.
+    /// The round is:
+    /// - the round of the Proposal with a pol_round matching the certificate's round (L28), or
+    /// - the matching proposal is at the same round (L36), or
+    /// - the round of the certificate if there is no matching proposal (L44)
+    pub(crate) fn store_and_multiplex_polka_certificate(
+        &mut self,
+        certificate: PolkaCertificate<Ctx>,
+    ) -> Option<(Round, RoundInput<Ctx>)> {
+        // Should only receive proposals for our height.
+        assert_eq!(self.height(), certificate.height);
+
+        let certificate_round = certificate.round;
+        let certificate_value_id = certificate.value_id.clone();
+
+        // Only add if an identical certificate isn't already present
+        if !self.polka_certificates.iter().any(|existing| {
+            existing.round == certificate.round && existing.value_id == certificate.value_id
+        }) {
+            self.polka_certificates.push(certificate);
+        }
+
+        let Some((signed_proposal, validity)) = self
+            .proposal_keeper
+            .get_proposal_and_validity_for_round(self.round())
+        else {
+            return Some((certificate_round, RoundInput::PolkaAny));
+        };
+
+        let proposal = &signed_proposal.message;
+
+        if certificate_value_id == proposal.value().id() {
+            if validity.is_valid() {
+                if proposal.pol_round() == certificate_round {
+                    Some((
+                        proposal.round(),
+                        RoundInput::ProposalAndPolkaPrevious(proposal.clone()),
+                    ))
+                } else if proposal.round() == certificate_round {
+                    Some((
+                        proposal.round(),
+                        RoundInput::ProposalAndPolkaCurrent(proposal.clone()),
+                    ))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            Some((certificate_round, RoundInput::PolkaAny))
+        }
     }
 
     /// After a vote threshold change for a given round, check if we have a polka for nil, some value or any,
