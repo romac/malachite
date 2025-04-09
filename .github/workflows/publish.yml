@@ -16,9 +16,11 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache-workspaces: "code"
-      - uses: katyo/publish-crates@v2
+      - name: Publish crates
+        uses: katyo/publish-crates@v2
         with:
           registry-token: ${{ secrets.CRATES_TOKEN }}
