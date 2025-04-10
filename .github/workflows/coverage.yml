@@ -157,7 +157,7 @@ jobs:
         with:
           name: integration-test-results
       - name: Upload integration coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: ${{ !cancelled() }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -165,7 +165,7 @@ jobs:
           flags: integration
           fail_ci_if_error: false
       - name: Upload MBT coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: ${{ !cancelled() }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
