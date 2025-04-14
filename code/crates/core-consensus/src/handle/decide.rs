@@ -1,4 +1,4 @@
-use crate::{handle::signature::verify_certificate, prelude::*};
+use crate::{handle::signature::verify_commit_certificate, prelude::*};
 
 #[cfg_attr(not(feature = "metrics"), allow(unused_variables))]
 pub async fn decide<Ctx>(
@@ -61,14 +61,17 @@ where
     assert_eq!(full_proposal.validity, Validity::Valid);
 
     // The certificate must be valid in Commit step
-    assert!(verify_certificate(
-        co,
-        certificate.clone(),
-        state.driver.validator_set().clone(),
-        state.params.threshold_params,
-    )
-    .await
-    .is_ok());
+    assert_eq!(
+        verify_commit_certificate(
+            co,
+            certificate.clone(),
+            state.driver.validator_set().clone(),
+            state.params.threshold_params,
+        )
+        .await?,
+        Ok(()),
+        "Commit certificate is not valid"
+    );
 
     // Update metrics
     #[cfg(feature = "metrics")]

@@ -440,8 +440,8 @@ where
                                 return Ok(());
                             };
 
-                            if let ConsensusError::InvalidCertificate(certificate, e) = e {
-                                sync.cast(SyncMsg::InvalidCertificate(peer, certificate, e))
+                            if let ConsensusError::InvalidCommitCertificate(certificate, e) = e {
+                                sync.cast(SyncMsg::InvalidCommitCertificate(peer, certificate, e))
                                     .map_err(|e| {
                                         eyre!(
                                             "Error when notifying sync of invalid certificate: {e}"
@@ -969,14 +969,26 @@ where
                 Ok(r.resume_with(valid))
             }
 
-            Effect::VerifyCertificate(certificate, validator_set, thresholds, r) => {
-                let valid = self.signing_provider.verify_certificate(
+            Effect::VerifyCommitCertificate(certificate, validator_set, thresholds, r) => {
+                let result = self.signing_provider.verify_commit_certificate(
+                    &self.ctx,
                     &certificate,
                     &validator_set,
                     thresholds,
                 );
 
-                Ok(r.resume_with(valid))
+                Ok(r.resume_with(result))
+            }
+
+            Effect::VerifyPolkaCertificate(certificate, validator_set, thresholds, r) => {
+                let result = self.signing_provider.verify_polka_certificate(
+                    &self.ctx,
+                    &certificate,
+                    &validator_set,
+                    thresholds,
+                );
+
+                Ok(r.resume_with(result))
             }
 
             Effect::ExtendVote(height, round, value_id, r) => {
@@ -1072,7 +1084,7 @@ where
             }
 
             Effect::Decide(certificate, extensions, r) => {
-                assert!(!certificate.aggregated_signature.signatures.is_empty());
+                assert!(!certificate.commit_signatures.is_empty());
 
                 self.wal_flush(state.phase).await?;
 
