@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-> Nothing yet.
+### `malachitebft-engine`
+- Changed the reply channel of `GetValidatorSet` message to take an `Option<Ctx::ValidatorSet>` instead of `Ctx::ValidatorSet`.
 
 ## 0.2.0
 
