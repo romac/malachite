@@ -2,11 +2,19 @@
 
 ## Unreleased
 
+### `malachitebft-core-types`
+- Removed the VoteSet synchronization protocol, as it is neither required nor sufficient for liveness.
+  See ([#998](https://github.com/informalsystems/malachite/issues/998)) for more details.
+
 ### `malachitebft-core-consensus`
+- Removed the VoteSet synchronization protocol, as it is neither required nor sufficient for liveness.
+  See ([#998](https://github.com/informalsystems/malachite/issues/998)) for more details.
 - Added new variants to `Input` enum: `PolkaCertificate` and `RoundCertificate`
 - Added new variant to `Effect` enum: `PublishLivenessMessage`
 
 ### `malachitebft-engine`
+- Removed the VoteSet synchronization protocol, as it is neither required nor sufficient for liveness.
+  See ([#998](https://github.com/informalsystems/malachite/issues/998)) for more details.
 - Changed the reply channel of `GetValidatorSet` message to take an `Option<Ctx::ValidatorSet>` instead of `Ctx::ValidatorSet`.
 - Added new variant to `Msg` enum: `PublishLivenessMsg`
 - Added new variants to `NetworkEvent` enum: `PolkaCertificate` and `RoundCertificate`
@@ -22,6 +30,10 @@
 - Added new variant to `Channel` enum: `Liveness`
 - Renamed `Event::Message` variant to `Event::ConsensusMessage`
 - Added new variant to `Event::LivenessMessage`
+
+### `malachitebft-sync`
+- Removed the VoteSet synchronization protocol, as it is neither required nor sufficient for liveness.
+  See ([#998](https://github.com/informalsystems/malachite/issues/998)) for more details.
 
 ## 0.2.0
 

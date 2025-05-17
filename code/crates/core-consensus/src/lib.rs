@@ -10,7 +10,7 @@ mod error;
 pub use error::Error;
 
 mod params;
-pub use params::{Params, ThresholdParams, VoteSyncMode};
+pub use params::{Params, ThresholdParams};
 
 #[doc(hidden)]
 pub use params::HIDDEN_LOCK_ROUND;

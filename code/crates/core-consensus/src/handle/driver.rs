@@ -8,10 +8,10 @@ use crate::handle::signature::sign_vote;
 use crate::handle::vote::on_vote;
 use crate::params::HIDDEN_LOCK_ROUND;
 use crate::prelude::*;
-use crate::types::{LivenessMsg, SignedConsensusMsg};
+use crate::types::{
+    LivenessMsg, {LocallyProposedValue, SignedConsensusMsg},
+};
 use crate::util::pretty::PrettyVal;
-use crate::LocallyProposedValue;
-use crate::VoteSyncMode;
 
 use super::propose::on_propose;
 
@@ -69,11 +69,9 @@ where
             #[cfg(feature = "metrics")]
             metrics.rebroadcast_timeouts.inc();
 
-            // Schedule rebroadcast timer if necessary
-            if state.params.vote_sync_mode == VoteSyncMode::Rebroadcast {
-                let timeout = Timeout::rebroadcast(*round);
-                perform!(co, Effect::ScheduleTimeout(timeout, Default::default()));
-            }
+            // Schedule rebroadcast timer
+            let timeout = Timeout::rebroadcast(*round);
+            perform!(co, Effect::ScheduleTimeout(timeout, Default::default()));
         }
 
         DriverInput::ProposeValue(round, _) => {
@@ -165,53 +163,12 @@ where
         }
     }
 
-    if prev_step != new_step {
-        if state.driver.step_is_prevote() {
-            // Cancel the Propose timeout since we have moved from Propose to Prevote
-            perform!(
-                co,
-                Effect::CancelTimeout(Timeout::propose(state.driver.round()), Default::default())
-            );
-            if state.params.vote_sync_mode == VoteSyncMode::RequestResponse {
-                // Schedule the Prevote time limit timeout
-                perform!(
-                    co,
-                    Effect::ScheduleTimeout(
-                        Timeout::prevote_time_limit(state.driver.round()),
-                        Default::default()
-                    )
-                );
-            }
-        }
-
-        if state.driver.step_is_precommit()
-            && state.params.vote_sync_mode == VoteSyncMode::RequestResponse
-        {
-            perform!(
-                co,
-                Effect::CancelTimeout(
-                    Timeout::prevote_time_limit(state.driver.round()),
-                    Default::default()
-                )
-            );
-            perform!(
-                co,
-                Effect::ScheduleTimeout(
-                    Timeout::precommit_time_limit(state.driver.round()),
-                    Default::default()
-                )
-            );
-        }
-
-        if state.driver.step_is_commit() {
-            perform!(
-                co,
-                Effect::CancelTimeout(
-                    Timeout::precommit_time_limit(state.driver.round()),
-                    Default::default()
-                )
-            );
-        }
+    if prev_step != new_step && state.driver.step_is_prevote() {
+        // Cancel the Propose timeout since we have moved from Propose to Prevote
+        perform!(
+            co,
+            Effect::CancelTimeout(Timeout::propose(state.driver.round()), Default::default())
+        );
     }
 
     process_driver_outputs(co, state, metrics, outputs).await?;
@@ -405,6 +362,10 @@ where
                 );
 
                 state.set_last_vote(signed_vote);
+
+                // Schedule rebroadcast timer
+                let timeout = Timeout::rebroadcast(state.driver.round());
+                perform!(co, Effect::ScheduleTimeout(timeout, Default::default()));
             }
 
             Ok(())

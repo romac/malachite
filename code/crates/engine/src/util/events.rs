@@ -54,8 +54,6 @@ pub enum Event<Ctx: Context> {
     RebroadcastRoundCertificate(RoundCertificate<Ctx>),
     SkipRoundCertificate(RoundCertificate<Ctx>),
     PolkaCertificate(PolkaCertificate<Ctx>),
-    RequestedVoteSet(Ctx::Height, Round),
-    SentVoteSetResponse(Ctx::Height, Round, usize, usize),
     WalReplayBegin(Ctx::Height, usize),
     WalReplayEntry(WalEntry<Ctx>),
     WalReplayDone(Ctx::Height),
@@ -85,15 +83,6 @@ impl<Ctx: Context> fmt::Display for Event<Ctx> {
                 f,
                 "RebroadcastRoundCertificate(certificate: {certificate:?})"
             ),
-            Event::RequestedVoteSet(height, round) => {
-                write!(f, "RequestedVoteSet(height: {height}, round: {round})")
-            }
-            Event::SentVoteSetResponse(height, round, vote_count, polka_count) => {
-                write!(
-                    f,
-                    "SentVoteSetResponse(height: {height}, round: {round}, count: {vote_count}, polka_certificates: {polka_count})"
-                )
-            }
             Event::WalReplayBegin(height, count) => {
                 write!(f, "WalReplayBegin(height: {height}, count: {count})")
             }

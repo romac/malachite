@@ -447,39 +447,6 @@ pub struct ConsensusConfig {
 
     /// Message types that can carry values
     pub value_payload: ValuePayload,
-
-    /// VoteSync configuration options
-    pub vote_sync: VoteSyncConfig,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct VoteSyncConfig {
-    /// The mode of vote synchronization
-    /// - RequestResponse: The lagging node sends a request to a peer for the missing votes
-    /// - Rebroadcast: Nodes rebroadcast their last vote to all peers
-    pub mode: VoteSyncMode,
-}
-
-/// The mode of vote synchronization
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum VoteSyncMode {
-    /// The lagging node sends a request to a peer for the missing votes
-    #[default]
-    RequestResponse,
-
-    /// Nodes rebroadcast their last vote to all peers
-    Rebroadcast,
-}
-
-impl VoteSyncMode {
-    pub fn is_request_response(&self) -> bool {
-        matches!(self, Self::RequestResponse)
-    }
-
-    pub fn is_rebroadcast(&self) -> bool {
-        matches!(self, Self::Rebroadcast)
-    }
 }
 
 /// Message types required by consensus to deliver the value being proposed
@@ -535,11 +502,6 @@ pub struct TimeoutConfig {
     #[serde(with = "humantime_serde")]
     pub timeout_precommit_delta: Duration,
 
-    /// How long we stay in preovte or precommit steps before starting
-    /// the vote synchronization protocol.
-    #[serde(with = "humantime_serde")]
-    pub timeout_step: Duration,
-
     /// How long we wait after entering a round before starting
     /// the rebroadcast liveness protocol    
     #[serde(with = "humantime_serde")]
@@ -552,8 +514,6 @@ impl TimeoutConfig {
             TimeoutKind::Propose => self.timeout_propose,
             TimeoutKind::Prevote => self.timeout_prevote,
             TimeoutKind::Precommit => self.timeout_precommit,
-            TimeoutKind::PrevoteTimeLimit => self.timeout_step,
-            TimeoutKind::PrecommitTimeLimit => self.timeout_step,
             TimeoutKind::Rebroadcast => {
                 self.timeout_propose + self.timeout_prevote + self.timeout_precommit
             }
@@ -565,8 +525,6 @@ impl TimeoutConfig {
             TimeoutKind::Propose => Some(self.timeout_propose_delta),
             TimeoutKind::Prevote => Some(self.timeout_prevote_delta),
             TimeoutKind::Precommit => Some(self.timeout_precommit_delta),
-            TimeoutKind::PrevoteTimeLimit => None,
-            TimeoutKind::PrecommitTimeLimit => None,
             TimeoutKind::Rebroadcast => None,
         }
     }
@@ -577,7 +535,6 @@ impl Default for TimeoutConfig {
         let timeout_propose = Duration::from_secs(3);
         let timeout_prevote = Duration::from_secs(1);
         let timeout_precommit = Duration::from_secs(1);
-        let timeout_step = Duration::from_secs(2);
         let timeout_rebroadcast = timeout_propose + timeout_prevote + timeout_precommit;
 
         Self {
@@ -587,7 +544,6 @@ impl Default for TimeoutConfig {
             timeout_prevote_delta: Duration::from_millis(500),
             timeout_precommit,
             timeout_precommit_delta: Duration::from_millis(500),
-            timeout_step,
             timeout_rebroadcast,
         }
     }

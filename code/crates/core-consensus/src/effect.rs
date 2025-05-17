@@ -2,7 +2,6 @@ use derive_where::derive_where;
 
 use malachitebft_core_types::*;
 
-use crate::input::RequestId;
 use crate::types::{LivenessMsg, SignedConsensusMsg};
 use crate::{ConsensusMsg, VoteExtensionError, WalEntry};
 
@@ -183,23 +182,6 @@ where
         Ctx::ValidatorSet,
         ThresholdParams,
         resume::CertificateValidity,
-    ),
-
-    /// Consensus has been stuck in Prevote or Precommit step, ask for vote sets from peers
-    ///
-    /// Resume with: [`resume::Continue`]
-    RequestVoteSet(Ctx::Height, Round, resume::Continue),
-
-    /// A peer has required our vote set, send the response
-    ///
-    /// Resume with: [`resume::Continue`]`
-    SendVoteSetResponse(
-        RequestId,
-        Ctx::Height,
-        Round,
-        VoteSet<Ctx>,
-        Vec<PolkaCertificate<Ctx>>,
-        resume::Continue,
     ),
 
     /// Append an entry to the Write-Ahead Log for crash recovery

@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use informalsystems_malachitebft_test::TestContext;
-use malachitebft_config::VoteSyncMode;
 use malachitebft_core_consensus::HIDDEN_LOCK_ROUND;
 use malachitebft_core_types::Round;
 use malachitebft_test_framework::TestNode;
@@ -50,7 +49,6 @@ async fn round_certificate_rebroadcast() {
             Duration::from_secs(30),
             TestParams {
                 enable_value_sync: false,
-                vote_sync_mode: Some(VoteSyncMode::Rebroadcast),
                 ..Default::default()
             },
         )
@@ -96,7 +94,6 @@ async fn polka_certificate_for_hidden_lock() {
             Duration::from_secs(120),
             TestParams {
                 enable_value_sync: false,
-                vote_sync_mode: Some(VoteSyncMode::Rebroadcast),
                 ..Default::default()
             },
         )
