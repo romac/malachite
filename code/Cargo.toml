@@ -50,14 +50,17 @@ rust-version = "1.85"
 
 [profile.dev]
 opt-level = 1
+lto = "off"
+debug = "line-tables-only"
 
 [profile.release]
 lto = "thin"
 overflow-checks = true
+strip = "debuginfo"
 
 [profile.profiling]
 inherits = "release"
-debug = true
+debug = "full"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)'] }
