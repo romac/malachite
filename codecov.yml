@@ -22,8 +22,8 @@ component_management:
         - "code/crates/core-consensus/**"
         - "code/crates/core-driver/**"
         - "code/crates/core-state-machine/**"
-        - "code/crates/core-state-types/**"
-        - "code/crates/core-state-votekeeper/**"
+        - "code/crates/core-types/**"
+        - "code/crates/core-votekeeper/**"
     - component_id: engine
       name: engine
       paths:
