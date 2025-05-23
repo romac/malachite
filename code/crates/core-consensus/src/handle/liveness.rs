@@ -1,8 +1,8 @@
+use crate::handle::driver::apply_driver_input;
 use crate::handle::validator_set::get_validator_set;
-use crate::handle::{driver::apply_driver_input, vote::verify_signed_vote};
 use crate::prelude::*;
 
-use super::signature::verify_polka_certificate;
+use super::signature::{verify_polka_certificate, verify_round_certificate};
 
 /// Handles the processing of a polka certificate.
 ///
@@ -114,38 +114,82 @@ where
         return Ok(());
     }
 
+    match certificate.cert_type {
+        RoundCertificateType::Precommit => {
+            if certificate.round < state.round() {
+                warn!(
+                    %certificate.round,
+                    consensus.round = %state.round(),
+                    "Precommit round certificate from older round"
+                );
+                return Ok(());
+            }
+        }
+        RoundCertificateType::Skip => {
+            if certificate.round <= state.round() {
+                warn!(
+                    %certificate.round,
+                    consensus.round = %state.round(),
+                    "Skip round certificate from same or older round"
+                );
+                return Ok(());
+            }
+        }
+    }
+
+    let validator_set = get_validator_set(co, state, certificate.height)
+        .await?
+        .ok_or_else(|| Error::ValidatorSetNotFound(certificate.height))?;
+
+    let validity = verify_round_certificate(
+        co,
+        certificate.clone(),
+        validator_set.into_owned(),
+        state.params.threshold_params,
+    )
+    .await?;
+
+    if let Err(e) = validity {
+        warn!(?certificate, "Invalid round certificate: {e}");
+        return Ok(());
+    }
+
+    // For round certificates, we process votes one by one, unlike polka and commit certificates,
+    // which we process as a whole. The reason for this difference lies in how driver handles equivocated votes.
+    //
+    // If we were to process polka or commit certificates vote by vote, any equivocated vote (i.e. a vote
+    // that conflicts with an already received vote from the same validator) would be discarded. This would
+    // cause us to ignore equivocated votes that are part of the certificate and which are important for
+    // correct operation of the protocol. To avoid this, we process polka and commit certificates as a whole.
+    //
+    // For round certificates, however, this is not necessary. It suffices that at least one valid vote
+    // (either from the certificate or already present in the system) is processed. Thus, discarding an
+    // equivocated vote from the round certificate does not affect correctness.
+    //
+    // As a result, we decided to simplify the logic for round certificates by handling their votes individually.
+    // This avoids extra complexity and edge case handling in the driver.
     for signature in certificate.round_signatures {
-        let vote_type = signature.vote_type;
-        let vote: SignedVote<Ctx> = match vote_type {
-            VoteType::Prevote => SignedVote::new(
-                state.ctx.new_prevote(
+        let vote = {
+            let vote_msg = match signature.vote_type {
+                VoteType::Prevote => state.ctx.new_prevote(
                     certificate.height,
                     certificate.round,
                     signature.value_id,
                     signature.address,
                 ),
-                signature.signature,
-            ),
-            VoteType::Precommit => SignedVote::new(
-                state.ctx.new_precommit(
+                VoteType::Precommit => state.ctx.new_precommit(
                     certificate.height,
                     certificate.round,
                     signature.value_id,
                     signature.address,
                 ),
-                signature.signature,
-            ),
+            };
+            SignedVote::new(vote_msg, signature.signature)
         };
 
-        if !verify_signed_vote(co, state, &vote).await? {
-            warn!(?vote, "Invalid vote");
-            continue;
-        }
         apply_driver_input(co, state, metrics, DriverInput::Vote(vote)).await?;
     }
 
-    // Cancel rebroadcast timer
-    // TODO: Should do only if the round certificate is well formed, i.e. either PrecommitAny or SkipRound
     perform!(
         co,
         Effect::CancelTimeout(Timeout::rebroadcast(certificate.round), Default::default())

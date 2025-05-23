@@ -5,7 +5,7 @@ use malachitebft_codec::Codec;
 use malachitebft_core_consensus::{LivenessMsg, PeerId, ProposedValue, SignedConsensusMsg};
 use malachitebft_core_types::{
     CommitCertificate, CommitSignature, NilOrVal, PolkaCertificate, PolkaSignature, Round,
-    RoundCertificate, RoundSignature, SignedVote, Validity, VoteType,
+    RoundCertificate, RoundCertificateType, RoundSignature, SignedVote, Validity, VoteType,
 };
 use malachitebft_engine::util::streaming::{StreamContent, StreamId, StreamMessage};
 use malachitebft_starknet_p2p_types::{Felt, FeltExt, Signature};
@@ -314,6 +314,12 @@ pub(crate) fn encode_round_certificate(
         fork_id: certificate.height.fork_id,
         block_number: certificate.height.block_number,
         round: certificate.round.as_u32().expect("round should not be nil"),
+        cert_type: match certificate.cert_type {
+            RoundCertificateType::Precommit => {
+                proto::RoundCertificateType::RoundCertPrecommit.into()
+            }
+            RoundCertificateType::Skip => proto::RoundCertificateType::RoundCertSkip.into(),
+        },
         signatures: certificate
             .round_signatures
             .iter()
@@ -326,8 +332,8 @@ pub(crate) fn encode_round_certificate(
                 };
                 Ok(proto::RoundSignature {
                     vote_type: match sig.vote_type {
-                        VoteType::Prevote => proto::VoteType::Prevote as i32,
-                        VoteType::Precommit => proto::VoteType::Precommit as i32,
+                        VoteType::Prevote => proto::VoteType::Prevote.into(),
+                        VoteType::Precommit => proto::VoteType::Precommit.into(),
                     },
                     validator_address: Some(address),
                     signature: Some(signature),
@@ -344,6 +350,12 @@ pub(crate) fn decode_round_certificate(
     Ok(RoundCertificate {
         height: Height::new(certificate.block_number, certificate.fork_id),
         round: Round::new(certificate.round),
+        cert_type: match proto::RoundCertificateType::try_from(certificate.cert_type)
+            .map_err(|_| ProtoError::Other("Unknown RoundCertificateType".into()))?
+        {
+            proto::RoundCertificateType::RoundCertPrecommit => RoundCertificateType::Precommit,
+            proto::RoundCertificateType::RoundCertSkip => RoundCertificateType::Skip,
+        },
         round_signatures: certificate
             .signatures
             .into_iter()
@@ -360,10 +372,11 @@ pub(crate) fn decode_round_certificate(
                     None => NilOrVal::Nil,
                     Some(block_hash) => NilOrVal::Val(BlockHash::from_proto(block_hash)?),
                 };
-                let vote_type = match sig.vote_type {
-                    0 => VoteType::Prevote,
-                    1 => VoteType::Precommit,
-                    _ => return Err(ProtoError::Other("Invalid vote type".to_string())),
+                let vote_type = match proto::VoteType::try_from(sig.vote_type)
+                    .map_err(|_| ProtoError::Other("Invalid vote type".to_string()))?
+                {
+                    proto::VoteType::Prevote => VoteType::Prevote,
+                    proto::VoteType::Precommit => VoteType::Precommit,
                 };
                 Ok(RoundSignature::new(vote_type, value_id, address, signature))
             })
