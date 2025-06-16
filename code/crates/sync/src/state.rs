@@ -23,7 +23,7 @@ where
     pub sync_height: Ctx::Height,
 
     /// Decided value requests for these heights have been sent out to peers.
-    pub pending_decided_value_requests: BTreeMap<Ctx::Height, BTreeSet<OutboundRequestId>>,
+    pub pending_value_requests: BTreeMap<Ctx::Height, BTreeSet<OutboundRequestId>>,
 
     /// Maps request ID to height for pending decided value requests.
     pub height_per_request_id: BTreeMap<OutboundRequestId, Ctx::Height>,
@@ -55,7 +55,7 @@ where
             started: false,
             tip_height: Ctx::Height::ZERO,
             sync_height: Ctx::Height::ZERO,
-            pending_decided_value_requests: BTreeMap::new(),
+            pending_value_requests: BTreeMap::new(),
             height_per_request_id: BTreeMap::new(),
             peers: BTreeMap::new(),
             peer_scorer: PeerScorer::new(scoring_strategy),
@@ -106,7 +106,7 @@ where
         self.peer_scorer.select_peer(&peers, &mut self.rng)
     }
 
-    pub fn store_pending_decided_value_request(
+    pub fn store_pending_value_request(
         &mut self,
         height: Ctx::Height,
         request_id: OutboundRequestId,
@@ -114,38 +114,43 @@ where
         self.height_per_request_id
             .insert(request_id.clone(), height);
 
-        self.pending_decided_value_requests
+        self.pending_value_requests
             .entry(height)
             .or_default()
             .insert(request_id);
     }
 
-    pub fn remove_pending_decided_value_request_by_height(&mut self, height: &Ctx::Height) {
-        if let Some(request_ids) = self.pending_decided_value_requests.remove(height) {
+    /// Remove all pending decided value requests for a given height.
+    pub fn remove_pending_value_request_by_height(&mut self, height: &Ctx::Height) {
+        if let Some(request_ids) = self.pending_value_requests.remove(height) {
             for request_id in request_ids {
                 self.height_per_request_id.remove(&request_id);
             }
         }
     }
 
-    pub fn remove_pending_decided_value_request_by_id(&mut self, request_id: &OutboundRequestId) {
-        let height = match self.height_per_request_id.remove(request_id) {
-            Some(height) => height,
-            None => return, // Request ID not found
-        };
+    /// Remove a pending decided value request by its ID and return the height it was associated with.
+    pub fn remove_pending_value_request_by_id(
+        &mut self,
+        request_id: &OutboundRequestId,
+    ) -> Option<Ctx::Height> {
+        let height = self.height_per_request_id.remove(request_id)?;
 
-        if let Some(request_ids) = self.pending_decided_value_requests.get_mut(&height) {
+        if let Some(request_ids) = self.pending_value_requests.get_mut(&height) {
             request_ids.remove(request_id);
 
             // If there are no more requests for this height, remove the entry
             if request_ids.is_empty() {
-                self.pending_decided_value_requests.remove(&height);
+                self.pending_value_requests.remove(&height);
             }
         }
+
+        Some(height)
     }
 
-    pub fn has_pending_decided_value_request(&self, height: &Ctx::Height) -> bool {
-        self.pending_decided_value_requests
+    /// Check if there are any pending decided value requests for a given height.
+    pub fn has_pending_value_request(&self, height: &Ctx::Height) -> bool {
+        self.pending_value_requests
             .get(height)
             .is_some_and(|ids| !ids.is_empty())
     }

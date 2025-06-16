@@ -70,7 +70,7 @@ where
         }
 
         Input::ValueResponse(request_id, peer_id, None) => {
-            on_empty_value_response(co, state, metrics, request_id, peer_id).await
+            on_invalid_value_response(co, state, metrics, request_id, peer_id).await
         }
 
         Input::GotDecidedValue(request_id, height, value) => {
@@ -187,7 +187,7 @@ where
     debug!(height.tip = %height, "Updating tip height");
 
     state.tip_height = height;
-    state.remove_pending_decided_value_request_by_height(&height);
+    state.remove_pending_value_request_by_height(&height);
 
     Ok(())
 }
@@ -216,7 +216,7 @@ where
 }
 
 pub async fn on_value_response<Ctx>(
-    _co: Co<Ctx>,
+    co: Co<Ctx>,
     state: &mut State<Ctx>,
     metrics: &Metrics,
     request_id: OutboundRequestId,
@@ -228,16 +228,15 @@ where
 {
     debug!(%response.height, %request_id, %peer_id, "Received response");
 
-    state.remove_pending_decided_value_request_by_height(&response.height);
+    state.remove_pending_value_request_by_height(&response.height);
 
     let response_time = metrics.value_response_received(response.height.as_u64());
 
     if let Some(response_time) = response_time {
-        let sync_result = if response.value.is_none() {
-            SyncResult::Failure
-        } else {
-            SyncResult::Success(response_time)
-        };
+        let sync_result = response
+            .value
+            .as_ref()
+            .map_or(SyncResult::Failure, |_| SyncResult::Success(response_time));
 
         state
             .peer_scorer
@@ -247,22 +246,34 @@ where
     // We do not update the peer score if we do not know the response time.
     // This should never happen, but we need to handle it gracefully just in case.
 
+    if response.value.is_none() {
+        warn!(%response.height, %request_id, "Received invalid value response");
+
+        // If we received an empty response, we will try to request the value from another peer.
+        request_value_from_peer_except(co, state, metrics, response.height, peer_id).await?;
+    }
+
     Ok(())
 }
 
-pub async fn on_empty_value_response<Ctx>(
-    _co: Co<Ctx>,
+pub async fn on_invalid_value_response<Ctx>(
+    co: Co<Ctx>,
     state: &mut State<Ctx>,
-    _metrics: &Metrics,
+    metrics: &Metrics,
     request_id: OutboundRequestId,
     peer: PeerId,
 ) -> Result<(), Error<Ctx>>
 where
     Ctx: Context,
 {
-    debug!(%request_id, %peer, "Received empty response");
+    debug!(%request_id, %peer, "Received invalid response");
 
-    state.remove_pending_decided_value_request_by_id(&request_id);
+    if let Some(height) = state.remove_pending_value_request_by_id(&request_id) {
+        debug!(%height, %request_id, "Found which height this request was for");
+
+        // If we have an associated height for this request, we will try again and request it from another peer.
+        request_value_from_peer_except(co, state, metrics, height, peer).await?;
+    }
 
     Ok(())
 }
@@ -327,7 +338,7 @@ where
 
             metrics.value_request_timed_out(height.as_u64());
 
-            state.remove_pending_decided_value_request_by_height(&height);
+            state.remove_pending_value_request_by_height(&height);
             state.peer_scorer.update_score(peer_id, SyncResult::Timeout);
         }
     };
@@ -350,7 +361,7 @@ where
     trace!("Certificate: {certificate:#?}");
 
     state.peer_scorer.update_score(from, SyncResult::Failure);
-    state.remove_pending_decided_value_request_by_height(&certificate.height);
+    state.remove_pending_value_request_by_height(&certificate.height);
 
     request_value_from_peer_except(co, state, metrics, certificate.height, from).await
 }
@@ -368,7 +379,7 @@ where
 {
     let sync_height = state.sync_height;
 
-    if state.has_pending_decided_value_request(&sync_height) {
+    if state.has_pending_value_request(&sync_height) {
         warn!(height.sync = %sync_height, "Already have a pending value request for this height");
         return Ok(());
     }
@@ -404,7 +415,7 @@ where
 
     if let Some(request_id) = request_id {
         debug!(%request_id, %peer, "Sent value request to peer");
-        state.store_pending_decided_value_request(height, request_id);
+        state.store_pending_value_request(height, request_id);
     } else {
         warn!(height.sync = %height, %peer, "Failed to send value request to peer");
     }
@@ -424,7 +435,7 @@ where
 {
     info!(height.sync = %height, "Requesting sync from another peer");
 
-    state.remove_pending_decided_value_request_by_height(&height);
+    state.remove_pending_value_request_by_height(&height);
 
     if let Some(peer) = state.random_peer_with_tip_at_or_above_except(height, except) {
         request_value_from_peer(co, state, metrics, height, peer).await?;
