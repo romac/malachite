@@ -11,6 +11,13 @@
 - Added new parallel requests related parameters to sync config.
   See ([#1092](https://github.com/informalsystems/malachite/issues/1092)) for more details.
 
+## 0.3.1
+
+*June 27th, 2025*
+
+No breaking changes.
+
+
 ## 0.3.0
 
 *June 17th, 2025*
