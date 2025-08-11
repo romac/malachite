@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Make SigningProvider trait methods async ([#1151](https://github.com/informalsystems/malachite/issues/1151))
+- Make GossipSub topic names configurable ([#849](https://github.com/informalsystems/malachite/issues/849))
 
 ## 0.5.0
 

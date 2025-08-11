@@ -6,6 +6,11 @@
 
 - Changed methods of `SigningProvider` and `SigningProviderExt` traits to `async` ([#1151](https://github.com/informalsystems/malachite/issues/1151))
 
+### `malachitebft-config`
+
+- Added field `channel_names: ChannelNames` to `NetworkConfig` struct ([#849](https://github.com/informalsystems/malachite/pull/849))
+
+
 ## 0.5.0
 
 *July 31st, 2025*
