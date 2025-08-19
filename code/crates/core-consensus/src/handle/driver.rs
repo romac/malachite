@@ -230,23 +230,20 @@ where
                 "Proposing value"
             );
 
-            // Only sign and publish if we're in the validator set
-            if state.is_validator() {
-                let signed_proposal = sign_proposal(co, proposal.clone()).await?;
+            let signed_proposal = sign_proposal(co, proposal.clone()).await?;
 
-                if signed_proposal.pol_round().is_defined() {
-                    perform!(
-                        co,
-                        Effect::RestreamProposal(
-                            signed_proposal.height(),
-                            signed_proposal.round(),
-                            signed_proposal.pol_round(),
-                            signed_proposal.validator_address().clone(),
-                            signed_proposal.value().id(),
-                            Default::default()
-                        )
-                    );
-                }
+            if signed_proposal.pol_round().is_defined() {
+                perform!(
+                    co,
+                    Effect::RestreamProposal(
+                        signed_proposal.height(),
+                        signed_proposal.round(),
+                        signed_proposal.pol_round(),
+                        signed_proposal.validator_address().clone(),
+                        signed_proposal.value().id(),
+                        Default::default()
+                    )
+                );
 
                 on_proposal(co, state, metrics, signed_proposal.clone()).await?;
 
@@ -355,33 +352,31 @@ where
                 }
             }
 
-            if state.is_validator() {
-                info!(
-                    vote_type = ?vote.vote_type(),
-                    value = %PrettyVal(vote.value().as_ref()),
-                    round = %vote.round(),
-                    "Voting",
-                );
+            info!(
+                vote_type = ?vote.vote_type(),
+                value = %PrettyVal(vote.value().as_ref()),
+                round = %vote.round(),
+                "Voting",
+            );
 
-                let extended_vote = extend_vote(co, vote).await?;
-                let signed_vote = sign_vote(co, extended_vote).await?;
+            let extended_vote = extend_vote(co, vote).await?;
+            let signed_vote = sign_vote(co, extended_vote).await?;
 
-                on_vote(co, state, metrics, signed_vote.clone()).await?;
+            on_vote(co, state, metrics, signed_vote.clone()).await?;
 
-                perform!(
-                    co,
-                    Effect::PublishConsensusMsg(
-                        SignedConsensusMsg::Vote(signed_vote.clone()),
-                        Default::default()
-                    )
-                );
+            perform!(
+                co,
+                Effect::PublishConsensusMsg(
+                    SignedConsensusMsg::Vote(signed_vote.clone()),
+                    Default::default()
+                )
+            );
 
-                state.set_last_vote(signed_vote);
+            state.set_last_vote(signed_vote);
 
-                // Schedule rebroadcast timer
-                let timeout = Timeout::rebroadcast(state.driver.round());
-                perform!(co, Effect::ScheduleTimeout(timeout, Default::default()));
-            }
+            // Schedule rebroadcast timer
+            let timeout = Timeout::rebroadcast(state.driver.round());
+            perform!(co, Effect::ScheduleTimeout(timeout, Default::default()));
 
             Ok(())
         }

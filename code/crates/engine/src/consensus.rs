@@ -1094,6 +1094,10 @@ where
             }
 
             Effect::ExtendVote(height, round, value_id, r) => {
+                if !is_active_validator {
+                    return Ok(r.resume_with(None));
+                }
+
                 if let Some(extension) = self.extend_vote(height, round, value_id).await? {
                     let signed_extension =
                         self.signing_provider.sign_vote_extension(extension).await;
@@ -1104,6 +1108,10 @@ where
             }
 
             Effect::VerifyVoteExtension(height, round, value_id, signed_extension, pk, r) => {
+                if !is_active_validator {
+                    return Ok(r.resume_with(Ok(())));
+                }
+
                 let valid = self
                     .signing_provider
                     .verify_signed_vote_extension(
