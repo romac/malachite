@@ -1371,6 +1371,8 @@ where
             return Ok(());
         }
 
+        debug!("Handling message: {msg:?}");
+
         if let Err(e) = self.handle_msg(myself.clone(), state, msg).await {
             error!("Error when handling message: {e:?}");
         }
