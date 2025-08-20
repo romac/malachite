@@ -26,7 +26,7 @@ macro_rules! process {
         'proc: loop {
             match co_result {
                 $crate::gen::CoResult::Yielded($effect) => {
-                    $crate::tracing::debug!("Processing effect: {effect:?}");
+                    $crate::tracing::debug!("Processing effect: {:?}", $effect);
                     let resume = match $handle {
                         Ok(resume) => resume,
                         Err(error) => {
