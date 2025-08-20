@@ -244,42 +244,42 @@ where
                         Default::default()
                     )
                 );
+            }
 
-                on_proposal(co, state, metrics, signed_proposal.clone()).await?;
+            on_proposal(co, state, metrics, signed_proposal.clone()).await?;
 
-                // Proposal messages should not be broadcasted if they are implicit,
-                // instead they should be inferred from the block parts.
-                if state.params.value_payload.include_proposal() {
-                    perform!(
-                        co,
-                        Effect::PublishConsensusMsg(
-                            SignedConsensusMsg::Proposal(signed_proposal),
-                            Default::default()
-                        )
+            // Proposal messages should not be broadcasted if they are implicit,
+            // instead they should be inferred from the block parts.
+            if state.params.value_payload.include_proposal() {
+                perform!(
+                    co,
+                    Effect::PublishConsensusMsg(
+                        SignedConsensusMsg::Proposal(signed_proposal),
+                        Default::default()
+                    )
+                );
+            };
+
+            // Publishing the polka certificate of the re-proposed value
+            // ensures all validators receive it, which is necessary for
+            // them to accept the re-proposed value.
+            if proposal.pol_round().is_defined() {
+                // Broadcast the polka certificate at pol_round
+                let Some(polka_certificate) =
+                    state.polka_certificate_at_round(proposal.pol_round())
+                else {
+                    panic!(
+                        "Missing polka certificate for pol_round {}",
+                        proposal.pol_round()
                     );
                 };
-
-                // Publishing the polka certificate of the re-proposed value
-                // ensures all validators receive it, which is necessary for
-                // them to accept the re-proposed value.
-                if proposal.pol_round().is_defined() {
-                    // Broadcast the polka certificate at pol_round
-                    let Some(polka_certificate) =
-                        state.polka_certificate_at_round(proposal.pol_round())
-                    else {
-                        panic!(
-                            "Missing polka certificate for pol_round {}",
-                            proposal.pol_round()
-                        );
-                    };
-                    perform!(
-                        co,
-                        Effect::PublishLivenessMsg(
-                            LivenessMsg::PolkaCertificate(polka_certificate),
-                            Default::default()
-                        )
-                    );
-                }
+                perform!(
+                    co,
+                    Effect::PublishLivenessMsg(
+                        LivenessMsg::PolkaCertificate(polka_certificate),
+                        Default::default()
+                    )
+                );
             }
 
             Ok(())
