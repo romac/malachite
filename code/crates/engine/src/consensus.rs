@@ -262,20 +262,13 @@ struct HandlerState<'a, Ctx: Context> {
     height: Ctx::Height,
     timers: &'a mut Timers,
     timeouts: &'a mut Timeouts,
+    is_active_validator: bool,
 }
 
 impl<Ctx> Consensus<Ctx>
 where
     Ctx: Context,
 {
-    /// Check if this node is an active validator.
-    ///
-    /// Returns true only if:
-    /// - Consensus is enabled in the configuration, AND
-    /// - This node is present in the current validator set
-    fn is_active_validator(&self, consensus_state: &ConsensusState<Ctx>) -> bool {
-        self.consensus_config.enabled && consensus_state.is_validator()
-    }
     #[allow(clippy::too_many_arguments)]
     pub async fn spawn(
         ctx: Ctx,
@@ -308,6 +301,15 @@ where
         Ok(actor_ref)
     }
 
+    /// Check if this node is an active validator.
+    ///
+    /// Returns true only if:
+    /// - Consensus is enabled in the configuration, AND
+    /// - This node is present in the current validator set
+    fn is_active_validator(&self, consensus_state: &ConsensusState<Ctx>) -> bool {
+        self.consensus_config.enabled && consensus_state.is_validator()
+    }
+
     async fn process_input(
         &self,
         myself: &ActorRef<Msg<Ctx>>,
@@ -327,9 +329,10 @@ where
                     height,
                     timers: &mut state.timers,
                     timeouts: &mut state.timeouts,
+                    is_active_validator,
                 };
 
-                self.handle_effect(myself, handler_state, effect, is_active_validator).await
+                self.handle_effect(myself, handler_state, effect).await
             }
         )
     }
@@ -970,7 +973,6 @@ where
         myself: &ActorRef<Msg<Ctx>>,
         state: HandlerState<'_, Ctx>,
         effect: Effect<Ctx>,
-        is_active_validator: bool,
     ) -> Result<Resume<Ctx>, ActorProcessingErr> {
         match effect {
             Effect::ResetTimeouts(r) => {
@@ -1094,7 +1096,7 @@ where
             }
 
             Effect::ExtendVote(height, round, value_id, r) => {
-                if !is_active_validator {
+                if !state.is_active_validator {
                     return Ok(r.resume_with(None));
                 }
 
@@ -1108,7 +1110,7 @@ where
             }
 
             Effect::VerifyVoteExtension(height, round, value_id, signed_extension, pk, r) => {
-                if !is_active_validator {
+                if !state.is_active_validator {
                     return Ok(r.resume_with(Ok(())));
                 }
 
@@ -1133,7 +1135,7 @@ where
             }
 
             Effect::PublishConsensusMsg(msg, r) => {
-                if is_active_validator {
+                if state.is_active_validator {
                     // Sync the WAL to disk before we broadcast the message
                     // NOTE: The message has already been append to the WAL by the `WalAppend` effect.
                     self.wal_flush(state.phase).await?;
@@ -1150,7 +1152,7 @@ where
             }
 
             Effect::PublishLivenessMsg(msg, r) => {
-                if is_active_validator {
+                if state.is_active_validator {
                     match msg {
                         LivenessMsg::Vote(ref msg) => {
                             self.tx_event.send(|| Event::RepublishVote(msg.clone()));
@@ -1174,7 +1176,7 @@ where
             }
 
             Effect::RepublishVote(msg, r) => {
-                if is_active_validator {
+                if state.is_active_validator {
                     // Notify any subscribers that we are about to rebroadcast a vote
                     self.tx_event.send(|| Event::RepublishVote(msg.clone()));
 
@@ -1187,7 +1189,7 @@ where
             }
 
             Effect::RepublishRoundCertificate(certificate, r) => {
-                if is_active_validator {
+                if state.is_active_validator {
                     // Notify any subscribers that we are about to rebroadcast a round certificate
                     self.tx_event
                         .send(|| Event::RebroadcastRoundCertificate(certificate.clone()));
@@ -1205,7 +1207,7 @@ where
             }
 
             Effect::GetValue(height, round, timeout, r) => {
-                if is_active_validator {
+                if state.is_active_validator {
                     let timeout_duration = state.timeouts.duration_for(timeout.kind);
 
                     self.get_value(myself, height, round, timeout_duration)
@@ -1230,7 +1232,7 @@ where
             }
 
             Effect::RestreamProposal(height, round, valid_round, address, value_id, r) => {
-                if is_active_validator {
+                if state.is_active_validator {
                     self.host
                         .cast(HostMsg::RestreamValue {
                             height,
