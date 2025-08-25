@@ -315,6 +315,9 @@ where
     ) -> Result<(), ConsensusError<Ctx>> {
         let height = state.height();
 
+        // By the time the effect is processed the state height might have changed.
+        // This happens for input Msg::StartHeight(height), so height is potentially stale.
+
         malachitebft_core_consensus::process!(
             input: input,
             state: &mut state.consensus,
@@ -647,26 +650,12 @@ where
     where
         Ctx: Context,
     {
-        let Some(sync) = self.sync.clone() else {
-            warn!("Received sync response but sync actor is not available");
-            return Ok(());
-        };
-
-        // Fetch the proposer for the round and height of the synced value
-        // Given that proposer selection is required be fully deterministic,
-        // we are guaranteed to get the proposer for that value.
-        let proposer = state
-            .consensus
-            .get_proposer(value.certificate.height, value.certificate.round)
-            .clone();
-
         if let Err(e) = self
             .process_input(
                 myself,
                 state,
                 ConsensusInput::SyncValueResponse(CoreValueResponse::new(
                     peer,
-                    proposer,
                     value.value_bytes.clone(),
                     value.certificate.clone(),
                 )),
@@ -674,23 +663,6 @@ where
             .await
         {
             error!(%height, "Error when processing received synced block: {e}");
-
-            if let ConsensusError::InvalidCommitCertificate(certificate, e) = e {
-                error!(
-                    %peer,
-                    %certificate.height,
-                    %certificate.round,
-                    "Invalid certificate received: {e}"
-                );
-
-                sync.cast(SyncMsg::InvalidValue(peer, certificate.height))
-                    .map_err(|e| eyre!("Error when notifying sync of invalid certificate: {e}"))?;
-            } else {
-                sync.cast(SyncMsg::ValueProcessingError(peer, height))
-                    .map_err(|e| {
-                        eyre!("Error when notifying sync of value processing error: {e}")
-                    })?;
-            }
         }
 
         Ok(())
@@ -1265,7 +1237,35 @@ where
                 Ok(r.resume_with(()))
             }
 
-            Effect::SyncValue(value, r) => {
+            Effect::InvalidSyncValue(peer, height, error, r) => {
+                if let Some(sync) = &self.sync {
+                    if let ConsensusError::InvalidCommitCertificate(certificate, e) = error {
+                        error!(
+                            %peer,
+                            %certificate.height,
+                            %certificate.round,
+                            "Invalid certificate received: {e}"
+                        );
+
+                        sync.cast(SyncMsg::InvalidValue(peer, certificate.height))
+                            .map_err(|e| {
+                                eyre!("Error when notifying sync of invalid certificate: {e}")
+                            })?;
+                    } else {
+                        sync.cast(SyncMsg::ValueProcessingError(peer, height))
+                            .map_err(|e| {
+                                eyre!("Error when notifying sync of value processing error: {e}")
+                            })?;
+                    }
+                }
+
+                Ok(r.resume_with(()))
+            }
+
+            Effect::ValidSyncValue(value, proposer, r) => {
+                // NOTE: The state.height is not yet updated if this is an effect that is triggered by the
+                // Msg::StartHeight(height), with buffered sync value for height `height`.
+
                 let certificate_height = value.certificate.height;
                 let certificate_round = value.certificate.round;
 
@@ -1278,7 +1278,7 @@ where
                     |reply_to| HostMsg::ProcessSyncedValue {
                         height: certificate_height,
                         round: certificate_round,
-                        proposer: value.proposer,
+                        proposer,
                         value_bytes: value.value_bytes,
                         reply_to,
                     },
