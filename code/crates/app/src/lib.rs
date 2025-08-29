@@ -8,6 +8,7 @@
 //     rustdoc::missing_doc_code_examples
 // )]
 
+pub mod builder;
 pub mod node;
 pub mod part_store;
 pub mod spawn;
