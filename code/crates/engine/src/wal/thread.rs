@@ -35,12 +35,11 @@ where
     Codec: WalCodec<Ctx>,
 {
     thread::spawn(move || {
-        let result = catch_unwind(AssertUnwindSafe(|| {
+        let result = catch_unwind(AssertUnwindSafe(|| -> Result<()> {
             while let Some(msg) = rx.blocking_recv() {
-                match process_msg(msg, &span, &mut log, &codec) {
-                    Ok(ControlFlow::Continue(())) => continue,
-                    Ok(ControlFlow::Break(())) => break,
-                    Err(e) => error!("WAL task failed: {e}"),
+                match process_msg(msg, &span, &mut log, &codec)? {
+                    ControlFlow::Continue(()) => continue,
+                    ControlFlow::Break(()) => break,
                 }
             }
 
@@ -48,10 +47,12 @@ where
 
             // Task finished normally, stop the thread
             drop(log);
+
+            Ok(())
         }));
 
         if let Err(e) = result {
-            error!("WAL thread panicked: {e:?}");
+            error!("WAL thread failed: {e:?}");
         }
     })
 }
