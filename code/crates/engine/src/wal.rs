@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use derive_where::derive_where;
 use eyre::eyre;
 use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SpawnErr};
-use tracing::warn;
 use tracing::{debug, error, info};
+use tracing::{warn, Span};
 
 use malachitebft_core_types::{Context, Height};
 use malachitebft_metrics::SharedRegistry;
@@ -70,7 +70,6 @@ pub struct Args<Codec> {
 
 #[derive_where(Clone)]
 pub struct State<Ctx: Context, Codec> {
-    span: tracing::Span,
     height: Ctx::Height,
     log: Arc<Mutex<wal::Log>>,
     codec: Arc<Codec>,
@@ -97,16 +96,18 @@ where
                 state.height = height;
 
                 tokio::task::spawn_blocking({
+                    let span = Span::current();
                     let state = state.clone();
-                    move || started_height(state, height, reply_to)
+                    move || started_height(span, state, height, reply_to)
                 })
                 .await??;
             }
 
             Msg::Reset(height, reply_to) => {
                 tokio::task::spawn_blocking({
+                    let span = Span::current();
                     let state = state.clone();
-                    move || reset(state, height, reply_to)
+                    move || reset(span, state, height, reply_to)
                 })
                 .await??;
             }
@@ -118,24 +119,27 @@ where
                 }
 
                 tokio::task::spawn_blocking({
+                    let span = Span::current();
                     let state = state.clone();
-                    move || append(state, entry, reply_to)
+                    move || append(span, state, entry, reply_to)
                 })
                 .await??;
             }
 
             Msg::Flush(reply_to) => {
                 tokio::task::spawn_blocking({
+                    let span = Span::current();
                     let state = state.clone();
-                    move || flush(state, reply_to)
+                    move || flush(span, state, reply_to)
                 })
                 .await??;
             }
 
             Msg::Dump => {
                 tokio::task::spawn_blocking({
+                    let span = Span::current();
                     let state = state.clone();
-                    move || dump(state)
+                    move || dump(span, state)
                 })
                 .await??;
             }
@@ -145,8 +149,9 @@ where
     }
 }
 
-#[tracing::instrument(parent = &state.span, skip_all)]
+#[tracing::instrument(parent = &span, skip_all)]
 fn started_height<Ctx: Context, Codec: WalCodec<Ctx>>(
+    span: tracing::Span,
     state: State<Ctx, Codec>,
     height: <Ctx as Context>::Height,
     reply_to: WalReply<Option<Vec<WalEntry<Ctx>>>>,
@@ -181,8 +186,9 @@ fn started_height<Ctx: Context, Codec: WalCodec<Ctx>>(
     Ok(())
 }
 
-#[tracing::instrument(parent = &state.span, skip_all)]
+#[tracing::instrument(parent = &span, skip_all)]
 fn reset<Ctx: Context, Codec: WalCodec<Ctx>>(
+    span: tracing::Span,
     state: State<Ctx, Codec>,
     height: Ctx::Height,
     reply_to: WalReply<()>,
@@ -207,8 +213,9 @@ fn reset<Ctx: Context, Codec: WalCodec<Ctx>>(
     Ok(())
 }
 
-#[tracing::instrument(parent = &state.span, skip_all)]
+#[tracing::instrument(parent = &span, skip_all)]
 fn append<Ctx: Context, Codec: WalCodec<Ctx>>(
+    span: tracing::Span,
     state: State<Ctx, Codec>,
     entry: WalEntry<Ctx>,
     reply_to: WalReply<()>,
@@ -245,8 +252,9 @@ fn append<Ctx: Context, Codec: WalCodec<Ctx>>(
     Ok(())
 }
 
-#[tracing::instrument(parent = &state.span, skip_all)]
+#[tracing::instrument(parent = &span, skip_all)]
 fn flush<Ctx: Context, Codec: WalCodec<Ctx>>(
+    span: tracing::Span,
     state: State<Ctx, Codec>,
     reply_to: WalReply<()>,
 ) -> Result<(), ActorProcessingErr> {
@@ -276,8 +284,9 @@ fn flush<Ctx: Context, Codec: WalCodec<Ctx>>(
     Ok(())
 }
 
-#[tracing::instrument(parent = &state.span, skip_all)]
+#[tracing::instrument(parent = &span, skip_all)]
 fn dump<Ctx: Context, Codec: WalCodec<Ctx>>(
+    span: tracing::Span,
     state: State<Ctx, Codec>,
 ) -> Result<(), ActorProcessingErr> {
     let mut log = state
@@ -311,11 +320,13 @@ where
         _myself: WalRef<Ctx>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let log = wal::Log::open(&args.path)?;
+        let path = args.path.clone();
+
+        info!("Opening WAL at {}", args.path.display());
+        let log = tokio::task::spawn_blocking(move || wal::Log::open(&path)).await??;
         info!("Opened WAL at {}", args.path.display());
 
         Ok(State {
-            span: self.span.clone(),
             height: Ctx::Height::ZERO,
             log: Arc::new(Mutex::new(log)),
             codec: Arc::new(args.codec),
