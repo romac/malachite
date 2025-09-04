@@ -1,9 +1,11 @@
+use std::io;
 use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
+use derive_where::derive_where;
 use eyre::eyre;
 use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SpawnErr};
-use tokio::sync::{mpsc, oneshot};
 use tracing::warn;
 use tracing::{debug, error, info};
 
@@ -13,11 +15,12 @@ use malachitebft_wal as wal;
 
 mod entry;
 mod iter;
-mod thread;
 
 pub use entry::WalCodec;
 pub use entry::WalEntry;
 pub use iter::log_entries;
+
+use crate::wal::entry::{decode_entry, encode_entry};
 
 pub type WalRef<Ctx> = ActorRef<Msg<Ctx>>;
 
@@ -65,10 +68,12 @@ pub struct Args<Codec> {
     pub codec: Codec,
 }
 
-pub struct State<Ctx: Context> {
+#[derive_where(Clone)]
+pub struct State<Ctx: Context, Codec> {
+    span: tracing::Span,
     height: Ctx::Height,
-    wal_sender: mpsc::Sender<self::thread::WalMsg<Ctx>>,
-    _handle: std::thread::JoinHandle<()>,
+    log: Arc<Mutex<wal::Log>>,
+    codec: Arc<Codec>,
 }
 
 impl<Ctx, Codec> Wal<Ctx, Codec>
@@ -80,7 +85,7 @@ where
         &self,
         _myself: WalRef<Ctx>,
         msg: Msg<Ctx>,
-        state: &mut State<Ctx>,
+        state: &mut State<Ctx, Codec>,
     ) -> Result<(), ActorProcessingErr> {
         match msg {
             Msg::StartedHeight(height, reply_to) => {
@@ -91,11 +96,19 @@ where
 
                 state.height = height;
 
-                self.started_height(state, height, reply_to).await?;
+                tokio::task::spawn_blocking({
+                    let state = state.clone();
+                    move || started_height(state, height, reply_to)
+                })
+                .await??;
             }
 
             Msg::Reset(height, reply_to) => {
-                self.reset(state, height, reply_to).await?;
+                tokio::task::spawn_blocking({
+                    let state = state.clone();
+                    move || reset(state, height, reply_to)
+                })
+                .await??;
             }
 
             Msg::Append(height, entry, reply_to) => {
@@ -104,110 +117,178 @@ where
                     return Ok(());
                 }
 
-                self.write_log(state, entry, reply_to).await?;
+                tokio::task::spawn_blocking({
+                    let state = state.clone();
+                    move || append(state, entry, reply_to)
+                })
+                .await??;
             }
 
             Msg::Flush(reply_to) => {
-                self.flush_log(state, reply_to).await?;
+                tokio::task::spawn_blocking({
+                    let state = state.clone();
+                    move || flush(state, reply_to)
+                })
+                .await??;
             }
 
             Msg::Dump => {
-                state.wal_sender.send(self::thread::WalMsg::Dump).await?;
+                tokio::task::spawn_blocking({
+                    let state = state.clone();
+                    move || dump(state)
+                })
+                .await??;
             }
         }
 
         Ok(())
     }
+}
 
-    async fn reset(
-        &self,
-        state: &mut State<Ctx>,
-        height: Ctx::Height,
-        reply_to: WalReply<()>,
-    ) -> Result<(), ActorProcessingErr> {
-        let (tx, rx) = oneshot::channel();
+#[tracing::instrument(parent = &state.span, skip_all)]
+fn started_height<Ctx: Context, Codec: WalCodec<Ctx>>(
+    state: State<Ctx, Codec>,
+    height: <Ctx as Context>::Height,
+    reply_to: WalReply<Option<Vec<WalEntry<Ctx>>>>,
+) -> Result<(), ActorProcessingErr> {
+    let sequence = height.as_u64();
 
-        state
-            .wal_sender
-            .send(self::thread::WalMsg::Reset(height, tx))
-            .await?;
+    let mut log = state
+        .log
+        .lock()
+        .map_err(|e| eyre!("Failed to lock WAL for flushing: {e}"))?;
 
-        let result = rx.await?;
+    let entries = if sequence == log.sequence() {
+        // WAL is already at that sequence
+        // Let's check if there are any entries to replay
+        fetch_entries(&mut log, state.codec.as_ref()).map(Some)
+    } else {
+        // WAL is at different sequence, restart it
+        // No entries to replay
+        let result = log.restart(sequence).map(|_| None).map_err(Into::into);
+
+        debug!(%height, "Reset WAL");
+
+        result
+    };
+
+    drop(log);
+
+    reply_to
+        .send(entries)
+        .map_err(|e| eyre!("Failed to send reply: {e}"))?;
+
+    Ok(())
+}
+
+#[tracing::instrument(parent = &state.span, skip_all)]
+fn reset<Ctx: Context, Codec: WalCodec<Ctx>>(
+    state: State<Ctx, Codec>,
+    height: Ctx::Height,
+    reply_to: WalReply<()>,
+) -> Result<(), ActorProcessingErr> {
+    let sequence = height.as_u64();
+
+    let mut log = state
+        .log
+        .lock()
+        .map_err(|e| eyre!("Failed to lock WAL for flushing: {e}"))?;
+
+    let result = log.restart(sequence).map_err(Into::into);
+
+    drop(log);
+
+    debug!(%height, "Reset WAL");
+
+    reply_to
+        .send(result)
+        .map_err(|e| eyre!("Failed to send reply: {e}"))?;
+
+    Ok(())
+}
+
+#[tracing::instrument(parent = &state.span, skip_all)]
+fn append<Ctx: Context, Codec: WalCodec<Ctx>>(
+    state: State<Ctx, Codec>,
+    entry: WalEntry<Ctx>,
+    reply_to: WalReply<()>,
+) -> Result<(), ActorProcessingErr> {
+    let entry_type = wal_entry_type(&entry);
+
+    let mut buf = Vec::new();
+    encode_entry(&entry, state.codec.as_ref(), &mut buf)?;
+
+    if !buf.is_empty() {
+        let mut log = state
+            .log
+            .lock()
+            .map_err(|e| eyre!("Failed to lock WAL for flushing: {e}"))?;
+
+        let result = log.append(&buf).map_err(Into::into);
+
+        if let Err(e) = &result {
+            error!("ATTENTION: Failed to append entry to WAL: {e}");
+        } else {
+            debug!(
+                type = %entry_type, entry.size = %buf.len(), log.entries = %log.len(),
+                "Wrote log entry"
+            );
+        }
+
+        drop(log);
 
         reply_to
             .send(result)
             .map_err(|e| eyre!("Failed to send reply: {e}"))?;
-
-        Ok(())
     }
 
-    async fn started_height(
-        &self,
-        state: &mut State<Ctx>,
-        height: <Ctx as Context>::Height,
-        reply_to: WalReply<Option<Vec<WalEntry<Ctx>>>>,
-    ) -> Result<(), ActorProcessingErr> {
-        let (tx, rx) = oneshot::channel();
+    Ok(())
+}
 
-        state
-            .wal_sender
-            .send(self::thread::WalMsg::StartedHeight(height, tx))
-            .await?;
+#[tracing::instrument(parent = &state.span, skip_all)]
+fn flush<Ctx: Context, Codec: WalCodec<Ctx>>(
+    state: State<Ctx, Codec>,
+    reply_to: WalReply<()>,
+) -> Result<(), ActorProcessingErr> {
+    let mut log = state
+        .log
+        .lock()
+        .map_err(|e| eyre!("Failed to lock WAL for flushing: {e}"))?;
 
-        let to_replay = rx
-            .await?
-            .map(|entries| Some(entries).filter(|entries| !entries.is_empty()));
+    let result = log.flush().map_err(Into::into);
 
-        reply_to
-            .send(to_replay)
-            .map_err(|e| eyre!("Failed to send reply: {e}"))?;
-
-        Ok(())
+    if let Err(e) = &result {
+        error!("ATTENTION: Failed to flush WAL to disk: {e}");
+    } else {
+        debug!(
+            wal.entries = %log.len(),
+            wal.size = %log.size_bytes().unwrap_or(0),
+            "Flushed WAL to disk"
+        );
     }
 
-    async fn write_log(
-        &self,
-        state: &mut State<Ctx>,
-        msg: impl Into<WalEntry<Ctx>>,
-        reply_to: WalReply<()>,
-    ) -> Result<(), ActorProcessingErr> {
-        let entry = msg.into();
-        let (tx, rx) = oneshot::channel();
+    drop(log);
 
-        state
-            .wal_sender
-            .send(self::thread::WalMsg::Append(entry, tx))
-            .await?;
+    reply_to
+        .send(result)
+        .map_err(|e| eyre!("Failed to send reply: {e}"))?;
 
-        let result = rx.await?;
+    Ok(())
+}
 
-        reply_to
-            .send(result)
-            .map_err(|e| eyre!("Failed to send reply: {e}"))?;
+#[tracing::instrument(parent = &state.span, skip_all)]
+fn dump<Ctx: Context, Codec: WalCodec<Ctx>>(
+    state: State<Ctx, Codec>,
+) -> Result<(), ActorProcessingErr> {
+    let mut log = state
+        .log
+        .lock()
+        .map_err(|e| eyre!("Failed to lock WAL for flushing: {e}"))?;
 
-        Ok(())
-    }
+    dump_entries(&mut log, state.codec.as_ref())
+        .map_err(|e| eyre!("Failed to dump WAL entries: {e}"))?;
 
-    async fn flush_log(
-        &self,
-        state: &mut State<Ctx>,
-        reply_to: WalReply<()>,
-    ) -> Result<(), ActorProcessingErr> {
-        let (tx, rx) = oneshot::channel();
-
-        state
-            .wal_sender
-            .send(self::thread::WalMsg::Flush(tx))
-            .await?;
-
-        let result = rx.await?;
-
-        reply_to
-            .send(result)
-            .map_err(|e| eyre!("Failed to send reply: {e}"))?;
-
-        Ok(())
-    }
+    Ok(())
 }
 
 #[async_trait]
@@ -218,7 +299,7 @@ where
 {
     type Msg = Msg<Ctx>;
     type Arguments = Args<Codec>;
-    type State = State<Ctx>;
+    type State = State<Ctx, Codec>;
 
     #[tracing::instrument(
         name = "wal.pre_start",
@@ -233,15 +314,11 @@ where
         let log = wal::Log::open(&args.path)?;
         info!("Opened WAL at {}", args.path.display());
 
-        let (tx, rx) = mpsc::channel(100);
-
-        // Spawn a system thread to perform blocking WAL operations.
-        let handle = self::thread::spawn(self.span.clone(), log, args.codec, rx);
-
         Ok(State {
+            span: self.span.clone(),
             height: Ctx::Height::ZERO,
-            wal_sender: tx,
-            _handle: handle,
+            log: Arc::new(Mutex::new(log)),
+            codec: Arc::new(args.codec),
         })
     }
 
@@ -277,8 +354,6 @@ where
     ) -> Result<(), ActorProcessingErr> {
         info!("Shutting down WAL");
 
-        let _ = state.wal_sender.send(self::thread::WalMsg::Shutdown).await;
-
         Ok(())
     }
 }
@@ -290,5 +365,92 @@ fn span_height<Ctx: Context>(height: Ctx::Height, msg: &Msg<Ctx>) -> Ctx::Height
         *h
     } else {
         height
+    }
+}
+
+fn fetch_entries<Ctx, Codec>(log: &mut wal::Log, codec: &Codec) -> eyre::Result<Vec<WalEntry<Ctx>>>
+where
+    Ctx: Context,
+    Codec: WalCodec<Ctx>,
+{
+    if log.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let entries = log
+        .iter()?
+        .enumerate() // Add enumeration to get the index
+        .filter_map(|(idx, result)| match result {
+            Ok(entry) => Some((idx, entry)),
+            Err(e) => {
+                error!("Failed to retrieve WAL entry {idx}: {e}");
+                None
+            }
+        })
+        .filter_map(
+            |(idx, bytes)| match decode_entry(codec, io::Cursor::new(bytes.clone())) {
+                Ok(entry) => Some(entry),
+                Err(e) => {
+                    error!("Failed to decode WAL entry {idx}: {e} {:?}", bytes);
+                    None
+                }
+            },
+        )
+        .collect::<Vec<_>>();
+
+    if log.len() != entries.len() {
+        Err(eyre::eyre!(
+            "Failed to fetch and decode all WAL entries: expected {}, got {}",
+            log.len(),
+            entries.len()
+        ))
+    } else {
+        Ok(entries)
+    }
+}
+
+fn dump_entries<'a, Ctx, Codec>(log: &'a mut wal::Log, codec: &'a Codec) -> eyre::Result<()>
+where
+    Ctx: Context,
+    Codec: WalCodec<Ctx>,
+{
+    let len = log.len();
+    let mut count = 0;
+
+    info!("WAL Dump");
+    info!("- Entries: {len}");
+    info!("- Size:    {} bytes", log.size_bytes().unwrap_or(0));
+    info!("Entries:");
+
+    for (idx, entry) in log_entries(log, codec)?.enumerate() {
+        count += 1;
+
+        match entry {
+            Ok(entry) => {
+                info!("- #{idx}: {entry:?}");
+            }
+            Err(e) => {
+                error!("- #{idx}: Error decoding WAL entry: {e}");
+            }
+        }
+    }
+
+    if count != len {
+        error!("Expected {len} entries, but found {count} entries");
+    }
+
+    Ok(())
+}
+
+fn wal_entry_type<Ctx: Context>(entry: &WalEntry<Ctx>) -> &'static str {
+    use malachitebft_core_consensus::SignedConsensusMsg;
+
+    match entry {
+        WalEntry::ConsensusMsg(msg) => match msg {
+            SignedConsensusMsg::Vote(_) => "Consensus(Vote)",
+            SignedConsensusMsg::Proposal(_) => "Consensus(Proposal)",
+        },
+        WalEntry::ProposedValue(_) => "LocallyProposedValue",
+        WalEntry::Timeout(_) => "Timeout",
     }
 }
