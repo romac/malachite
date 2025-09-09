@@ -2,7 +2,7 @@ use std::cmp::max;
 use std::ops::RangeInclusive;
 
 use derive_where::derive_where;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, warn, Span};
 
 use malachitebft_core_types::{Context, Height};
 
@@ -228,6 +228,16 @@ where
         // If consensus is voting on a height that is currently being synced from a peer, do not update the sync height.
         state.sync_height = max(state.sync_height, height);
     }
+
+    let span = Span::current();
+    span.record("height.tip", state.tip_height.as_u64());
+    span.record("height.sync", state.sync_height.as_u64());
+
+    debug!(
+        new.tip = %state.tip_height,
+        new.sync = %state.sync_height,
+        "Updated tip and sync heights"
+    );
 
     // Trigger potential requests if possible.
     request_values(co, state, metrics).await?;
