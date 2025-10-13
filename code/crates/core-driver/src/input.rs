@@ -30,5 +30,5 @@ where
     PolkaCertificate(PolkaCertificate<Ctx>),
 
     /// Receive a timeout
-    TimeoutElapsed(Timeout),
+    TimeoutElapsed(Timeout<Ctx>),
 }

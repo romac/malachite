@@ -29,6 +29,31 @@ where
 
 pub struct ProtobufCodec;
 
+#[derive(Clone, PartialEq, ::prost::Message)]
+struct ProtoHeight {
+    #[prost(uint64, tag = "3")]
+    pub block_number: u64,
+    #[prost(uint64, tag = "4")]
+    pub fork_id: u64,
+}
+
+impl Codec<Height> for ProtobufCodec {
+    type Error = ProtoError;
+
+    fn decode(&self, bytes: Bytes) -> Result<Height, Self::Error> {
+        let proto = ProtoHeight::decode(bytes.as_ref()).map_err(ProtoError::Decode)?;
+        Ok(Height::new(proto.block_number, proto.fork_id))
+    }
+
+    fn encode(&self, height: &Height) -> Result<Bytes, Self::Error> {
+        let proto = ProtoHeight {
+            block_number: height.block_number,
+            fork_id: height.fork_id,
+        };
+        Ok(proto.encode_to_bytes())
+    }
+}
+
 impl Codec<Address> for ProtobufCodec {
     type Error = ProtoError;
 

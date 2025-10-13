@@ -21,9 +21,9 @@ where
     Decide(Round, Ctx::Proposal),
 
     /// Schedule a timeout
-    ScheduleTimeout(Timeout),
+    ScheduleTimeout(Timeout<Ctx>),
 
     /// Ask for a value at the given height, round.
     /// The timeout tells the proposal builder how long it has to build a value.
-    GetValue(Ctx::Height, Round, Timeout),
+    GetValue(Ctx::Height, Round, Timeout<Ctx>),
 }

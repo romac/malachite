@@ -20,11 +20,11 @@ where
     Vote(Ctx::Vote),
 
     /// Schedule the timeout.
-    ScheduleTimeout(Timeout),
+    ScheduleTimeout(Timeout<Ctx>),
 
     /// Ask for a value at the given height, round and to schedule a timeout.
     /// The timeout tells the proposal builder how long it has to build a value.
-    GetValueAndScheduleTimeout(Ctx::Height, Round, Timeout),
+    GetValueAndScheduleTimeout(Ctx::Height, Round, Timeout<Ctx>),
 
     /// Decide the value.
     Decision(Round, Ctx::Proposal),
@@ -66,17 +66,29 @@ impl<Ctx: Context> Output<Ctx> {
     }
 
     /// Build a `ScheduleTimeout` output.
-    pub fn schedule_timeout(round: Round, step: TimeoutKind) -> Self {
-        Output::ScheduleTimeout(Timeout { round, kind: step })
+    pub fn schedule_timeout(height: Ctx::Height, round: Round, kind: TimeoutKind) -> Self {
+        Output::ScheduleTimeout(Timeout {
+            height,
+            round,
+            kind,
+        })
     }
 
     /// Build a `GetValue` output.
     pub fn get_value_and_schedule_timeout(
         height: Ctx::Height,
         round: Round,
-        step: TimeoutKind,
+        kind: TimeoutKind,
     ) -> Self {
-        Output::GetValueAndScheduleTimeout(height, round, Timeout { round, kind: step })
+        Output::GetValueAndScheduleTimeout(
+            height,
+            round,
+            Timeout {
+                height,
+                round,
+                kind,
+            },
+        )
     }
 
     /// Build a `Decision` output.

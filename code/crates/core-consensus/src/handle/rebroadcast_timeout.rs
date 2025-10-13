@@ -52,7 +52,7 @@ where
     #[cfg(feature = "metrics")]
     metrics.rebroadcast_timeouts.inc();
 
-    let timeout = Timeout::rebroadcast(round);
+    let timeout = Timeout::rebroadcast(height, round);
     perform!(co, Effect::ScheduleTimeout(timeout, Default::default()));
 
     Ok(())

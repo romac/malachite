@@ -191,7 +191,10 @@ where
 
     perform!(
         co,
-        Effect::CancelTimeout(Timeout::rebroadcast(certificate.round), Default::default())
+        Effect::CancelTimeout(
+            Timeout::rebroadcast(certificate.height, certificate.round),
+            Default::default()
+        )
     );
 
     Ok(())

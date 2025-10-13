@@ -108,11 +108,15 @@ fn driver_steps_proposer() {
             desc: "Start round 0, we are proposer, ask for a value to propose",
             input: Some(Input::NewRound(Height::new(1), Round::new(0), my_addr)),
             expected_outputs: vec![
-                Output::ScheduleTimeout(Timeout::new(Round::new(0), TimeoutKind::Propose)),
+                Output::ScheduleTimeout(Timeout::new(
+                    Height::new(1),
+                    Round::new(0),
+                    TimeoutKind::Propose,
+                )),
                 Output::GetValue(
                     Height::new(1),
                     Round::new(0),
-                    Timeout::new(Round::new(0), TimeoutKind::Propose),
+                    Timeout::new(Height::new(1), Round::new(0), TimeoutKind::Propose),
                 ),
             ],
             expected_round: Round::new(0),
@@ -307,11 +311,15 @@ fn driver_steps_proposer_timeout_get_value() {
             desc: "Start round 0, we are proposer, ask for a value to propose",
             input: Some(Input::NewRound(Height::new(1), Round::new(0), my_addr)),
             expected_outputs: vec![
-                Output::ScheduleTimeout(Timeout::new(Round::new(0), TimeoutKind::Propose)),
+                Output::ScheduleTimeout(Timeout::new(
+                    Height::new(1),
+                    Round::new(0),
+                    TimeoutKind::Propose,
+                )),
                 Output::GetValue(
                     Height::new(1),
                     Round::new(0),
-                    Timeout::new(Round::new(0), TimeoutKind::Propose),
+                    Timeout::new(Height::new(1), Round::new(0), TimeoutKind::Propose),
                 ),
             ],
             expected_round: Round::new(0),
@@ -324,7 +332,10 @@ fn driver_steps_proposer_timeout_get_value() {
         },
         TestStep {
             desc: "Receive a propose timeout",
-            input: Some(Input::TimeoutElapsed(Timeout::propose(Round::new(0)))),
+            input: Some(Input::TimeoutElapsed(Timeout::propose(
+                Height::new(1),
+                Round::new(0),
+            ))),
             expected_outputs: vec![Output::Vote(Vote::new_prevote(
                 Height::new(1),
                 Round::new(0),
@@ -376,7 +387,10 @@ fn driver_steps_not_proposer_valid() {
                 Round::new(0),
                 proposal.validator_address,
             )),
-            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(Round::new(0)))],
+            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(
+                Height::new(1),
+                Round::new(0),
+            ))],
             expected_round: Round::new(0),
             new_state: State {
                 height: Height::new(1),
@@ -572,7 +586,10 @@ fn driver_steps_not_proposer_invalid() {
                 Round::new(0),
                 proposal.validator_address,
             )),
-            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(Round::new(0)))],
+            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(
+                Height::new(1),
+                Round::new(0),
+            ))],
             expected_round: Round::new(0),
             new_state: State {
                 height: Height::new(1),
@@ -636,7 +653,10 @@ fn driver_steps_not_proposer_invalid() {
                 NilOrVal::Val(value.id()),
                 v3.address,
             ))),
-            expected_outputs: vec![Output::ScheduleTimeout(Timeout::prevote(Round::new(0)))],
+            expected_outputs: vec![Output::ScheduleTimeout(Timeout::prevote(
+                Height::new(1),
+                Round::new(0),
+            ))],
             expected_round: Round::new(0),
             new_state: State {
                 height: Height::new(1),
@@ -647,7 +667,10 @@ fn driver_steps_not_proposer_invalid() {
         },
         TestStep {
             desc: "prevote timeout elapses, we precommit nil (v2)",
-            input: Some(Input::TimeoutElapsed(Timeout::prevote(Round::new(0)))),
+            input: Some(Input::TimeoutElapsed(Timeout::prevote(
+                Height::new(1),
+                Round::new(0),
+            ))),
             expected_outputs: vec![Output::Vote(Vote::new_precommit(
                 Height::new(1),
                 Round::new(0),
@@ -700,7 +723,10 @@ fn driver_steps_not_proposer_other_height() {
                 Round::new(0),
                 proposal.validator_address,
             )),
-            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(Round::new(0)))],
+            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(
+                Height::new(1),
+                Round::new(0),
+            ))],
             expected_round: Round::new(0),
             new_state: State {
                 height: Height::new(1),
@@ -760,7 +786,10 @@ fn driver_steps_not_proposer_other_round() {
         TestStep {
             desc: "Start round 0, we are not the proposer",
             input: Some(Input::NewRound(Height::new(1), Round::new(0), v1.address)),
-            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(Round::new(0)))],
+            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(
+                Height::new(1),
+                Round::new(0),
+            ))],
             expected_round: Round::new(0),
             new_state: State {
                 height: Height::new(1),
@@ -807,7 +836,10 @@ fn driver_steps_not_proposer_timeout_multiple_rounds() {
         TestStep {
             desc: "Start round 0, we, v3, are not the proposer",
             input: Some(Input::NewRound(Height::new(1), Round::new(0), v1.address)),
-            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(Round::new(0)))],
+            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(
+                Height::new(1),
+                Round::new(0),
+            ))],
             expected_round: Round::new(0),
             new_state: State {
                 height: Height::new(1),
@@ -819,7 +851,10 @@ fn driver_steps_not_proposer_timeout_multiple_rounds() {
         // Receive a propose timeout, prevote nil (from v3)
         TestStep {
             desc: "Receive a propose timeout, prevote nil (v3)",
-            input: Some(Input::TimeoutElapsed(Timeout::propose(Round::new(0)))),
+            input: Some(Input::TimeoutElapsed(Timeout::propose(
+                Height::new(1),
+                Round::new(0),
+            ))),
             expected_outputs: vec![Output::Vote(Vote::new_prevote(
                 Height::new(1),
                 Round::new(0),
@@ -928,7 +963,10 @@ fn driver_steps_not_proposer_timeout_multiple_rounds() {
                 NilOrVal::Nil,
                 v2.address,
             ))),
-            expected_outputs: vec![Output::ScheduleTimeout(Timeout::precommit(Round::new(0)))],
+            expected_outputs: vec![Output::ScheduleTimeout(Timeout::precommit(
+                Height::new(1),
+                Round::new(0),
+            ))],
             expected_round: Round::new(0),
             new_state: State {
                 height: Height::new(1),
@@ -940,7 +978,10 @@ fn driver_steps_not_proposer_timeout_multiple_rounds() {
         // we receive a precommit timeout, start a new round
         TestStep {
             desc: "we receive a precommit timeout, start a new round",
-            input: Some(Input::TimeoutElapsed(Timeout::precommit(Round::new(0)))),
+            input: Some(Input::TimeoutElapsed(Timeout::precommit(
+                Height::new(1),
+                Round::new(0),
+            ))),
             expected_outputs: vec![Output::NewRound(Height::new(1), Round::new(1))],
             expected_round: Round::new(1),
             new_state: State {
@@ -953,7 +994,10 @@ fn driver_steps_not_proposer_timeout_multiple_rounds() {
         TestStep {
             desc: "Start round 1, we are not the proposer",
             input: Some(Input::NewRound(Height::new(1), Round::new(1), v2.address)),
-            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(Round::new(1)))],
+            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(
+                Height::new(1),
+                Round::new(1),
+            ))],
             expected_round: Round::new(1),
             new_state: State {
                 height: Height::new(1),
@@ -988,11 +1032,15 @@ fn driver_steps_no_value_to_propose() {
     assert_eq!(
         outputs,
         vec!(
-            Output::ScheduleTimeout(Timeout::new(Round::new(0), TimeoutKind::Propose)),
+            Output::ScheduleTimeout(Timeout::new(
+                Height::new(1),
+                Round::new(0),
+                TimeoutKind::Propose
+            )),
             Output::GetValue(
                 Height::new(1),
                 Round::new(0),
-                Timeout::propose(Round::new(0))
+                Timeout::propose(Height::new(1), Round::new(0))
             )
         )
     );
@@ -1071,7 +1119,10 @@ fn driver_steps_skip_round_skip_threshold() {
         TestStep {
             desc: "Start round 0, we, v3, are not the proposer",
             input: Some(Input::NewRound(height, Round::new(0), v1.address)),
-            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(Round::new(0)))],
+            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(
+                Height::new(1),
+                Round::new(0),
+            ))],
             expected_round: Round::new(0),
             new_state: State {
                 height,
@@ -1083,7 +1134,10 @@ fn driver_steps_skip_round_skip_threshold() {
         // Receive a propose timeout, prevote nil (from v3)
         TestStep {
             desc: "Receive a propose timeout, prevote nil (v3)",
-            input: Some(Input::TimeoutElapsed(Timeout::propose(Round::new(0)))),
+            input: Some(Input::TimeoutElapsed(Timeout::propose(
+                Height::new(1),
+                Round::new(0),
+            ))),
             expected_outputs: vec![Output::Vote(Vote::new_prevote(
                 height,
                 Round::new(0),
@@ -1173,7 +1227,10 @@ fn driver_steps_skip_round_quorum_threshold() {
         TestStep {
             desc: "Start round 0, we, v3, are not the proposer",
             input: Some(Input::NewRound(height, Round::new(0), v1.address)),
-            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(Round::new(0)))],
+            expected_outputs: vec![Output::ScheduleTimeout(Timeout::propose(
+                Height::new(1),
+                Round::new(0),
+            ))],
             expected_round: Round::new(0),
             new_state: State {
                 height,
@@ -1185,7 +1242,10 @@ fn driver_steps_skip_round_quorum_threshold() {
         // Receive a propose timeout, prevote nil (from v3)
         TestStep {
             desc: "Receive a propose timeout, prevote nil (v3)",
-            input: Some(Input::TimeoutElapsed(Timeout::propose(Round::new(0)))),
+            input: Some(Input::TimeoutElapsed(Timeout::propose(
+                Height::new(1),
+                Round::new(0),
+            ))),
             expected_outputs: vec![Output::Vote(Vote::new_prevote(
                 height,
                 Round::new(0),

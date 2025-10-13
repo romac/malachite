@@ -577,7 +577,10 @@ where
         ));
     }
 
-    fn apply_timeout(&mut self, timeout: Timeout) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+    fn apply_timeout(
+        &mut self,
+        timeout: Timeout<Ctx>,
+    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
         let input = match timeout.kind {
             TimeoutKind::Propose => RoundInput::TimeoutPropose,
             TimeoutKind::Prevote => RoundInput::TimeoutPrevote,

@@ -36,7 +36,7 @@ where
     Propose(LocallyProposedValue<Ctx>),
 
     /// A timeout has elapsed.
-    TimeoutElapsed(Timeout),
+    TimeoutElapsed(Timeout<Ctx>),
 
     /// We have received the full proposal for the current round.
     ///

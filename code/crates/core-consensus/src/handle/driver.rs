@@ -80,14 +80,14 @@ where
             metrics.rebroadcast_timeouts.inc();
 
             // Schedule rebroadcast timer
-            let timeout = Timeout::rebroadcast(*round);
+            let timeout = Timeout::rebroadcast(*height, *round);
             perform!(co, Effect::ScheduleTimeout(timeout, Default::default()));
         }
 
         DriverInput::ProposeValue(round, _) => {
             perform!(
                 co,
-                Effect::CancelTimeout(Timeout::propose(*round), Default::default())
+                Effect::CancelTimeout(Timeout::propose(state.height(), *round), Default::default())
             );
         }
 
@@ -177,7 +177,10 @@ where
         // Cancel the Propose timeout since we have moved from Propose to Prevote
         perform!(
             co,
-            Effect::CancelTimeout(Timeout::propose(state.driver.round()), Default::default())
+            Effect::CancelTimeout(
+                Timeout::propose(state.height(), state.round()),
+                Default::default()
+            )
         );
     }
 
@@ -379,7 +382,7 @@ where
                 state.set_last_vote(signed_vote);
 
                 // Schedule rebroadcast timer
-                let timeout = Timeout::rebroadcast(state.driver.round());
+                let timeout = Timeout::rebroadcast(state.height(), state.round());
                 perform!(co, Effect::ScheduleTimeout(timeout, Default::default()));
             }
 
