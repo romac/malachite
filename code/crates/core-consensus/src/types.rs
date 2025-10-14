@@ -92,7 +92,7 @@ pub struct ProposedValue<Ctx: Context> {
 #[derive_where(Clone, Debug)]
 pub enum WalEntry<Ctx: Context> {
     ConsensusMsg(SignedConsensusMsg<Ctx>),
-    Timeout(Timeout),
+    Timeout(Timeout<Ctx>),
     ProposedValue(ProposedValue<Ctx>),
 }
 
@@ -105,11 +105,11 @@ impl<Ctx: Context> WalEntry<Ctx> {
         }
     }
 
-    pub fn height(&self) -> Option<Ctx::Height> {
+    pub fn height(&self) -> Ctx::Height {
         match self {
-            WalEntry::ConsensusMsg(msg) => Some(msg.height()),
-            WalEntry::Timeout(_) => None,
-            WalEntry::ProposedValue(value) => Some(value.height),
+            WalEntry::ConsensusMsg(msg) => msg.height(),
+            WalEntry::Timeout(timeout) => timeout.height,
+            WalEntry::ProposedValue(value) => value.height,
         }
     }
 
@@ -120,7 +120,7 @@ impl<Ctx: Context> WalEntry<Ctx> {
         }
     }
 
-    pub fn as_timeout(&self) -> Option<&Timeout> {
+    pub fn as_timeout(&self) -> Option<&Timeout<Ctx>> {
         match self {
             WalEntry::Timeout(timeout) => Some(timeout),
             _ => None,

@@ -13,6 +13,7 @@ use malachitebft_core_types::{Context, Round, Timeout};
 pub trait WalCodec<Ctx>
 where
     Ctx: Context,
+    Self: Codec<Ctx::Height>,
     Self: Codec<SignedConsensusMsg<Ctx>>,
     Self: Codec<ProposedValue<Ctx>>,
 {
@@ -21,6 +22,7 @@ where
 impl<Ctx, C> WalCodec<Ctx> for C
 where
     Ctx: Context,
+    C: Codec<Ctx::Height>,
     C: Codec<SignedConsensusMsg<Ctx>>,
     C: Codec<ProposedValue<Ctx>>,
 {
@@ -40,7 +42,7 @@ where
 {
     match entry {
         WalEntry::ConsensusMsg(msg) => encode_consensus_msg(TAG_CONSENSUS, msg, codec, buf),
-        WalEntry::Timeout(timeout) => encode_timeout(TAG_TIMEOUT, timeout, buf),
+        WalEntry::Timeout(timeout) => encode_timeout(TAG_TIMEOUT, timeout, codec, buf),
         WalEntry::ProposedValue(value) => {
             encode_proposed_value(TAG_PROPOSED_VALUE, value, codec, buf)
         }
@@ -57,7 +59,7 @@ where
 
     match tag {
         TAG_CONSENSUS => decode_consensus_msg(codec, buf).map(WalEntry::ConsensusMsg),
-        TAG_TIMEOUT => decode_timeout(buf).map(WalEntry::Timeout),
+        TAG_TIMEOUT => decode_timeout(codec, buf).map(WalEntry::Timeout),
         TAG_PROPOSED_VALUE => decode_proposed_value(codec, buf).map(WalEntry::ProposedValue),
         _ => Err(io::Error::new(io::ErrorKind::InvalidData, "invalid tag")),
     }
@@ -113,7 +115,16 @@ where
 }
 
 // Timeout helpers
-fn encode_timeout(tag: u8, timeout: &Timeout, mut buf: impl Write) -> io::Result<()> {
+fn encode_timeout<Ctx, C>(
+    tag: u8,
+    timeout: &Timeout<Ctx>,
+    codec: &C,
+    mut buf: impl Write,
+) -> io::Result<()>
+where
+    Ctx: Context,
+    C: WalCodec<Ctx>,
+{
     use malachitebft_core_types::TimeoutKind;
 
     let step = match timeout.kind {
@@ -132,10 +143,25 @@ fn encode_timeout(tag: u8, timeout: &Timeout, mut buf: impl Write) -> io::Result
     buf.write_u8(step)?;
     buf.write_i64::<BE>(timeout.round.as_i64())?;
 
+    // Encode the height using the codec
+    let height_bytes = codec.encode(&timeout.height).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("failed to encode timeout height: {e}"),
+        )
+    })?;
+
+    buf.write_u64::<BE>(height_bytes.len() as u64)?;
+    buf.write_all(&height_bytes)?;
+
     Ok(())
 }
 
-fn decode_timeout(mut buf: impl Read) -> io::Result<Timeout> {
+fn decode_timeout<Ctx, C>(codec: &C, mut buf: impl Read) -> io::Result<Timeout<Ctx>>
+where
+    Ctx: Context,
+    C: WalCodec<Ctx>,
+{
     use malachitebft_core_types::TimeoutKind;
 
     let step = match buf.read_u8()? {
@@ -175,7 +201,19 @@ fn decode_timeout(mut buf: impl Read) -> io::Result<Timeout> {
 
     let round = Round::from(buf.read_i64::<BE>()?);
 
-    Ok(Timeout::new(round, step))
+    // Decode the height using the codec
+    let len = buf.read_u64::<BE>()?;
+    let mut height_bytes = vec![0; len as usize];
+    buf.read_exact(&mut height_bytes)?;
+
+    let height = codec.decode(height_bytes.into()).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("failed to decode timeout height: {e}"),
+        )
+    })?;
+
+    Ok(Timeout::new(height, round, step))
 }
 
 // Proposed value helpers

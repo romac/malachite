@@ -7,12 +7,23 @@ pub async fn on_timeout_elapsed<Ctx>(
     co: &Co<Ctx>,
     state: &mut State<Ctx>,
     metrics: &Metrics,
-    timeout: Timeout,
+    timeout: Timeout<Ctx>,
 ) -> Result<(), Error<Ctx>>
 where
     Ctx: Context,
 {
     let (height, round) = (state.height(), state.round());
+
+    if timeout.height != height {
+        debug!(
+            %height,
+            %round,
+            timeout.height = %timeout.height,
+            "Ignoring timeout for different height",
+        );
+
+        return Ok(());
+    }
 
     if timeout.round != round {
         debug!(
@@ -27,7 +38,6 @@ where
 
     info!(
         step = ?timeout.kind,
-        %timeout.round,
         %height,
         %round,
         "Timeout elapsed"

@@ -98,7 +98,7 @@ pub enum Msg<Ctx: Context> {
     NetworkEvent(NetworkEvent<Ctx>),
 
     /// A timeout has elapsed
-    TimeoutElapsed(TimeoutElapsed<Timeout>),
+    TimeoutElapsed(TimeoutElapsed<Timeout<Ctx>>),
 
     /// The proposal builder has built a value and can be used in a new proposal consensus message
     ProposeValue(LocallyProposedValue<Ctx>),
@@ -168,13 +168,13 @@ impl<Ctx: Context> From<NetworkEvent<Ctx>> for Msg<Ctx> {
 
 type ConsensusInput<Ctx> = malachitebft_core_consensus::Input<Ctx>;
 
-impl<Ctx: Context> From<TimeoutElapsed<Timeout>> for Msg<Ctx> {
-    fn from(msg: TimeoutElapsed<Timeout>) -> Self {
+impl<Ctx: Context> From<TimeoutElapsed<Timeout<Ctx>>> for Msg<Ctx> {
+    fn from(msg: TimeoutElapsed<Timeout<Ctx>>) -> Self {
         Msg::TimeoutElapsed(msg)
     }
 }
 
-type Timers = TimerScheduler<Timeout>;
+type Timers<Ctx> = TimerScheduler<Timeout<Ctx>>;
 
 struct Timeouts {
     config: TimeoutConfig,
@@ -230,7 +230,7 @@ const MAX_BUFFER_SIZE: usize = 1024;
 
 pub struct State<Ctx: Context> {
     /// Scheduler for timers
-    timers: Timers,
+    timers: Timers<Ctx>,
 
     /// Timeouts configuration
     timeouts: Timeouts,
@@ -268,7 +268,7 @@ where
 struct HandlerState<'a, Ctx: Context> {
     phase: Phase,
     height: Ctx::Height,
-    timers: &'a mut Timers,
+    timers: &'a mut Timers<Ctx>,
     timeouts: &'a mut Timeouts,
 }
 
@@ -680,7 +680,7 @@ where
         &self,
         myself: &ActorRef<Msg<Ctx>>,
         state: &mut State<Ctx>,
-        timeout: Timeout,
+        timeout: Timeout<Ctx>,
     ) -> Result<(), ActorProcessingErr> {
         // Make sure the associated timer is cancelled
         state.timers.cancel(&timeout);
@@ -902,11 +902,11 @@ where
         }
 
         debug!(
-            state.height = %height, entry.height = ?entry.height(),
+            state.height = %height, entry.height = %entry.height(),
             "Appending entry to WAL: {}", entry.get_type()
         );
 
-        let result = ractor::call!(self.wal, WalMsg::Append, height, entry);
+        let result = ractor::call!(self.wal, WalMsg::Append, entry);
 
         match result {
             Ok(Ok(())) => {

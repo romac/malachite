@@ -62,12 +62,12 @@ where
     /// Cancel a given timeout
     ///
     /// Resume with: [`resume::Continue`]
-    CancelTimeout(Timeout, resume::Continue),
+    CancelTimeout(Timeout<Ctx>, resume::Continue),
 
     /// Schedule a timeout
     ///
     /// Resume with: [`resume::Continue`]
-    ScheduleTimeout(Timeout, resume::Continue),
+    ScheduleTimeout(Timeout<Ctx>, resume::Continue),
 
     /// Consensus is starting a new round with the given proposer
     ///
@@ -103,7 +103,7 @@ where
     /// input to consensus within the specified timeout duration.
     ///
     /// Resume with: [`resume::Continue`]
-    GetValue(Ctx::Height, Round, Timeout, resume::Continue),
+    GetValue(Ctx::Height, Round, Timeout<Ctx>, resume::Continue),
 
     /// Requests the application to re-stream a proposal that it has already seen.
     ///

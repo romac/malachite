@@ -490,7 +490,7 @@ where
 {
     debug_trace!(state, Line::L21ProposeTimeoutScheduled);
 
-    let timeout = Output::schedule_timeout(state.round, TimeoutKind::Propose);
+    let timeout = Output::schedule_timeout(state.height, state.round, TimeoutKind::Propose);
     Transition::to(state.with_step(Step::Propose)).with_output(timeout)
 }
 
@@ -504,7 +504,7 @@ pub fn schedule_timeout_prevote<Ctx>(state: State<Ctx>) -> Transition<Ctx>
 where
     Ctx: Context,
 {
-    let output = Output::schedule_timeout(state.round, TimeoutKind::Prevote);
+    let output = Output::schedule_timeout(state.height, state.round, TimeoutKind::Prevote);
     Transition::to(state).with_output(output)
 }
 
@@ -515,7 +515,7 @@ pub fn schedule_timeout_precommit<Ctx>(state: State<Ctx>) -> Transition<Ctx>
 where
     Ctx: Context,
 {
-    let output = Output::schedule_timeout(state.round, TimeoutKind::Precommit);
+    let output = Output::schedule_timeout(state.height, state.round, TimeoutKind::Precommit);
     Transition::to(state).with_output(output)
 }
 

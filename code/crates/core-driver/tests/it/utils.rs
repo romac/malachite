@@ -145,28 +145,28 @@ pub fn decide_output(round: Round, proposal: Proposal) -> Output<TestContext> {
     Output::Decide(round, proposal)
 }
 
-pub fn start_propose_timer_output(round: Round) -> Output<TestContext> {
-    Output::ScheduleTimeout(Timeout::propose(round))
+pub fn start_propose_timer_output(height: Height, round: Round) -> Output<TestContext> {
+    Output::ScheduleTimeout(Timeout::propose(height, round))
 }
 
-pub fn timeout_propose_input(round: Round) -> Input<TestContext> {
-    Input::TimeoutElapsed(Timeout::propose(round))
+pub fn timeout_propose_input(height: Height, round: Round) -> Input<TestContext> {
+    Input::TimeoutElapsed(Timeout::propose(height, round))
 }
 
-pub fn start_prevote_timer_output(round: Round) -> Output<TestContext> {
-    Output::ScheduleTimeout(Timeout::prevote(round))
+pub fn start_prevote_timer_output(height: Height, round: Round) -> Output<TestContext> {
+    Output::ScheduleTimeout(Timeout::prevote(height, round))
 }
 
-pub fn timeout_prevote_input(round: Round) -> Input<TestContext> {
-    Input::TimeoutElapsed(Timeout::prevote(round))
+pub fn timeout_prevote_input(height: Height, round: Round) -> Input<TestContext> {
+    Input::TimeoutElapsed(Timeout::prevote(height, round))
 }
 
-pub fn start_precommit_timer_output(round: Round) -> Output<TestContext> {
-    Output::ScheduleTimeout(Timeout::precommit(round))
+pub fn start_precommit_timer_output(height: Height, round: Round) -> Output<TestContext> {
+    Output::ScheduleTimeout(Timeout::precommit(height, round))
 }
 
-pub fn timeout_precommit_input(round: Round) -> Input<TestContext> {
-    Input::TimeoutElapsed(Timeout::precommit(round))
+pub fn timeout_precommit_input(height: Height, round: Round) -> Input<TestContext> {
+    Input::TimeoutElapsed(Timeout::precommit(height, round))
 }
 
 pub fn propose_state(round: Round) -> State<TestContext> {

@@ -19,6 +19,24 @@ use crate::{Address, Height, Proposal, ProposalPart, TestContext, Value, ValueId
 #[derive(Copy, Clone, Debug)]
 pub struct ProtobufCodec;
 
+impl Codec<Height> for ProtobufCodec {
+    type Error = ProtoError;
+
+    fn decode(&self, bytes: Bytes) -> Result<Height, Self::Error> {
+        let height = u64::decode(bytes.as_ref()).map_err(ProtoError::Decode)?;
+        Ok(Height::new(height))
+    }
+
+    fn encode(&self, height: &Height) -> Result<Bytes, Self::Error> {
+        let mut buf = Vec::with_capacity(height.as_u64().encoded_len());
+        height
+            .as_u64()
+            .encode(&mut buf)
+            .map_err(ProtoError::Encode)?;
+        Ok(Bytes::from(buf))
+    }
+}
+
 impl Codec<Value> for ProtobufCodec {
     type Error = ProtoError;
 

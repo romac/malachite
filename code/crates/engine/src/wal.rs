@@ -54,7 +54,7 @@ pub type WalReply<T> = RpcReplyPort<eyre::Result<T>>;
 pub enum Msg<Ctx: Context> {
     StartedHeight(Ctx::Height, WalReply<Option<Vec<WalEntry<Ctx>>>>),
     Reset(Ctx::Height, WalReply<()>),
-    Append(Ctx::Height, WalEntry<Ctx>, WalReply<()>),
+    Append(WalEntry<Ctx>, WalReply<()>),
     Flush(WalReply<()>),
     Dump,
 }
@@ -97,13 +97,11 @@ where
                 self.reset(state, height, reply_to).await?;
             }
 
-            Msg::Append(height, entry, reply_to) => {
-                let entry_height = entry.height().unwrap_or(height);
-
-                if entry_height != state.height {
+            Msg::Append(entry, reply_to) => {
+                if entry.height() != state.height {
                     debug!(
                         wal.height = %state.height,
-                        entry.height = %entry_height,
+                        entry.height = %entry.height(),
                         "Ignoring append, mismatched height"
                     );
 

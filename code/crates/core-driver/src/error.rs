@@ -49,4 +49,13 @@ where
         /// Consensus height
         consensus_height: Ctx::Height,
     },
+
+    /// Received a timeout for another height
+    #[error("Received timeout for height {timeout_height} different from consensus height {consensus_height}")]
+    InvalidTimeoutHeight {
+        /// Timeout height
+        timeout_height: Ctx::Height,
+        /// Consensus height
+        consensus_height: Ctx::Height,
+    },
 }
