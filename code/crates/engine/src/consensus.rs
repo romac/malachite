@@ -729,8 +729,9 @@ where
 
             Err(e) => {
                 error!(%height, "Error when notifying WAL of started height: {e}");
-                self.tx_event
-                    .send(|| Event::WalReplayError(Arc::new(e.into())));
+
+                self.tx_event.send(|| Event::WalResetError(Arc::new(e)));
+
                 Ok(Default::default())
             }
         }
