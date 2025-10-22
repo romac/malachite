@@ -375,10 +375,32 @@ where
 
                 // Fetch entries from the WAL or reset the WAL if this is a restart
                 let wal_entries = if is_restart {
-                    self.wal_reset(height).await?;
+                    if let Err(e) = self.wal_reset(height).await {
+                        error!(%height, "Error when resetting WAL: {e}");
+                        error!(%height, "Consensus may be in an inconsistent state after WAL reset failure");
+                        error!(%height, "Shutting down consensus actor to prevent safety violations");
+
+                        myself.kill();
+
+                        return Err(eyre!("Terminating consensus due to WAL reset failure").into());
+                    }
+
                     vec![]
                 } else {
-                    self.wal_fetch(height).await?
+                    match self.wal_fetch(height).await {
+                        Ok(entries) => entries,
+                        Err(e) => {
+                            error!(%height, "Error when fetching WAL entries: {e}");
+                            error!(%height, "Consensus may be in an inconsistent state after WAL fetch failure");
+                            error!(%height, "Shutting down consensus actor to prevent safety violations");
+
+                            myself.kill();
+
+                            return Err(
+                                eyre!("Terminating consensus due to WAL fetch failure").into()
+                            );
+                        }
+                    }
                 };
 
                 if !wal_entries.is_empty() {
@@ -409,7 +431,15 @@ where
                 }
 
                 if !wal_entries.is_empty() {
-                    self.wal_replay(&myself, state, height, wal_entries).await;
+                    if let Err(e) = self.wal_replay(&myself, state, height, wal_entries).await {
+                        error!(%height, "Error when replaying WAL: {e}");
+                        error!(%height, "Consensus may be in an inconsistent state after WAL replay failure");
+                        error!(%height, "Shutting down consensus actor to prevent safety violations");
+
+                        myself.kill();
+
+                        return Err(eyre!("Terminating consensus due to WAL replay failure").into());
+                    }
                 }
 
                 // Set the phase to `Running` now that we have replayed the WAL

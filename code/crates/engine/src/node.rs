@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::task::JoinHandle;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use malachitebft_core_types::Context;
 
@@ -94,7 +94,7 @@ where
     #[tracing::instrument(name = "node", parent = &self.span, skip_all)]
     async fn handle_supervisor_evt(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         evt: SupervisionEvent,
         _state: &mut (),
     ) -> Result<(), ActorProcessingErr> {
@@ -102,16 +102,29 @@ where
             SupervisionEvent::ActorStarted(cell) => {
                 info!(actor = %cell.get_id(), "Actor has started");
             }
+
             SupervisionEvent::ActorTerminated(cell, _state, reason) => {
-                warn!(
+                error!(
                     "Actor {} has terminated: {}",
                     cell.get_id(),
-                    reason.unwrap_or_default()
+                    reason.unwrap_or_else(|| "no reason provided".to_string())
                 );
+
+                error!("Shutting down node due to child actor termination");
+                myself.stop(Some(
+                    "Shutting down node due to child actor termination".to_string(),
+                ));
             }
+
             SupervisionEvent::ActorFailed(cell, error) => {
                 error!("Actor {} has failed: {error}", cell.get_id());
+                error!("Shutting down node due to child actor failure");
+
+                myself.stop(Some(
+                    "Shutting down node due to child actor failure".to_string(),
+                ));
             }
+
             SupervisionEvent::ProcessGroupChanged(_) => (),
         }
 
