@@ -698,10 +698,15 @@ where
                 // Success
             }
             Ok(Err(e)) => {
-                error!("Resetting the WAL failed: {e}");
+                error!(%height, "Failed to reset WAL: {e}");
+                return Err(eyre!("Failed to reset WAL for height {height}: {e}").into());
             }
             Err(e) => {
-                error!("Failed to send Reset command to WAL actor: {e}");
+                error!(%height, "Failed to send Reset command to WAL actor: {e}");
+                return Err(eyre!(
+                    "Failed to send Reset command to WAL actor for height {height}: {e}"
+                )
+                .into());
             }
         }
 
@@ -716,8 +721,9 @@ where
 
         match result {
             Ok(None) => {
-                // Nothing to replay
                 debug!(%height, "No WAL entries to replay");
+
+                // Nothing to replay
                 Ok(Default::default())
             }
 
@@ -732,7 +738,7 @@ where
 
                 self.tx_event.send(|| Event::WalResetError(Arc::new(e)));
 
-                Ok(Default::default())
+                Err(eyre!("Failed to fetch WAL entries for height {height}").into())
             }
         }
     }
