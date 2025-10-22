@@ -667,7 +667,7 @@ where
         myself: &ActorRef<Msg<Ctx>>,
         state: &mut State<Ctx>,
         timeout: Timeout,
-    ) -> Result<(), ActorProcessingErr> {
+    ) -> Result<(), ConsensusError<Ctx>> {
         // Make sure the associated timer is cancelled
         state.timers.cancel(&timeout);
 
@@ -743,7 +743,7 @@ where
         state: &mut State<Ctx>,
         height: Ctx::Height,
         entries: Vec<WalEntry<Ctx>>,
-    ) {
+    ) -> Result<(), Arc<ConsensusError<Ctx>>> {
         use SignedConsensusMsg::*;
 
         assert_eq!(state.phase, Phase::Recovering);
@@ -751,7 +751,7 @@ where
         info!("Replaying {} WAL entries", entries.len());
 
         if entries.is_empty() {
-            return;
+            return Ok(());
         }
 
         self.tx_event
@@ -770,8 +770,14 @@ where
                     {
                         error!("Error when replaying vote: {e}");
 
-                        self.tx_event
-                            .send(|| Event::WalReplayError(Arc::new(e.into())));
+                        let e = Arc::new(e);
+
+                        {
+                            let e = Arc::clone(&e);
+                            self.tx_event.send(|| Event::WalReplayError(e));
+                        }
+
+                        return Err(e);
                     }
                 }
 
@@ -784,8 +790,14 @@ where
                     {
                         error!("Error when replaying Proposal: {e}");
 
-                        self.tx_event
-                            .send(|| Event::WalReplayError(Arc::new(e.into())));
+                        let e = Arc::new(e);
+
+                        {
+                            let e = Arc::clone(&e);
+                            self.tx_event.send(|| Event::WalReplayError(e));
+                        }
+
+                        return Err(e);
                     }
                 }
 
@@ -795,7 +807,14 @@ where
                     if let Err(e) = self.timeout_elapsed(myself, state, timeout).await {
                         error!("Error when replaying TimeoutElapsed: {e}");
 
-                        self.tx_event.send(|| Event::WalReplayError(Arc::new(e)));
+                        let e = Arc::new(e);
+
+                        {
+                            let e = Arc::clone(&e);
+                            self.tx_event.send(|| Event::WalReplayError(e));
+                        }
+
+                        return Err(e);
                     }
                 }
 
@@ -812,14 +831,22 @@ where
                     {
                         error!("Error when replaying LocallyProposedValue: {e}");
 
-                        self.tx_event
-                            .send(|| Event::WalReplayError(Arc::new(e.into())));
+                        let e = Arc::new(e);
+
+                        {
+                            let e = Arc::clone(&e);
+                            self.tx_event.send(|| Event::WalReplayError(e));
+                        }
+
+                        return Err(e);
                     }
                 }
             }
         }
 
         self.tx_event.send(|| Event::WalReplayDone(state.height()));
+
+        Ok(())
     }
 
     fn get_value(
