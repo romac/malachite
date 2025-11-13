@@ -21,6 +21,9 @@ pub use params::HIDDEN_LOCK_ROUND;
 mod effect;
 pub use effect::{Effect, Resumable, Resume};
 
+mod process;
+pub use process::process;
+
 mod types;
 pub use types::*;
 

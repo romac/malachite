@@ -313,20 +313,27 @@ where
         state: &mut State<Ctx>,
         input: ConsensusInput<Ctx>,
     ) -> Result<(), ConsensusError<Ctx>> {
-        malachitebft_core_consensus::process!(
-            input: input,
-            state: &mut state.consensus,
-            metrics: &self.metrics,
-            with: effect => {
-                let handler_state = HandlerState {
-                    phase: state.phase,
-                    timers: &mut state.timers,
-                    timeouts: &mut state.timeouts,
-                };
+        let mut handler_state = HandlerState {
+            phase: state.phase,
+            timers: &mut state.timers,
+            timeouts: &mut state.timeouts,
+        };
 
-                self.handle_effect(myself, handler_state, effect).await
-            }
+        let result = malachitebft_core_consensus::process(
+            input,
+            &mut state.consensus,
+            &self.metrics,
+            async move |effect| self.handle_effect(myself, &mut handler_state, effect).await,
         )
+        .await;
+
+        match result {
+            Ok(result) => result,
+            Err(e) => {
+                error!("Error when processing consensus input: {e:?}");
+                Ok(())
+            }
+        }
     }
 
     #[async_recursion]
@@ -939,7 +946,7 @@ where
     async fn handle_effect(
         &self,
         myself: &ActorRef<Msg<Ctx>>,
-        state: HandlerState<'_>,
+        state: &mut HandlerState<'_>,
         effect: Effect<Ctx>,
     ) -> Result<Resume<Ctx>, ActorProcessingErr> {
         match effect {
