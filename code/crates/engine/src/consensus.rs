@@ -216,70 +216,201 @@ impl Timeouts {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum Phase {
-    Unstarted,
-    Ready,
-    Running,
-    Recovering,
-}
-
 /// Maximum number of messages to buffer while consensus is
-/// in the `Unstarted` or `Recovering` phase
+/// in the `Unstarted`, `Ready` or `Recovering` phase
 const MAX_BUFFER_SIZE: usize = 1024;
 
-pub struct State<Ctx: Context> {
+/// State that is shared across all consensus phases
+struct SharedState {
     /// Scheduler for timers
     timers: Timers,
 
     /// Timeouts configuration
     timeouts: Timeouts,
 
-    /// The state of the consensus state machine,
-    /// or `None` if consensus has not been started yet.
-    consensus: Option<ConsensusState<Ctx>>,
-
     /// The set of peers we are connected to.
     connected_peers: BTreeSet<PeerId>,
+}
 
-    /// The current phase
-    phase: Phase,
+/// The different phases consensus can be in
+enum ConsensusPhase<Ctx: Context> {
+    /// Consensus has not started yet, network not listening
+    Unstarted {
+        /// Buffer of messages received before consensus started
+        msg_buffer: MessageBuffer<Ctx>,
+    },
 
-    /// A buffer of messages that were received while
-    /// consensus was `Unstarted` or in the `Recovering` phase
-    msg_buffer: MessageBuffer<Ctx>,
+    /// Network is listening, ready to start consensus when host signals
+    Ready {
+        /// Buffer of messages received before consensus started
+        msg_buffer: MessageBuffer<Ctx>,
+    },
+
+    /// Recovering from WAL, replaying entries
+    Recovering {
+        /// The consensus state machine
+        consensus: ConsensusState<Ctx>,
+        /// Buffer of messages received during recovery
+        msg_buffer: MessageBuffer<Ctx>,
+    },
+
+    /// Consensus is running normally
+    Running {
+        /// The consensus state machine
+        consensus: ConsensusState<Ctx>,
+    },
+}
+
+pub struct State<Ctx: Context> {
+    /// State shared across all phases
+    shared: SharedState,
+
+    /// The current phase and phase-specific state
+    phase: ConsensusPhase<Ctx>,
 }
 
 impl<Ctx> State<Ctx>
 where
     Ctx: Context,
 {
+    /// Get the current height, or default if consensus hasn't started
     pub fn height(&self) -> Ctx::Height {
-        self.consensus
-            .as_ref()
-            .map(|c| c.height())
-            .unwrap_or_default()
-    }
-
-    pub fn round(&self) -> Round {
-        self.consensus
-            .as_ref()
-            .map(|c| c.round())
-            .unwrap_or(Round::Nil)
-    }
-
-    fn set_phase(&mut self, phase: Phase) {
-        if self.phase != phase {
-            info!(prev = ?self.phase, new = ?phase, "Phase transition");
-            self.phase = phase;
+        match &self.phase {
+            ConsensusPhase::Unstarted { .. } | ConsensusPhase::Ready { .. } => {
+                Ctx::Height::default()
+            }
+            ConsensusPhase::Recovering { consensus, .. } | ConsensusPhase::Running { consensus } => {
+                consensus.height()
+            }
         }
     }
+
+    /// Get the current round, or Nil if consensus hasn't started
+    pub fn round(&self) -> Round {
+        match &self.phase {
+            ConsensusPhase::Unstarted { .. } | ConsensusPhase::Ready { .. } => Round::Nil,
+            ConsensusPhase::Recovering { consensus, .. } | ConsensusPhase::Running { consensus } => {
+                consensus.round()
+            }
+        }
+    }
+
+    /// Get a mutable reference to the consensus state, if it exists
+    fn consensus_mut(&mut self) -> Option<&mut ConsensusState<Ctx>> {
+        match &mut self.phase {
+            ConsensusPhase::Unstarted { .. } | ConsensusPhase::Ready { .. } => None,
+            ConsensusPhase::Recovering { consensus, .. } | ConsensusPhase::Running { consensus } => {
+                Some(consensus)
+            }
+        }
+    }
+
+    /// Get an immutable reference to the consensus state, if it exists
+    fn consensus(&self) -> Option<&ConsensusState<Ctx>> {
+        match &self.phase {
+            ConsensusPhase::Unstarted { .. } | ConsensusPhase::Ready { .. } => None,
+            ConsensusPhase::Recovering { consensus, .. } | ConsensusPhase::Running { consensus } => {
+                Some(consensus)
+            }
+        }
+    }
+
+    /// Check if we should buffer messages in the current phase
+    fn should_buffer_messages(&self) -> bool {
+        !matches!(self.phase, ConsensusPhase::Running { .. })
+    }
+
+    /// Get the current phase
+    fn phase(&self) -> Phase {
+        phase_for(&self.phase)
+    }
+
+    /// Transition from Unstarted to Ready
+    fn transition_to_ready(&mut self) {
+        if let ConsensusPhase::Unstarted { msg_buffer } = &mut self.phase {
+            info!(prev = ?Phase::Unstarted, new = ?Phase::Ready, "Phase transition");
+            let msg_buffer = std::mem::replace(msg_buffer, MessageBuffer::new(MAX_BUFFER_SIZE));
+            self.phase = ConsensusPhase::Ready { msg_buffer };
+        }
+    }
+
+    /// Transition from Ready/Unstarted to Recovering
+    fn transition_to_recovering(&mut self, consensus: ConsensusState<Ctx>) {
+        let prev = self.phase();
+        info!(?prev, new = ?Phase::Recovering, "Phase transition");
+
+        let msg_buffer = match &mut self.phase {
+            ConsensusPhase::Unstarted { msg_buffer } | ConsensusPhase::Ready { msg_buffer } => {
+                std::mem::replace(msg_buffer, MessageBuffer::new(MAX_BUFFER_SIZE))
+            }
+            _ => MessageBuffer::new(MAX_BUFFER_SIZE),
+        };
+
+        self.phase = ConsensusPhase::Recovering {
+            consensus,
+            msg_buffer,
+        };
+    }
+
+    /// Transition from Recovering/Ready to Running
+    fn transition_to_running(&mut self, consensus: ConsensusState<Ctx>) {
+        let prev = self.phase();
+        info!(?prev, new = ?Phase::Running, "Phase transition");
+
+        self.phase = ConsensusPhase::Running { consensus };
+    }
+
+    /// Get the message buffer, if the current phase has one
+    fn msg_buffer(&self) -> Option<&MessageBuffer<Ctx>> {
+        match &self.phase {
+            ConsensusPhase::Unstarted { msg_buffer }
+            | ConsensusPhase::Ready { msg_buffer }
+            | ConsensusPhase::Recovering { msg_buffer, .. } => Some(msg_buffer),
+            ConsensusPhase::Running { .. } => None,
+        }
+    }
+
+    /// Get a mutable reference to the message buffer, if the current phase has one
+    fn msg_buffer_mut(&mut self) -> Option<&mut MessageBuffer<Ctx>> {
+        match &mut self.phase {
+            ConsensusPhase::Unstarted { msg_buffer }
+            | ConsensusPhase::Ready { msg_buffer }
+            | ConsensusPhase::Recovering { msg_buffer, .. } => Some(msg_buffer),
+            ConsensusPhase::Running { .. } => None,
+        }
+    }
+
+    /// Clear the message buffer if one exists
+    fn clear_msg_buffer(&mut self) {
+        if let Some(buffer) = self.msg_buffer_mut() {
+            *buffer = MessageBuffer::new(MAX_BUFFER_SIZE);
+        }
+    }
+}
+
+/// Simple enum to represent the current phase without borrowing state
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Phase {
+    Unstarted,
+    Ready,
+    Recovering,
+    Running,
 }
 
 struct HandlerState<'a> {
     phase: Phase,
     timers: &'a mut Timers,
     timeouts: &'a mut Timeouts,
+}
+
+/// Helper function to get phase enum without borrowing the whole state
+fn phase_for<Ctx: Context>(phase: &ConsensusPhase<Ctx>) -> Phase {
+    match phase {
+        ConsensusPhase::Unstarted { .. } => Phase::Unstarted,
+        ConsensusPhase::Ready { .. } => Phase::Ready,
+        ConsensusPhase::Recovering { .. } => Phase::Recovering,
+        ConsensusPhase::Running { .. } => Phase::Running,
+    }
 }
 
 impl<Ctx> Consensus<Ctx>
@@ -324,15 +455,28 @@ where
         state: &mut State<Ctx>,
         input: ConsensusInput<Ctx>,
     ) -> Result<(), ConsensusError<Ctx>> {
+        // Split state into its parts to avoid borrow checker issues
+        let State { shared, phase: consensus_phase } = state;
+        let phase = phase_for(consensus_phase);
+
+        let consensus = match consensus_phase {
+            ConsensusPhase::Unstarted { .. } | ConsensusPhase::Ready { .. } => {
+                panic!("Consensus not started - cannot process input")
+            }
+            ConsensusPhase::Recovering { consensus, .. } | ConsensusPhase::Running { consensus } => {
+                consensus
+            }
+        };
+
         malachitebft_core_consensus::process!(
             input: input,
-            state: state.consensus.as_mut().expect("Consensus not started"),
+            state: consensus,
             metrics: &self.metrics,
             with: effect => {
                 let handler_state = HandlerState {
-                    phase: state.phase,
-                    timers: &mut state.timers,
-                    timeouts: &mut state.timeouts,
+                    phase,
+                    timers: &mut shared.timers,
+                    timeouts: &mut shared.timeouts,
                 };
 
                 self.handle_effect(myself, handler_state, effect).await
@@ -347,17 +491,20 @@ where
         state: &mut State<Ctx>,
         is_restart: bool,
     ) {
-        if state.msg_buffer.is_empty() {
+        let buffer_len = state.msg_buffer().map(|b| b.len()).unwrap_or(0);
+
+        if buffer_len == 0 {
             return;
         }
 
         if is_restart {
-            state.msg_buffer = MessageBuffer::new(MAX_BUFFER_SIZE);
+            state.clear_msg_buffer();
+            return;
         }
 
-        info!(count = %state.msg_buffer.len(), "Replaying buffered messages");
+        info!(count = %buffer_len, "Replaying buffered messages");
 
-        while let Some(msg) = state.msg_buffer.pop() {
+        while let Some(msg) = state.msg_buffer_mut().and_then(|b| b.pop()) {
             debug!("Replaying buffered message: {msg}");
 
             if let Err(e) = self.handle_msg(myself.clone(), state, msg).await {
@@ -381,13 +528,13 @@ where
                     return Err(eyre!("Validator set for height {height} is empty").into());
                 }
 
-                state.consensus = Some(ConsensusState::new(
+                let consensus = ConsensusState::new(
                     self.ctx.clone(),
                     height,
                     validator_set.clone(),
                     self.params.clone(),
                     self.consensus_config.queue_capacity,
-                ));
+                );
 
                 self.tx_event
                     .send(|| Event::StartedHeight(height, is_restart));
@@ -400,9 +547,13 @@ where
                     self.wal_fetch(height).await?
                 };
 
+                // Transition to appropriate phase
                 if !wal_entries.is_empty() {
                     // Set the phase to `Recovering` while we replay the WAL
-                    state.set_phase(Phase::Recovering);
+                    state.transition_to_recovering(consensus);
+                } else {
+                    // No WAL entries, go straight to Running
+                    state.transition_to_running(consensus);
                 }
 
                 // Notify the sync actor that we have started a new height
@@ -419,7 +570,7 @@ where
                     .process_input(
                         &myself,
                         state,
-                        ConsensusInput::StartHeight(height, validator_set, is_restart),
+                        ConsensusInput::StartHeight(height, validator_set.clone(), is_restart),
                     )
                     .await;
 
@@ -429,10 +580,23 @@ where
 
                 if !wal_entries.is_empty() {
                     self.wal_replay(&myself, state, height, wal_entries).await;
-                }
 
-                // Set the phase to `Running` now that we have replayed the WAL
-                state.set_phase(Phase::Running);
+                    // Transition from Recovering to Running after WAL replay
+                    if let Some(consensus) = state.consensus_mut() {
+                        // We need to take ownership, so we'll extract and replace
+                        let consensus = std::mem::replace(
+                            consensus,
+                            ConsensusState::new(
+                                self.ctx.clone(),
+                                height,
+                                validator_set.clone(),
+                                self.params.clone(),
+                                self.consensus_config.queue_capacity,
+                            ),
+                        );
+                        state.transition_to_running(consensus);
+                    }
+                }
 
                 // Process any buffered messages, now that we are in the `Running` phase
                 self.process_buffered_msgs(&myself, state, is_restart).await;
@@ -462,8 +626,8 @@ where
                     NetworkEvent::Listening(address) => {
                         info!(%address, "Listening");
 
-                        if state.phase == Phase::Unstarted {
-                            state.set_phase(Phase::Ready);
+                        if matches!(state.phase, ConsensusPhase::Unstarted { .. }) {
+                            state.transition_to_ready();
 
                             self.host.call_and_forward(
                                 |reply_to| HostMsg::ConsensusReady { reply_to },
@@ -477,12 +641,12 @@ where
                     }
 
                     NetworkEvent::PeerConnected(peer_id) => {
-                        if !state.connected_peers.insert(peer_id) {
+                        if !state.shared.connected_peers.insert(peer_id) {
                             // We already saw that peer, ignoring...
                             return Ok(());
                         }
 
-                        info!(%peer_id, total = %state.connected_peers.len(), "Connected to peer");
+                        info!(%peer_id, total = %state.shared.connected_peers.len(), "Connected to peer");
 
                         self.metrics.connected_peers.inc();
                     }
@@ -490,7 +654,7 @@ where
                     NetworkEvent::PeerDisconnected(peer_id) => {
                         info!(%peer_id, "Disconnected from peer");
 
-                        if state.connected_peers.remove(&peer_id) {
+                        if state.shared.connected_peers.remove(&peer_id) {
                             self.metrics.connected_peers.dec();
                         }
                     }
@@ -619,7 +783,7 @@ where
             }
 
             Msg::TimeoutElapsed(elapsed) => {
-                let Some(timeout) = state.timers.intercept_timer_msg(elapsed) else {
+                let Some(timeout) = state.shared.timers.intercept_timer_msg(elapsed) else {
                     // Timer was cancelled or already processed, ignore
                     return Ok(());
                 };
@@ -647,7 +811,7 @@ where
             }
 
             Msg::DumpState(reply_to) => {
-                let state_dump = if let Some(consensus) = &state.consensus {
+                let state_dump = if let Some(consensus) = state.consensus() {
                     info!(
                         height = %consensus.height(),
                         round  = %consensus.round(),
@@ -703,10 +867,10 @@ where
         timeout: Timeout,
     ) -> Result<(), ActorProcessingErr> {
         // Make sure the associated timer is cancelled
-        state.timers.cancel(&timeout);
+        state.shared.timers.cancel(&timeout);
 
         // Increase the timeout for the next round
-        state.timeouts.increase_timeout(timeout.kind);
+        state.shared.timeouts.increase_timeout(timeout.kind);
 
         // Print debug information if the timeout is for a prevote or precommit
         if matches!(
@@ -715,9 +879,9 @@ where
         ) {
             info!(step = ?timeout.kind, "Timeout elapsed");
 
-            state.consensus.as_ref().inspect(|consensus| {
+            if let Some(consensus) = state.consensus() {
                 consensus.print_state();
-            });
+            }
         }
 
         // Process the timeout event
@@ -782,7 +946,7 @@ where
     ) {
         use SignedConsensusMsg::*;
 
-        assert_eq!(state.phase, Phase::Recovering);
+        assert!(matches!(state.phase, ConsensusPhase::Recovering { .. }));
 
         info!("Replaying {} WAL entries", entries.len());
 
@@ -1344,12 +1508,14 @@ where
             .cast(NetworkMsg::Subscribe(Box::new(myself.clone())))?;
 
         Ok(State {
-            timers: Timers::new(Box::new(myself)),
-            timeouts: Timeouts::new(self.consensus_config.timeouts),
-            consensus: None,
-            connected_peers: BTreeSet::new(),
-            phase: Phase::Unstarted,
-            msg_buffer: MessageBuffer::new(MAX_BUFFER_SIZE),
+            shared: SharedState {
+                timers: Timers::new(Box::new(myself)),
+                timeouts: Timeouts::new(self.consensus_config.timeouts),
+                connected_peers: BTreeSet::new(),
+            },
+            phase: ConsensusPhase::Unstarted {
+                msg_buffer: MessageBuffer::new(MAX_BUFFER_SIZE),
+            },
         })
     }
 
@@ -1366,7 +1532,7 @@ where
     ) -> Result<(), ActorProcessingErr> {
         info!("Consensus has started");
 
-        state.timers.cancel_all();
+        state.shared.timers.cancel_all();
         Ok(())
     }
 
@@ -1385,9 +1551,12 @@ where
         msg: Msg<Ctx>,
         state: &mut State<Ctx>,
     ) -> Result<(), ActorProcessingErr> {
-        if state.phase != Phase::Running && should_buffer(&msg) {
-            let _span = error_span!("buffer", phase = ?state.phase).entered();
-            state.msg_buffer.buffer(msg);
+        if state.should_buffer_messages() && should_buffer(&msg) {
+            let phase = state.phase();
+            let _span = error_span!("buffer", phase = ?phase).entered();
+            if let Some(buffer) = state.msg_buffer_mut() {
+                buffer.buffer(msg);
+            }
             return Ok(());
         }
 
@@ -1413,7 +1582,7 @@ where
         state: &mut State<Ctx>,
     ) -> Result<(), ActorProcessingErr> {
         info!("Consensus has stopped");
-        state.timers.cancel_all();
+        state.shared.timers.cancel_all();
         Ok(())
     }
 }
