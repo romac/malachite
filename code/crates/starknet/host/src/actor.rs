@@ -11,7 +11,7 @@ use tracing::{debug, error, info, trace, warn};
 
 use malachitebft_core_consensus::{PeerId, Role, VoteExtensionError};
 use malachitebft_core_types::{CommitCertificate, Round, Validity, ValueId};
-use malachitebft_engine::host::{LocallyProposedValue, Next, ProposedValue};
+use malachitebft_engine::host::{HeightParams, LocallyProposedValue, Next, ProposedValue};
 use malachitebft_engine::network::{NetworkMsg, NetworkRef};
 use malachitebft_engine::util::streaming::{StreamContent, StreamMessage};
 use malachitebft_sync::RawDecidedValue;
@@ -209,14 +209,20 @@ impl Host {
 
 async fn on_consensus_ready(
     state: &mut HostState,
-    reply_to: RpcReplyPort<(Height, ValidatorSet)>,
+    reply_to: RpcReplyPort<(Height, HeightParams<MockContext>)>,
 ) -> Result<(), ActorProcessingErr> {
     let latest_block_height = state.block_store.last_height().await.unwrap_or_default();
     let start_height = latest_block_height.increment();
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    reply_to.send((start_height, state.host.validator_set.clone()))?;
+    reply_to.send((
+        start_height,
+        HeightParams {
+            validator_set: state.host.validator_set.clone(),
+            timeouts: state.host.timeouts,
+        },
+    ))?;
 
     Ok(())
 }
@@ -687,7 +693,10 @@ async fn on_decided(
     // Start the next height
     reply_to.send(Next::Start(
         state.height.increment(),
-        state.host.validator_set.clone(),
+        HeightParams {
+            validator_set: state.host.validator_set.clone(),
+            timeouts: state.host.timeouts,
+        },
     ))?;
 
     Ok(())

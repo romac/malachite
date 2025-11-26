@@ -106,21 +106,22 @@ where
         }
     }
 
-    /// Reset votes, round state, pending input
-    /// and move to new height with the given validator set.
+    /// Reset votes, round state, pending input and move to new height with the given validator set.
     pub fn move_to_height(&mut self, height: Ctx::Height, validator_set: Ctx::ValidatorSet) {
         // Reset the proposal keeper
         let proposal_keeper = ProposalKeeper::new();
 
+        // Update the validator set
+        self.validator_set = validator_set.clone();
+
         // Reset the vote keeper
-        let vote_keeper = VoteKeeper::new(validator_set.clone(), self.threshold_params);
+        let vote_keeper = VoteKeeper::new(validator_set, self.threshold_params);
 
         // Reset the round state
         let round_state = RoundState::new(height, Round::Nil);
 
-        self.validator_set = validator_set;
-        self.proposal_keeper = proposal_keeper;
         self.vote_keeper = vote_keeper;
+        self.proposal_keeper = proposal_keeper;
         self.round_state = round_state;
         self.pending_inputs = vec![];
         self.commit_certificates = vec![];

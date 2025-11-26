@@ -18,6 +18,7 @@ use crate::msgs::ConsensusRequest;
 use crate::spawn::{spawn_host_actor, spawn_network_actor};
 use crate::Channels;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn start_engine<Node, Ctx, WalCodec, NetCodec>(
     ctx: Ctx,
     node: Node,

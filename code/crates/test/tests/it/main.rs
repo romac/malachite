@@ -6,6 +6,7 @@ mod n3f0_consensus_mode;
 mod n3f0_pubsub_protocol;
 mod n3f1;
 mod reset;
+mod timeout_updates;
 mod validator_set;
 mod value_sync;
 mod vote_rebroadcast;
@@ -153,7 +154,6 @@ impl TestRunner {
                 // Current test app does not support proposal-only value payload properly as Init does not include valid_round
                 value_payload: ValuePayload::ProposalAndParts,
                 queue_capacity: 100, // Deprecated, derived from `sync.parallel_requests`
-                timeouts: TimeoutConfig::default(),
                 p2p: P2pConfig {
                     protocol,
                     discovery: DiscoveryConfig::default(),

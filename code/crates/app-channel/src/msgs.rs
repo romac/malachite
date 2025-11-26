@@ -12,7 +12,7 @@ use malachitebft_app::consensus::VoteExtensionError;
 use malachitebft_app::types::core::ValueOrigin;
 use malachitebft_engine::consensus::state_dump::StateDump;
 use malachitebft_engine::consensus::Msg as ConsensusActorMsg;
-use malachitebft_engine::host::Next;
+use malachitebft_engine::host::{HeightParams, Next};
 use malachitebft_engine::network::Msg as NetworkActorMsg;
 use malachitebft_engine::util::events::TxEvent;
 
@@ -140,9 +140,8 @@ pub enum AppMsg<Ctx: Context> {
     /// The application MUST reply with a message to instruct
     /// consensus to start at a given height.
     ConsensusReady {
-        /// Channel for sending back the height to start at
-        /// and the validator set for that height
-        reply: Reply<(Ctx::Height, Ctx::ValidatorSet)>,
+        /// Channel for sending back the height to start and the associated parameters.
+        reply: Reply<(Ctx::Height, HeightParams<Ctx>)>,
     },
 
     /// Notifies the application that a new consensus round has begun.
@@ -300,27 +299,27 @@ pub enum AppMsg<Ctx: Context> {
 /// Messages sent from the application to consensus.
 #[derive_where(Debug)]
 pub enum ConsensusMsg<Ctx: Context> {
-    /// Instructs consensus to start a new height with the given validator set.
-    StartHeight(Ctx::Height, Ctx::ValidatorSet),
+    /// Instructs consensus to start a new height with the provided parameters.
+    StartHeight(Ctx::Height, HeightParams<Ctx>),
+
+    /// Instructs consensus to restart at a given height with the provided parameters.
+    RestartHeight(Ctx::Height, HeightParams<Ctx>),
 
     /// Previousuly received value proposed by a validator
     ReceivedProposedValue(ProposedValue<Ctx>, ValueOrigin),
-
-    /// Instructs consensus to restart at a given height with the given validator set.
-    RestartHeight(Ctx::Height, Ctx::ValidatorSet),
 }
 
 impl<Ctx: Context> From<ConsensusMsg<Ctx>> for ConsensusActorMsg<Ctx> {
     fn from(msg: ConsensusMsg<Ctx>) -> ConsensusActorMsg<Ctx> {
         match msg {
-            ConsensusMsg::StartHeight(height, validator_set) => {
-                ConsensusActorMsg::StartHeight(height, validator_set)
+            ConsensusMsg::StartHeight(height, updates) => {
+                ConsensusActorMsg::StartHeight(height, updates)
             }
             ConsensusMsg::ReceivedProposedValue(value, origin) => {
                 ConsensusActorMsg::ReceivedProposedValue(value, origin)
             }
-            ConsensusMsg::RestartHeight(height, validator_set) => {
-                ConsensusActorMsg::RestartHeight(height, validator_set)
+            ConsensusMsg::RestartHeight(height, updates) => {
+                ConsensusActorMsg::RestartHeight(height, updates)
             }
         }
     }

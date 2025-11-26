@@ -12,19 +12,19 @@ use tokio::time::Instant;
 use tracing::{debug, error, error_span, info, warn};
 
 use malachitebft_codec as codec;
-use malachitebft_config::{ConsensusConfig, TimeoutConfig};
+use malachitebft_config::ConsensusConfig;
 use malachitebft_core_consensus::{
     Effect, LivenessMsg, PeerId, Resumable, Resume, SignedConsensusMsg, VoteExtensionError,
 };
 use malachitebft_core_types::{
-    Context, Height, Proposal, Round, Timeout, TimeoutKind, ValidatorSet, Validity, Value, ValueId,
-    ValueOrigin, ValueResponse as CoreValueResponse, Vote,
+    Context, Height, Proposal, Round, Timeout, TimeoutKind, Timeouts, ValidatorSet, Validity,
+    Value, ValueId, ValueOrigin, ValueResponse as CoreValueResponse, Vote,
 };
 use malachitebft_metrics::Metrics;
 use malachitebft_signing::{SigningProvider, SigningProviderExt};
 use malachitebft_sync::{self as sync, HeightStartType, ValueResponse};
 
-use crate::host::{HostMsg, HostRef, LocallyProposedValue, Next, ProposedValue};
+use crate::host::{HeightParams, HostMsg, HostRef, LocallyProposedValue, Next, ProposedValue};
 use crate::network::{NetworkEvent, NetworkMsg, NetworkRef};
 use crate::sync::Msg as SyncMsg;
 use crate::sync::SyncRef;
@@ -91,8 +91,8 @@ pub type ConsensusMsg<Ctx> = Msg<Ctx>;
 
 #[derive_where(Debug)]
 pub enum Msg<Ctx: Context> {
-    /// Start consensus for the given height with the given validator set
-    StartHeight(Ctx::Height, Ctx::ValidatorSet),
+    /// Start consensus for the given height and provided parameters.
+    StartHeight(Ctx::Height, HeightParams<Ctx>),
 
     /// Received an event from the gossip layer
     NetworkEvent(NetworkEvent<Ctx>),
@@ -106,7 +106,7 @@ pub enum Msg<Ctx: Context> {
     /// Received and assembled the full value proposed by a validator
     ReceivedProposedValue(ProposedValue<Ctx>, ValueOrigin),
 
-    /// Instructs consensus to restart at a given height with the given validator set.
+    /// Instructs consensus to restart at a given height with the provided parameters.
     ///
     /// On this input consensus resets the Write-Ahead Log.
     ///
@@ -115,7 +115,7 @@ pub enum Msg<Ctx: Context> {
     /// 1. The application must clean all state associated with the height for which commit has failed
     /// 2. Since consensus resets its write-ahead log, the node may equivocate on proposals and votes
     ///    for the restarted height, potentially violating protocol safety
-    RestartHeight(Ctx::Height, Ctx::ValidatorSet),
+    RestartHeight(Ctx::Height, HeightParams<Ctx>),
 
     /// Request to dump the current consensus state
     DumpState(RpcReplyPort<Option<StateDump<Ctx>>>),
@@ -124,7 +124,9 @@ pub enum Msg<Ctx: Context> {
 impl<Ctx: Context> fmt::Display for Msg<Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Msg::StartHeight(height, _) => write!(f, "StartHeight(height={height})"),
+            Msg::StartHeight(height, params) => {
+                write!(f, "StartHeight(height={height} params={params:?})")
+            }
             Msg::NetworkEvent(event) => match event {
                 NetworkEvent::Proposal(_, proposal) => write!(
                     f,
@@ -154,7 +156,9 @@ impl<Ctx: Context> fmt::Display for Msg<Ctx> {
                 "ReceivedProposedValue(height={} round={} origin={origin:?})",
                 value.height, value.round
             ),
-            Msg::RestartHeight(height, _) => write!(f, "RestartHeight(height={height})"),
+            Msg::RestartHeight(height, params) => {
+                write!(f, "RestartHeight(height={height} params={params:?})")
+            }
             Msg::DumpState(_) => write!(f, "DumpState"),
         }
     }
@@ -176,46 +180,6 @@ impl<Ctx: Context> From<TimeoutElapsed<Timeout>> for Msg<Ctx> {
 
 type Timers = TimerScheduler<Timeout>;
 
-struct Timeouts {
-    config: TimeoutConfig,
-}
-
-impl Timeouts {
-    pub fn new(config: TimeoutConfig) -> Self {
-        Self { config }
-    }
-
-    fn reset(&mut self, config: TimeoutConfig) {
-        self.config = config;
-    }
-
-    fn duration_for(&self, step: TimeoutKind) -> Duration {
-        match step {
-            TimeoutKind::Propose => self.config.timeout_propose,
-            TimeoutKind::Prevote => self.config.timeout_prevote,
-            TimeoutKind::Precommit => self.config.timeout_precommit,
-            TimeoutKind::Rebroadcast => {
-                self.config.timeout_propose
-                    + self.config.timeout_prevote
-                    + self.config.timeout_precommit
-            }
-        }
-    }
-
-    fn increase_timeout(&mut self, step: TimeoutKind) {
-        let c = &mut self.config;
-        match step {
-            TimeoutKind::Propose => c.timeout_propose += c.timeout_propose_delta,
-            TimeoutKind::Prevote => c.timeout_prevote += c.timeout_prevote_delta,
-            TimeoutKind::Precommit => c.timeout_precommit += c.timeout_precommit_delta,
-            TimeoutKind::Rebroadcast => {
-                c.timeout_rebroadcast +=
-                    c.timeout_propose_delta + c.timeout_prevote_delta + c.timeout_precommit_delta
-            }
-        };
-    }
-}
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Phase {
     Unstarted,
@@ -232,8 +196,8 @@ pub struct State<Ctx: Context> {
     /// Scheduler for timers
     timers: Timers,
 
-    /// Timeouts configuration
-    timeouts: Timeouts,
+    /// Timeouts for various consensus steps
+    timeouts: Ctx::Timeouts,
 
     /// The state of the consensus state machine,
     /// or `None` if consensus has not been started yet.
@@ -276,10 +240,10 @@ where
     }
 }
 
-struct HandlerState<'a> {
+struct HandlerState<'a, Ctx: Context> {
     phase: Phase,
     timers: &'a mut Timers,
-    timeouts: &'a mut Timeouts,
+    timeouts: Ctx::Timeouts,
 }
 
 impl<Ctx> Consensus<Ctx>
@@ -332,7 +296,7 @@ where
                 let handler_state = HandlerState {
                     phase: state.phase,
                     timers: &mut state.timers,
-                    timeouts: &mut state.timeouts,
+                    timeouts: state.timeouts,
                 };
 
                 self.handle_effect(myself, handler_state, effect).await
@@ -375,9 +339,9 @@ where
         let is_restart = matches!(msg, Msg::RestartHeight(_, _));
 
         match msg {
-            Msg::StartHeight(height, validator_set) | Msg::RestartHeight(height, validator_set) => {
-                // Check that the validator set is not empty
-                if validator_set.count() == 0 {
+            Msg::StartHeight(height, params) | Msg::RestartHeight(height, params) => {
+                // Check that the validator set is provided and that it is not empty
+                if params.validator_set.count() == 0 {
                     return Err(eyre!("Validator set for height {height} is empty").into());
                 }
 
@@ -386,7 +350,7 @@ where
                     state.consensus = Some(ConsensusState::new(
                         self.ctx.clone(),
                         height,
-                        validator_set.clone(),
+                        params.validator_set.clone(),
                         self.params.clone(),
                         self.consensus_config.queue_capacity,
                     ));
@@ -417,12 +381,15 @@ where
                     }
                 }
 
+                // Update the timeouts
+                state.timeouts = params.timeouts;
+
                 // Start consensus for the given height
                 let result = self
                     .process_input(
                         &myself,
                         state,
-                        ConsensusInput::StartHeight(height, validator_set, is_restart),
+                        ConsensusInput::StartHeight(height, params.validator_set, is_restart),
                     )
                     .await;
 
@@ -471,9 +438,7 @@ where
                             self.host.call_and_forward(
                                 |reply_to| HostMsg::ConsensusReady { reply_to },
                                 &myself,
-                                |(height, validator_set)| {
-                                    ConsensusMsg::StartHeight(height, validator_set)
-                                },
+                                |(height, params)| ConsensusMsg::StartHeight(height, params),
                                 None,
                             )?;
                         }
@@ -707,9 +672,6 @@ where
     ) -> Result<(), ActorProcessingErr> {
         // Make sure the associated timer is cancelled
         state.timers.cancel(&timeout);
-
-        // Increase the timeout for the next round
-        state.timeouts.increase_timeout(timeout.kind);
 
         // Print debug information if the timeout is for a prevote or precommit
         if matches!(
@@ -969,15 +931,10 @@ where
     async fn handle_effect(
         &self,
         myself: &ActorRef<Msg<Ctx>>,
-        state: HandlerState<'_>,
+        state: HandlerState<'_, Ctx>,
         effect: Effect<Ctx>,
     ) -> Result<Resume<Ctx>, ActorProcessingErr> {
         match effect {
-            Effect::ResetTimeouts(r) => {
-                state.timeouts.reset(self.consensus_config.timeouts);
-                Ok(r.resume_with(()))
-            }
-
             Effect::CancelAllTimeouts(r) => {
                 state.timers.cancel_all();
                 Ok(r.resume_with(()))
@@ -989,7 +946,7 @@ where
             }
 
             Effect::ScheduleTimeout(timeout, r) => {
-                let duration = state.timeouts.duration_for(timeout.kind);
+                let duration = state.timeouts.duration_for(timeout);
                 state.timers.start_timer(timeout, duration);
 
                 Ok(r.resume_with(()))
@@ -1196,7 +1153,7 @@ where
             }
 
             Effect::GetValue(height, round, timeout, r) => {
-                let timeout_duration = state.timeouts.duration_for(timeout.kind);
+                let timeout_duration = state.timeouts.duration_for(timeout);
 
                 self.get_value(myself, height, round, timeout_duration)
                     .map_err(|e| {
@@ -1238,8 +1195,8 @@ where
                         },
                         myself,
                         |next| match next {
-                            Next::Start(h, vs) => Msg::StartHeight(h, vs),
-                            Next::Restart(h, vs) => Msg::RestartHeight(h, vs),
+                            Next::Start(h, params) => Msg::StartHeight(h, params),
+                            Next::Restart(h, params) => Msg::RestartHeight(h, params),
                         },
                         None,
                     )
@@ -1348,7 +1305,7 @@ where
 
         Ok(State {
             timers: Timers::new(Box::new(myself)),
-            timeouts: Timeouts::new(self.consensus_config.timeouts),
+            timeouts: Ctx::Timeouts::default(),
             consensus: None,
             connected_peers: BTreeSet::new(),
             phase: Phase::Unstarted,

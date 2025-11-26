@@ -5,7 +5,7 @@ use tokio::task::JoinHandle;
 use tracing::warn;
 
 use malachitebft_config::{self as config, MempoolConfig, MempoolLoadConfig, ValueSyncConfig};
-use malachitebft_core_types::ValuePayload;
+use malachitebft_core_types::{LinearTimeouts, ValuePayload};
 use malachitebft_engine::consensus::{Consensus, ConsensusParams, ConsensusRef};
 use malachitebft_engine::host::HostRef;
 use malachitebft_engine::network::{Network, NetworkRef};
@@ -30,10 +30,12 @@ use crate::metrics::Metrics as AppMetrics;
 use crate::types::MockContext;
 use crate::types::{Address, PrivateKey, ValidatorSet};
 
+#[allow(clippy::too_many_arguments)]
 pub async fn spawn_node_actor(
     cfg: Config,
     home_dir: PathBuf,
     initial_validator_set: ValidatorSet,
+    initial_timeouts: LinearTimeouts,
     private_key: PrivateKey,
     tx_event: TxEvent<MockContext>,
     span: tracing::Span,
@@ -63,6 +65,7 @@ pub async fn spawn_node_actor(
         &address,
         &private_key,
         &initial_validator_set,
+        initial_timeouts,
         mempool,
         mempool_load,
         network.clone(),
@@ -353,6 +356,7 @@ async fn spawn_host_actor(
     address: &Address,
     private_key: &PrivateKey,
     initial_validator_set: &ValidatorSet,
+    initial_timeouts: LinearTimeouts,
     mempool: MempoolRef,
     mempool_load: MempoolLoadRef,
     network: NetworkRef<MockContext>,
@@ -382,6 +386,7 @@ async fn spawn_host_actor(
         *address,
         private_key.clone(),
         initial_validator_set.clone(),
+        initial_timeouts,
     );
 
     Host::spawn(
