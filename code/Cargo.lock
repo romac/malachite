@@ -2367,6 +2367,7 @@ dependencies = [
  "bytesize",
  "derive-where",
  "eyre",
+ "hex",
  "informalsystems-malachitebft-codec",
  "informalsystems-malachitebft-config",
  "informalsystems-malachitebft-core-consensus",

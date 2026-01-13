@@ -1,3 +1,6 @@
+use std::io;
+use std::sync::Arc;
+
 use derive_where::derive_where;
 
 use malachitebft_core_driver::Error as DriverError;
@@ -47,6 +50,11 @@ where
     #[error("Invalid certificate: {1}")]
     InvalidCommitCertificate(CommitCertificate<Ctx>, CertificateError<Ctx>),
 
+    /// Missing polka certificate.
     #[error("Missing polka certificate at height {0}, round {1}, value {2}, for {3}")]
     MissingPolkaCertificate(Ctx::Height, Round, ValueId<Ctx>, &'static str),
+
+    /// The write-ahead log is corrupted.
+    #[error("Write-ahead log is corrupted: {0}")]
+    WalCorrupted(Arc<io::Error>),
 }
