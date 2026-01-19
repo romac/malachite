@@ -701,7 +701,21 @@ where
         return Ok(());
     };
 
-    send_request_to_peer(&co, state, metrics, range, peer).await?;
+    // Send the request
+    let Some((request_id, final_range)) =
+        send_request_to_peer(&co, state, metrics, range, peer).await?
+    else {
+        return Ok(()); // Request was skipped (empty range, etc.)
+    };
+
+    // Store the pending request
+    state
+        .pending_requests
+        .insert(request_id, (final_range.clone(), peer));
+
+    // Update sync_height to the next uncovered height after this range
+    let starting_height = final_range.end().increment();
+    state.sync_height = find_next_uncovered_height::<Ctx>(starting_height, &state.pending_requests);
 
     Ok(())
 }
