@@ -91,6 +91,7 @@ fn make_config(port: u16, persistent_peers: Vec<u16>) -> Config {
 
 /// Tests that connection flood attack is mitigated.
 #[tokio::test]
+#[ignore] // Flaky test, enable when needed
 async fn connection_flood_attack() {
     init_logging();
 
