@@ -1,9 +1,10 @@
 use libp2p::{identify, swarm::ConnectionId, PeerId, Swarm};
 use tracing::{debug, info, warn};
 
-use crate::config::BootstrapProtocol;
-use crate::OutboundState;
-use crate::{request::RequestData, Discovery, DiscoveryClient, State};
+use crate::{
+    config::BootstrapProtocol, request::RequestData, util::strip_peer_id_from_multiaddr, Discovery,
+    DiscoveryClient, OutboundState, State,
+};
 
 impl<C> Discovery<C>
 where
@@ -13,7 +14,7 @@ where
     ///
     /// ## Bootstrap Discovery Flow:
     /// - Bootstrap configuration: bootstrap nodes configured with addresses but `peer_id = None`
-    ///    ```rust
+    ///    ```text
     ///    bootstrap_nodes:
     ///      [
     ///       (None, ["/ip4/1.2.3.4/tcp/8000", "/ip4/5.6.7.8/tcp/8000"]),
@@ -21,7 +22,7 @@ where
     ///      ]
     ///    ```
     /// - Initial dial: create `DialData` with `peer_id = None` and dial the **first** address
-    ///    ```rust
+    ///    ```text
     ///    DialData::new(None, vec![multiaddr]) // peer_id initially unknown
     ///    ```
     /// - Connection established: `handle_connection()` called with the actual `peer_id`
@@ -29,11 +30,18 @@ where
     /// - Identify protocol: peer sends identity information including supported protocols
     /// - Protocol check: only compatible peers reach `handle_new_peer()`
     /// - Bootstrap matching: **This function** matches the peer against bootstrap nodes:
-    ///    - Check if peer's advertised addresses match any bootstrap node addresses
+    ///    - For outbound: check addresses we dialed (from dial_data)
+    ///    - For inbound: check actual connection remote address
     ///    - If match found: update `bootstrap_nodes[i].0 = Some(peer_id)`
     ///
+    /// ## Note
+    /// For inbound connections, we use the actual TCP connection remote address from
+    /// `self.connections`, not the self-reported `identify::Info.listen_addrs`.
+    /// This prevents address spoofing attacks where a malicious peer claims to be
+    /// listening on a bootstrap node's address.
+    ///
     /// Called after connection is established but before peer is added to active_connections
-    fn update_bootstrap_node_peer_id(&mut self, peer_id: PeerId, info: &identify::Info) {
+    fn update_bootstrap_node_peer_id(&mut self, connection_id: ConnectionId, peer_id: PeerId) {
         debug!(
             "Checking peer {} against {} bootstrap nodes",
             peer_id,
@@ -62,9 +70,13 @@ where
             .find(|(_, dial_data)| dial_data.peer_id() == Some(peer_id))
             .map(|(_, dial_data)| dial_data);
 
+        // Get the connection remote address for inbound connections
+        // This prevents spoofing via self-reported identify addresses
+        let connection_remote_addr = self.connections.get(&connection_id).map(|c| &c.remote_addr);
+
         // Match addresses against bootstrap node configurations
-        // For outbound connections, check dial_data addresses
-        // For inbound connections, check peer's advertised addresses from identify
+        // For outbound connections, check dial_data addresses (trusted since we initiated)
+        // For inbound connections, check the connection remote address (trusted since it's TCP layer)
         for (maybe_peer_id, listen_addrs) in self.bootstrap_nodes.iter_mut() {
             // Check if this bootstrap node is unidentified
             if maybe_peer_id.is_some() {
@@ -72,16 +84,29 @@ where
             }
 
             let addresses_match = if let Some(dial_data) = dial_data {
-                // Outbound connection: check addresses we dialed
+                // Outbound connection, check addresses we dialed
                 dial_data
                     .listen_addrs()
                     .iter()
                     .any(|dial_addr| listen_addrs.contains(dial_addr))
+            } else if let Some(remote_addr) = connection_remote_addr {
+                // Inbound connection, check actual TCP remote address.
+                // Strip /p2p/ component if present, since addresses may include a peer ID.
+                // Note: This only matches if peer uses port reuse (source port == listen port).
+                // With ephemeral source ports, peer gets identified as bootstrap when we
+                // later dial their configured listen address.
+                let remote_addr_stripped = strip_peer_id_from_multiaddr(remote_addr);
+                listen_addrs.iter().any(|bootstrap_addr| {
+                    let bootstrap_stripped = strip_peer_id_from_multiaddr(bootstrap_addr);
+                    remote_addr_stripped == bootstrap_stripped
+                })
             } else {
-                // Inbound connection: check peer's advertised addresses
-                info.listen_addrs
-                    .iter()
-                    .any(|peer_addr| listen_addrs.contains(peer_addr))
+                // No connection info available, cannot verify
+                debug!(
+                    "No connection info for peer {} - cannot verify bootstrap status",
+                    peer_id
+                );
+                false
             };
 
             if addresses_match {
@@ -117,7 +142,7 @@ where
         }
 
         // Match peer against bootstrap nodes
-        self.update_bootstrap_node_peer_id(peer_id, &info);
+        self.update_bootstrap_node_peer_id(connection_id, peer_id);
 
         if self.config.persistent_peers_only && !self.is_persistent_peer(&peer_id) {
             warn!(

@@ -190,16 +190,10 @@ where
                 self.metrics.increment_total_failed_dials();
 
                 // For bootstrap nodes, clear the done_on flag so they can be retried
-                // by the periodic timer. We check and clear by address since bootstrap
-                // nodes may not have peer_id
-                let is_bootstrap = self.bootstrap_nodes.iter().any(|(_, addrs)| {
-                    dial_data
-                        .listen_addrs()
-                        .iter()
-                        .any(|dial_addr| addrs.contains(dial_addr))
-                });
-
-                if is_bootstrap {
+                // by the periodic timer. We use the is_bootstrap flag set at creation time
+                // rather than checking addresses, to prevent address spoofing attacks where
+                // a malicious peer could advertise bootstrap addresses in peer exchange.
+                if dial_data.is_bootstrap() {
                     // Clear done_on by address
                     for addr in dial_data.listen_addrs() {
                         self.controller
@@ -244,7 +238,7 @@ where
                 continue;
             }
 
-            let dial_data = DialData::new(*peer_id, listen_addrs.clone());
+            let dial_data = DialData::new_bootstrap(*peer_id, listen_addrs.clone());
 
             // For bootstrap nodes, always attempt to dial even if previously failed
             // This ensures persistent peers are retried indefinitely

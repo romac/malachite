@@ -6,8 +6,6 @@ use malachitebft_metrics::Registry;
 
 use libp2p::{identify, kad, request_response, swarm::ConnectionId, Multiaddr, PeerId, Swarm};
 
-mod util;
-
 mod behaviour;
 pub use behaviour::*;
 
@@ -27,6 +25,8 @@ mod metrics;
 use metrics::Metrics;
 
 mod request;
+
+pub mod util;
 
 #[derive(Debug, PartialEq)]
 enum State {

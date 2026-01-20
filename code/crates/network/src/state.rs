@@ -7,6 +7,7 @@ use libp2p::identify;
 use libp2p::request_response::InboundRequestId;
 use libp2p::Multiaddr;
 use malachitebft_discovery as discovery;
+use malachitebft_discovery::util::strip_peer_id_from_multiaddr;
 use malachitebft_sync as sync;
 
 use crate::behaviour::Behaviour;
@@ -479,17 +480,4 @@ fn extract_peer_id_from_multiaddr(addr: &Multiaddr) -> Option<libp2p::PeerId> {
         }
     }
     None
-}
-
-/// Strip /p2p/<peer_id> component from a Multiaddr for comparison
-fn strip_peer_id_from_multiaddr(addr: &Multiaddr) -> Multiaddr {
-    use libp2p::multiaddr::Protocol;
-
-    let mut result = Multiaddr::empty();
-    for protocol in addr.iter() {
-        if !matches!(protocol, Protocol::P2p(_)) {
-            result.push(protocol);
-        }
-    }
-    result
 }
