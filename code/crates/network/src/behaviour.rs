@@ -199,10 +199,12 @@ impl Behaviour {
             None => format!("moniker={}", identity.moniker),
         };
 
+        // Use signed peer records to prevent peer ID spoofing.
+        // Peers will sign their addresses with their private key, allowing verification.
         let identify = identify::Behaviour::new(
-            identify::Config::new(
+            identify::Config::new_with_signed_peer_record(
                 config.protocol_names.consensus.clone(),
-                identity.keypair.public(),
+                &identity.keypair,
             )
             .with_agent_version(agent_version),
         );

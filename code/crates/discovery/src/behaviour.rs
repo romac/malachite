@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::iter;
 use std::time::Duration;
 
@@ -16,15 +15,21 @@ use serde::{Deserialize, Serialize};
 use crate::config::BootstrapProtocol;
 use crate::Config;
 
+/// Protobuf-encoded signed peer record bytes.
+/// Use `SignedEnvelope::from_protobuf_encoding()` to decode.
+pub type SignedPeerRecordBytes = Vec<u8>;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Request {
-    Peers(HashSet<(Option<PeerId>, Vec<Multiaddr>)>),
+    /// Peer exchange with signed peer records, cryptographically verified
+    Peers(Vec<SignedPeerRecordBytes>),
     Connect(),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Response {
-    Peers(HashSet<(Option<PeerId>, Vec<Multiaddr>)>),
+    /// Peer exchange with signed peer records, cryptographically verified
+    Peers(Vec<SignedPeerRecordBytes>),
     Connect(bool),
 }
 

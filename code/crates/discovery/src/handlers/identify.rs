@@ -161,6 +161,15 @@ where
         // For inbound connections, this will return None and we don't touch dial data.
         self.controller.dial.remove_in_progress(&connection_id);
 
+        // Store signed peer record if available
+        if let Some(envelope) = &info.signed_peer_record {
+            self.signed_peer_records.insert(peer_id, envelope.clone());
+            debug!(
+                peer = %peer_id,
+                "Stored signed peer record for secure peer exchange"
+            );
+        }
+
         match self.discovered_peers.insert(peer_id, info.clone()) {
             Some(_) => {
                 info!(

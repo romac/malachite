@@ -4,6 +4,7 @@ use tracing::{debug, error, info, warn};
 
 use malachitebft_metrics::Registry;
 
+use libp2p::core::SignedEnvelope;
 use libp2p::{identify, kad, request_response, swarm::ConnectionId, Multiaddr, PeerId, Swarm};
 
 mod behaviour;
@@ -77,6 +78,8 @@ where
 
     bootstrap_nodes: Vec<(Option<PeerId>, Vec<Multiaddr>)>,
     discovered_peers: HashMap<PeerId, identify::Info>,
+    /// Signed peer records received from peers (cryptographically verified)
+    signed_peer_records: HashMap<PeerId, SignedEnvelope>,
     active_connections: HashMap<PeerId, Vec<ConnectionId>>,
     /// Track connection info (direction and remote address) per connection
     pub connections: HashMap<ConnectionId, ConnectionInfo>,
@@ -148,6 +151,7 @@ where
                 .map(|addr| (None, vec![addr]))
                 .collect(),
             discovered_peers: HashMap::new(),
+            signed_peer_records: HashMap::new(),
             active_connections: HashMap::new(),
             connections: HashMap::new(),
             outbound_peers: HashMap::new(),
@@ -222,10 +226,14 @@ where
                                 request, channel, ..
                             },
                     } => match request {
-                        behaviour::Request::Peers(peers) => {
-                            debug!(peer_id = %peer, %connection_id, "Received peers request");
+                        behaviour::Request::Peers(signed_records) => {
+                            debug!(
+                                peer_id = %peer, %connection_id,
+                                count = signed_records.len(),
+                                "Received peers request"
+                            );
 
-                            self.handle_peers_request(swarm, peer, channel, peers);
+                            self.handle_peers_request(swarm, peer, channel, signed_records);
                         }
 
                         behaviour::Request::Connect() => {
@@ -245,10 +253,14 @@ where
                                 ..
                             },
                     } => match response {
-                        behaviour::Response::Peers(peers) => {
-                            debug!(%peer, %connection_id, count = peers.len(), "Received peers response");
+                        behaviour::Response::Peers(signed_records) => {
+                            debug!(
+                                %peer, %connection_id,
+                                count = signed_records.len(),
+                                "Received peers response"
+                            );
 
-                            self.handle_peers_response(swarm, request_id, peers);
+                            self.handle_peers_response(swarm, request_id, signed_records);
                         }
 
                         behaviour::Response::Connect(accepted) => {

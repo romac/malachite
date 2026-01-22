@@ -100,6 +100,9 @@ where
     fn cleanup_peer_on_disconnect(&mut self, peer_id: PeerId) {
         let peer_info = self.discovered_peers.remove(&peer_id);
 
+        // Remove signed peer record (no longer connected, record may be stale)
+        self.signed_peer_records.remove(&peer_id);
+
         // Clear connect_request done_on to allow re-upgrading the peer on reconnection
         self.controller.connect_request.remove_done_on(&peer_id);
 
