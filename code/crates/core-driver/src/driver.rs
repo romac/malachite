@@ -402,6 +402,7 @@ where
             Input::Proposal(proposal, validity) => self.apply_proposal(proposal, validity),
             Input::Vote(vote) => self.apply_vote(vote),
             Input::TimeoutElapsed(timeout) => self.apply_timeout(timeout),
+            Input::SyncDecision(proposal) => self.apply_decide_on_sync(proposal),
         }
     }
 
@@ -624,6 +625,39 @@ where
         };
 
         self.apply_input(timeout.round, input)
+    }
+
+    /// Apply a sync decision using the provided unsigned proposal.
+    ///
+    /// This is used when we receive a value and commit certificate from sync.
+    /// The certificate must already be stored in the driver (from earlier processing).
+    /// We use the normal state machine decision path with `ProposalAndPrecommitValue`.
+    fn apply_decide_on_sync(
+        &mut self,
+        proposal: Ctx::Proposal,
+    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+        let round = proposal.round();
+        let value_id = proposal.value().id();
+
+        // The certificate should already be stored - it was looked up by the caller
+        // in on_proposed_value before calling SyncDecision
+        let certificate = self.commit_certificate(round, &value_id).ok_or_else(|| {
+            Error::CertificateNotFound {
+                round,
+                value_id: value_id.clone(),
+            }
+        })?;
+
+        // Sanity check: certificate height should match
+        debug_assert_eq!(
+            certificate.height,
+            self.height(),
+            "Certificate height mismatch"
+        );
+
+        // Go through the state machine with ProposalAndPrecommitValue
+        // This will trigger L49 and produce a Decision output
+        self.apply_input(round, RoundInput::ProposalAndPrecommitValue(proposal))
     }
 
     /// Apply the input, update the state.

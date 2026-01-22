@@ -180,12 +180,22 @@ impl<Ctx: Context> FullProposalKeeper<Ctx> {
         None
     }
 
-    pub fn get_value<'a>(
+    pub fn get_value(
         &self,
         height: &Ctx::Height,
         round: Round,
-        value: &'a Ctx::Value,
-    ) -> Option<(&'a Ctx::Value, Validity)> {
+        value: &Ctx::Value,
+    ) -> Option<(&Ctx::Value, Validity)> {
+        self.get_value_by_id(height, round, &value.id())
+    }
+
+    /// Get a valid value by its ID at the specified height and round.
+    pub fn get_value_by_id(
+        &self,
+        height: &Ctx::Height,
+        round: Round,
+        value_id: &ValueId<Ctx>,
+    ) -> Option<(&Ctx::Value, Validity)> {
         let entries = self
             .keeper
             .get(&(*height, round))
@@ -193,11 +203,11 @@ impl<Ctx: Context> FullProposalKeeper<Ctx> {
 
         for entry in entries {
             match entry {
-                Entry::Full(p) if p.proposal.value().id() == value.id() => {
-                    return Some((value, p.validity));
+                Entry::Full(p) if p.proposal.value().id() == *value_id => {
+                    return Some((&p.builder_value, p.validity));
                 }
-                Entry::ValueOnly(v, validity) if v.id() == value.id() => {
-                    return Some((value, *validity));
+                Entry::ValueOnly(v, validity) if v.id() == *value_id => {
+                    return Some((v, *validity));
                 }
                 _ => continue,
             }

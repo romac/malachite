@@ -222,6 +222,9 @@ where
                     signed_proposal.message.clone(),
                 ));
             }
+        } else {
+            // Proposal exists but validity is not confirmed, start precommit timer
+            return Some(RoundInput::PrecommitAny);
         }
 
         None

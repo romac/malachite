@@ -140,6 +140,18 @@ where
         }
 
         DriverInput::TimeoutElapsed(_) => (),
+
+        DriverInput::SyncDecision(proposal) => {
+            if proposal.height() != state.driver.height() {
+                warn!(
+                    "Received sync decision for wrong height {}, current height: {}",
+                    proposal.height(),
+                    state.driver.height()
+                );
+
+                return Ok(());
+            }
+        }
     }
 
     // Record the step we were in

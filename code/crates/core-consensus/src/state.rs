@@ -149,6 +149,26 @@ where
             .full_proposal_at_round_and_proposer(height, round, address)
     }
 
+    /// Get a proposed value by its ID at the specified height and round.
+    pub fn get_proposed_value_by_id(
+        &self,
+        height: Ctx::Height,
+        round: Round,
+        value_id: &ValueId<Ctx>,
+    ) -> Option<ProposedValue<Ctx>> {
+        let (value, validity) = self
+            .full_proposal_keeper
+            .get_value_by_id(&height, round, value_id)?;
+        Some(ProposedValue {
+            height,
+            round,
+            valid_round: Round::Nil,
+            proposer: self.get_proposer(height, round).clone(),
+            value: value.clone(),
+            validity,
+        })
+    }
+
     pub fn proposals_for_value(
         &self,
         proposed_value: &ProposedValue<Ctx>,
@@ -167,6 +187,19 @@ where
         // Values for higher height should have been cached for future processing
         assert_eq!(new_value.height, self.driver.height());
 
+        if self
+            .full_proposal_keeper
+            .get_value(&new_value.height, new_value.round, &new_value.value)
+            .is_none()
+            && new_value.validity.is_invalid()
+        {
+            warn!(
+                height = %new_value.height,
+                round = %new_value.round,
+                value.id = ?new_value.value.id(),
+                "Application sent an invalid proposed value"
+            );
+        }
         // Store the value at both round and valid_round
         self.full_proposal_keeper.store_value(new_value);
 

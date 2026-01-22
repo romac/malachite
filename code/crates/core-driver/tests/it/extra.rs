@@ -3584,6 +3584,68 @@ fn invalid_proposal_becomes_valid_decision_via_certificate() {
     run_steps(&mut driver, steps);
 }
 
+// A decision via the synchronization protocol.
+// A Commit certificate for v is received from the sync protocol and processed by the driver.
+// Then the application receives the fully decided value from the sync protocol, validates it
+// and produces ProposedValue event with Origin::Sync, processed by consensus-core.
+// This is becomes a SyncDecision() driver input with a synthetic Proposal.
+#[test]
+fn sync_decision_certificate_then_proposal() {
+    let value_v = Value::new(9999);
+
+    let [(v1, _sk1), (v2, _sk2), (v3, sk3)] = make_validators([2, 3, 2]);
+    let (_my_sk, my_addr) = (sk3.clone(), v3.address);
+
+    let height = Height::new(1);
+    let ctx = TestContext::new();
+    let vs = ValidatorSet::new(vec![v1.clone(), v2.clone(), v3.clone()]);
+
+    let mut driver = Driver::new(ctx, height, vs, my_addr, Default::default());
+
+    let synthetic_proposal = Proposal::new(
+        Height::new(1),
+        Round::new(0),
+        value_v.clone(),
+        Round::Nil,
+        v1.address,
+    );
+
+    let steps = vec![
+        TestStep {
+            desc: "Start round 0, we are not the proposer",
+            input: new_round_input(Round::new(0), v1.address),
+            expected_outputs: vec![start_propose_timer_output(Round::new(0))],
+            expected_round: Round::new(0),
+            new_state: propose_state(Round::new(0)),
+        },
+        // NOTICE: if we receive the decision v from the Sync protocol or the WAL
+        // **before** the Commit certificate nothing happens.
+        // But once the certificate is received, the Sync protocol decision
+        // input leads to the production of a SyncDecision() input.
+        // We cannot reproduce this scenario here.
+        TestStep {
+            desc: "Certificate for v from Sync protocol",
+            input: commit_certificate_input_at(
+                Round::new(0),
+                value_v.clone(),
+                &[v1.address, v2.address],
+            ),
+            expected_outputs: vec![start_precommit_timer_output(Round::new(0))],
+            expected_round: Round::new(0),
+            new_state: propose_state(Round::new(0)),
+        },
+        TestStep {
+            desc: "Decision value v from Sync protocol",
+            input: Input::SyncDecision(synthetic_proposal.clone()),
+            expected_outputs: vec![decide_output(Round::new(0), synthetic_proposal)],
+            expected_round: Round::new(0),
+            new_state: decided_state(Round::new(0), Round::new(0), value_v),
+        },
+    ];
+
+    run_steps(&mut driver, steps);
+}
+
 fn run_steps(driver: &mut Driver<TestContext>, steps: Vec<TestStep>) {
     let mut last_step = Step::Unstarted;
     for step in steps {
