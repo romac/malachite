@@ -78,48 +78,7 @@ where
         }
 
         Input::ValueResponse(request_id, peer_id, Some(response)) => {
-            let start = response.start_height;
-            let end = response.end_height().unwrap_or(start);
-            let range_len = end.as_u64() - start.as_u64() + 1;
-
-            // Check if the response is valid. A valid response starts at the
-            // requested start height, has at least one value, and no more than
-            // the requested range.
-            if let Some((requested_range, stored_peer_id)) = state.pending_requests.get(&request_id)
-            {
-                if stored_peer_id != &peer_id {
-                    warn!(
-                        %request_id, actual_peer = %peer_id, expected_peer = %stored_peer_id,
-                        "Received response from different peer than expected"
-                    );
-
-                    return on_invalid_value_response(co, state, metrics, request_id, peer_id)
-                        .await;
-                }
-
-                let is_valid = start.as_u64() == requested_range.start().as_u64()
-                    && start.as_u64() <= end.as_u64()
-                    && end.as_u64() <= requested_range.end().as_u64()
-                    && response.values.len() as u64 == range_len;
-                if is_valid {
-                    return on_value_response(co, state, metrics, request_id, peer_id, response)
-                        .await;
-                } else {
-                    warn!(
-                        %request_id, %peer_id,
-                        "Received request for wrong range of heights: expected {}..={} ({} values), got {}..={} ({} values)",
-                        requested_range.start().as_u64(), requested_range.end().as_u64(), range_len,
-                        start.as_u64(), end.as_u64(), response.values.len() as u64
-                    );
-
-                    return on_invalid_value_response(co, state, metrics, request_id, peer_id)
-                        .await;
-                }
-            } else {
-                warn!(%request_id, %peer_id, "Received response for unknown request ID");
-            }
-
-            Ok(())
+            on_value_response(co, state, metrics, request_id, peer_id, response).await
         }
 
         Input::ValueResponse(request_id, peer_id, None) => {
@@ -140,6 +99,57 @@ where
             on_value_processing_error(co, state, metrics, peer, height).await
         }
     }
+}
+
+async fn on_value_response<Ctx>(
+    co: Co<Ctx>,
+    state: &mut State<Ctx>,
+    metrics: &Metrics,
+    request_id: OutboundRequestId,
+    peer_id: PeerId,
+    response: ValueResponse<Ctx>,
+) -> Result<(), Error<Ctx>>
+where
+    Ctx: Context,
+{
+    let start = response.start_height;
+    let end = response.end_height().unwrap_or(start);
+    let range_len = end.as_u64() - start.as_u64() + 1;
+
+    // Check if the response is valid. A valid response starts at the
+    // requested start height, has at least one value, and no more than
+    // the requested range.
+    let Some((requested_range, stored_peer_id)) = state.pending_requests.get(&request_id) else {
+        warn!(%request_id, %peer_id, "Received response for unknown request ID");
+        return Ok(());
+    };
+
+    if stored_peer_id != &peer_id {
+        warn!(
+            %request_id, actual_peer = %peer_id, expected_peer = %stored_peer_id,
+            "Received response from different peer than expected"
+        );
+
+        return on_invalid_value_response(co, state, metrics, request_id, peer_id).await;
+    }
+
+    let is_valid = start.as_u64() == requested_range.start().as_u64()
+        && start.as_u64() <= end.as_u64()
+        && end.as_u64() <= requested_range.end().as_u64()
+        && response.values.len() as u64 == range_len;
+
+    if !is_valid {
+        warn!(
+            %request_id, %peer_id,
+            "Received request for wrong range of heights: expected {}..={} ({} values), got {}..={} ({} values)",
+            requested_range.start().as_u64(), requested_range.end().as_u64(), range_len,
+            start.as_u64(), end.as_u64(), response.values.len() as u64
+        );
+
+        return on_invalid_value_response(co, state, metrics, request_id, peer_id).await;
+    }
+
+    on_valid_value_response(co, state, metrics, request_id, peer_id, response).await
 }
 
 pub async fn on_tick<Ctx>(
@@ -373,7 +383,7 @@ where
     start..=end
 }
 
-pub async fn on_value_response<Ctx>(
+pub async fn on_valid_value_response<Ctx>(
     co: Co<Ctx>,
     state: &mut State<Ctx>,
     metrics: &Metrics,
@@ -675,6 +685,7 @@ where
     // we log here because seeing this log frequently implies that we keep getting partial responses
     // from peers and hints to potential reconfiguration.
     let max_parallel_requests = state.max_parallel_requests();
+
     if state.pending_requests.len() as u64 >= max_parallel_requests {
         info!(
             %max_parallel_requests,
