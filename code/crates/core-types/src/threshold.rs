@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn threshold_params_corner_cases() {
-        let mut rng = StdRng::seed_from_u64(0123456789);
+        let mut rng = StdRng::seed_from_u64(123456789);
         let max_total_power: u64 = 1u64 << 20; // ~10^6
         let mut total_power: u64 = 0;
 
@@ -148,7 +148,7 @@ mod tests {
                 // Q = total - power; if Q is even, Q/2 > power; else (Q+1)/2 > power
                 let two_thirds = ThresholdParam::TWO_F_PLUS_ONE.is_met(total - power, total);
                 assert!(
-                    two_thirds == ((total - power + 1) / 2 > power),
+                    two_thirds == ((total - power).div_ceil(2) > power),
                     "power = {power}, total - power = {}, total = {total}, {two_thirds}",
                     total - power,
                 );
