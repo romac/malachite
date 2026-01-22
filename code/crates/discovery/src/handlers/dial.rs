@@ -5,7 +5,10 @@ use libp2p::{
 };
 use tracing::{debug, error, warn};
 
-use crate::{controller::PeerData, dial::DialData, Discovery, DiscoveryClient};
+use crate::{
+    controller::PeerData, dial::DialData, ConnectionDirection, ConnectionInfo, Discovery,
+    DiscoveryClient,
+};
 
 impl<C> Discovery<C>
 where
@@ -49,7 +52,8 @@ where
         };
         let connection_id = dial_opts.connection_id();
 
-        self.controller.dial_register_done_on(&dial_data);
+        // Register peer_id only, not addresses as they are untrusted
+        self.controller.dial_register_done_on(&dial_data, false);
 
         self.controller
             .dial
@@ -89,18 +93,45 @@ where
         endpoint: ConnectedPoint,
     ) {
         match endpoint {
-            ConnectedPoint::Dialer { .. } => {
-                debug!(peer = %peer_id, %connection_id, "Connected to peer");
+            d @ ConnectedPoint::Dialer { .. } => {
+                let remote_addr = d.get_remote_address().clone();
+                debug!(
+                    peer = %peer_id, %connection_id, remote_address = %remote_addr,
+                    "Connected to peer (outbound)"
+                );
+
+                // Track connection, direction and remote address
+                self.connections.insert(
+                    connection_id,
+                    ConnectionInfo {
+                        direction: ConnectionDirection::Outbound,
+                        remote_addr,
+                    },
+                );
+
+                // Only register as "done" for connections that the node initiated
+                // This is needed in case the peer was dialed without knowing the peer id
+                self.controller
+                    .dial
+                    .register_done_on(PeerData::PeerId(peer_id));
             }
-            ConnectedPoint::Listener { .. } => {
-                debug!(peer = %peer_id, %connection_id, "Accepted incoming connection from peer");
+            l @ ConnectedPoint::Listener { .. } => {
+                let remote_addr = l.get_remote_address().clone();
+                debug!(
+                    peer = %peer_id, %connection_id, remote_address = %remote_addr,
+                    "Accepted incoming connection from peer (inbound)"
+                );
+
+                // Track connection info: direction and remote address
+                self.connections.insert(
+                    connection_id,
+                    ConnectionInfo {
+                        direction: ConnectionDirection::Inbound,
+                        remote_addr,
+                    },
+                );
             }
         }
-
-        // Needed in case the peer was dialed without knowing the peer id
-        self.controller
-            .dial
-            .register_done_on(PeerData::PeerId(peer_id));
 
         // This check is necessary to handle the case where two
         // nodes dial each other at the same time, which can lead
@@ -159,16 +190,10 @@ where
                 self.metrics.increment_total_failed_dials();
 
                 // For bootstrap nodes, clear the done_on flag so they can be retried
-                // by the periodic timer. We check and clear by address since bootstrap
-                // nodes may not have peer_id
-                let is_bootstrap = self.bootstrap_nodes.iter().any(|(_, addrs)| {
-                    dial_data
-                        .listen_addrs()
-                        .iter()
-                        .any(|dial_addr| addrs.contains(dial_addr))
-                });
-
-                if is_bootstrap {
+                // by the periodic timer. We use the is_bootstrap flag set at creation time
+                // rather than checking addresses, to prevent address spoofing attacks where
+                // a malicious peer could advertise bootstrap addresses in peer exchange.
+                if dial_data.is_bootstrap() {
                     // Clear done_on by address
                     for addr in dial_data.listen_addrs() {
                         self.controller
@@ -188,9 +213,9 @@ where
 
     pub(crate) fn add_to_dial_queue(&mut self, swarm: &Swarm<C>, dial_data: DialData) {
         if self.should_dial(swarm, &dial_data, true) {
-            // Already register as dialed address to avoid flooding the dial queue
-            // with the same dial attempts.
-            self.controller.dial_register_done_on(&dial_data);
+            // Register peer_id only to avoid flooding the dial queue.
+            // Don't register addresses because they may are untrusted (from peers response).
+            self.controller.dial_register_done_on(&dial_data, false);
 
             self.controller.dial.add_to_queue(dial_data, None);
         }
@@ -213,7 +238,7 @@ where
                 continue;
             }
 
-            let dial_data = DialData::new(*peer_id, listen_addrs.clone());
+            let dial_data = DialData::new_bootstrap(*peer_id, listen_addrs.clone());
 
             // For bootstrap nodes, always attempt to dial even if previously failed
             // This ensures persistent peers are retried indefinitely
@@ -224,7 +249,8 @@ where
                     self.controller.dial.queue_len(),
                     self.controller.dial.is_idle().1
                 );
-                self.controller.dial_register_done_on(&dial_data);
+                // For bootstrap nodes, register addresses too (trusted config)
+                self.controller.dial_register_done_on(&dial_data, true);
                 self.controller.dial.add_to_queue(dial_data, None);
             }
         }

@@ -7,6 +7,7 @@ use tracing::{debug, error, info};
 use malachitebft_app_channel::app::engine::host::{HeightParams, Next};
 use malachitebft_app_channel::app::streaming::StreamContent;
 use malachitebft_app_channel::app::types::codec::Codec;
+use malachitebft_app_channel::app::types::core::utils::height::HeightRangeExt;
 use malachitebft_app_channel::app::types::core::{Round, Validity};
 use malachitebft_app_channel::app::types::sync::RawDecidedValue;
 use malachitebft_app_channel::app::types::{LocallyProposedValue, ProposedValue};
@@ -78,12 +79,25 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
                     match state.validate_proposal_parts(parts) {
                         Ok(()) => {
                             // Validation passed - convert to ProposedValue and move to undecided
-                            let value = State::assemble_value_from_parts(parts.clone())?;
+                            let mut value = State::assemble_value_from_parts(parts.clone())?;
+
+                            // Use middleware to determine validity
+                            if let Some(middleware) = &state.middleware {
+                                value.validity = middleware.get_validity(
+                                    &state.ctx,
+                                    value.height,
+                                    value.round,
+                                    &value.value,
+                                );
+                            }
+
+                            let validity = value.validity;
                             state.store.store_undecided_proposal(value).await?;
                             info!(
                                 height = %parts.height,
                                 round = %parts.round,
                                 proposer = %parts.proposer,
+                                validity = ?validity,
                                 "Moved valid pending proposal to undecided after validation"
                             );
                         }
@@ -292,27 +306,27 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
             // then the engine might ask the application to provide with the value
             // that was decided at some lower height. In that case, we fetch it from our store
             // and send it to consensus.
-            AppMsg::GetDecidedValue { height, reply } => {
-                info!(%height, "Received sync request for decided value");
+            AppMsg::GetDecidedValues { range, reply } => {
+                info!(?range, "Received sync request for decided values");
 
-                let decided_value = state.get_decided_value(height).await;
-                info!(%height, "Found decided value: {decided_value:?}");
+                let mut values = Vec::new();
 
-                let raw_decided_value = decided_value.and_then(|decided_value| {
-                    match JsonCodec.encode(&decided_value.value) {
-                        Ok(value_bytes) => Some(RawDecidedValue {
-                            certificate: decided_value.certificate,
-                            value_bytes,
-                        }),
-                        Err(e) => {
-                            error!(%height, "Failed to encode decided value: {e}");
-                            None
+                for height in range.iter_heights() {
+                    if let Some(decided_value) = state.get_decided_value(height).await {
+                        match JsonCodec.encode(&decided_value.value) {
+                            Ok(value_bytes) => values.push(RawDecidedValue {
+                                certificate: decided_value.certificate,
+                                value_bytes,
+                            }),
+                            Err(e) => {
+                                error!(%height, "Failed to encode decided value: {e}");
+                            }
                         }
                     }
-                });
+                }
 
-                if reply.send(raw_decided_value).is_err() {
-                    error!("Failed to send GetDecidedValue reply");
+                if reply.send(values).is_err() {
+                    error!("Failed to send GetDecidedValues reply");
                 }
             }
 

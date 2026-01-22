@@ -108,24 +108,28 @@ where
 
     /// Reset votes, round state, pending input and move to new height with the given validator set.
     pub fn move_to_height(&mut self, height: Ctx::Height, validator_set: Ctx::ValidatorSet) {
-        // Reset the proposal keeper
-        let proposal_keeper = ProposalKeeper::new();
-
         // Update the validator set
         self.validator_set = validator_set.clone();
+        self.proposer = None;
 
         // Reset the vote keeper
         let vote_keeper = VoteKeeper::new(validator_set, self.threshold_params);
+        self.vote_keeper = vote_keeper;
 
         // Reset the round state
         let round_state = RoundState::new(height, Round::Nil);
-
-        self.vote_keeper = vote_keeper;
-        self.proposal_keeper = proposal_keeper;
         self.round_state = round_state;
-        self.pending_inputs = vec![];
+        self.round_certificate = None;
+
+        // Reset the proposal keeper
+        let proposal_keeper = ProposalKeeper::new();
+        self.proposal_keeper = proposal_keeper;
+
+        // Reset certificates
         self.commit_certificates = vec![];
         self.polka_certificates = vec![];
+
+        // Reset additional internal state
         self.last_prevote = None;
         self.last_precommit = None;
     }
@@ -226,16 +230,47 @@ where
     pub fn commit_certificate(
         &self,
         round: Round,
-        value_id: ValueId<Ctx>,
+        value_id: &ValueId<Ctx>,
     ) -> Option<&CommitCertificate<Ctx>> {
         self.commit_certificates
             .iter()
-            .find(|c| c.round == round && c.value_id == value_id)
+            .find(|c| &c.value_id == value_id && c.round == round && c.height == self.height())
     }
 
-    /// Get all polka certificates
+    /// Return the commit certificates, if any.
+    pub fn commit_certificates(&self) -> &[CommitCertificate<Ctx>] {
+        self.commit_certificates.as_ref()
+    }
+
+    /// Get the polka certificates at the current height for the specified round and value, if it exists
+    pub fn polka_certificate(
+        &self,
+        round: Round,
+        value_id: &ValueId<Ctx>,
+    ) -> Option<&PolkaCertificate<Ctx>> {
+        self.polka_certificates
+            .iter()
+            .find(|c| &c.value_id == value_id && c.round == round && c.height == self.height())
+    }
+
+    /// Return the polka certificates, if any.
     pub fn polka_certificates(&self) -> &[PolkaCertificate<Ctx>] {
-        &self.polka_certificates
+        self.polka_certificates.as_ref()
+    }
+
+    /// Return all pending inputs, as pairs (round, round input).
+    pub fn pending_inputs(&self) -> &[(Round, RoundInput<Ctx>)] {
+        self.pending_inputs.as_ref()
+    }
+
+    /// Return the last issued prevote, if any.
+    pub fn last_prevote(&self) -> Option<&Ctx::Vote> {
+        self.last_prevote.as_ref()
+    }
+
+    /// Return the last issued prevote, if any.
+    pub fn last_precommit(&self) -> Option<&Ctx::Vote> {
+        self.last_precommit.as_ref()
     }
 
     /// Get the round certificate for the current round.
@@ -367,6 +402,7 @@ where
             Input::Proposal(proposal, validity) => self.apply_proposal(proposal, validity),
             Input::Vote(vote) => self.apply_vote(vote),
             Input::TimeoutElapsed(timeout) => self.apply_timeout(timeout),
+            Input::SyncDecision(proposal) => self.apply_decide_on_sync(proposal),
         }
     }
 
@@ -589,6 +625,39 @@ where
         };
 
         self.apply_input(timeout.round, input)
+    }
+
+    /// Apply a sync decision using the provided unsigned proposal.
+    ///
+    /// This is used when we receive a value and commit certificate from sync.
+    /// The certificate must already be stored in the driver (from earlier processing).
+    /// We use the normal state machine decision path with `ProposalAndPrecommitValue`.
+    fn apply_decide_on_sync(
+        &mut self,
+        proposal: Ctx::Proposal,
+    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+        let round = proposal.round();
+        let value_id = proposal.value().id();
+
+        // The certificate should already be stored - it was looked up by the caller
+        // in on_proposed_value before calling SyncDecision
+        let certificate = self.commit_certificate(round, &value_id).ok_or_else(|| {
+            Error::CertificateNotFound {
+                round,
+                value_id: value_id.clone(),
+            }
+        })?;
+
+        // Sanity check: certificate height should match
+        debug_assert_eq!(
+            certificate.height,
+            self.height(),
+            "Certificate height mismatch"
+        );
+
+        // Go through the state machine with ProposalAndPrecommitValue
+        // This will trigger L49 and produce a Decision output
+        self.apply_input(round, RoundInput::ProposalAndPrecommitValue(proposal))
     }
 
     /// Apply the input, update the state.

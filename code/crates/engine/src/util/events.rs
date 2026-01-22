@@ -1,12 +1,13 @@
 use core::fmt;
+use std::io;
 use std::sync::Arc;
 
 use derive_where::derive_where;
-use ractor::ActorProcessingErr;
 use tokio::sync::broadcast;
 
 use malachitebft_core_consensus::{
-    LocallyProposedValue, ProposedValue, Role, SignedConsensusMsg, WalEntry,
+    Error as ConsensusError, LocallyProposedValue, ProposedValue, Role, SignedConsensusMsg,
+    WalEntry,
 };
 use malachitebft_core_types::{
     CommitCertificate, Context, PolkaCertificate, Round, RoundCertificate, SignedVote, ValueOrigin,
@@ -58,7 +59,9 @@ pub enum Event<Ctx: Context> {
     WalReplayBegin(Ctx::Height, usize),
     WalReplayEntry(WalEntry<Ctx>),
     WalReplayDone(Ctx::Height),
-    WalReplayError(Arc<ActorProcessingErr>),
+    WalReplayError(Arc<ConsensusError<Ctx>>),
+    WalResetError(Arc<eyre::Report>),
+    WalCorrupted(Arc<io::Error>),
 }
 
 impl<Ctx: Context> fmt::Display for Event<Ctx> {
@@ -91,6 +94,9 @@ impl<Ctx: Context> fmt::Display for Event<Ctx> {
             Event::WalReplayEntry(entry) => write!(f, "WalReplayEntry(entry: {entry:?})"),
             Event::WalReplayDone(height) => write!(f, "WalReplayDone(height: {height})"),
             Event::WalReplayError(error) => write!(f, "WalReplayError({error})"),
+            Event::WalResetError(error) => write!(f, "WalResetError({error})"),
+            Event::WalCorrupted(error) => write!(f, "WalCorrupted(error: {error:?})"),
+
             Event::PolkaCertificate(certificate) => {
                 write!(f, "PolkaCertificate: {certificate:?})")
             }

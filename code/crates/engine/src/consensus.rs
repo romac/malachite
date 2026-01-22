@@ -1,5 +1,7 @@
 use core::fmt;
 use std::collections::BTreeSet;
+use std::future::{pending, Future};
+use std::io;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -359,12 +361,29 @@ where
                 self.tx_event
                     .send(|| Event::StartedHeight(height, is_restart));
 
+                // Push validator set to network layer
+                if let Err(e) = self
+                    .network
+                    .cast(NetworkMsg::UpdateValidatorSet(params.validator_set.clone()))
+                {
+                    error!(%height, "Error pushing validator set to network layer: {e}");
+                }
+
                 // Fetch entries from the WAL or reset the WAL if this is a restart
                 let wal_entries = if is_restart {
-                    self.wal_reset(height).await?;
+                    hang_on_failure(self.wal_reset(height), |e| {
+                        error!(%height, "Error when resetting WAL: {e}");
+                        error!(%height, "Consensus may be in an inconsistent state after WAL reset failure");
+                    })
+                    .await;
+
                     vec![]
                 } else {
-                    self.wal_fetch(height).await?
+                    hang_on_failure(self.wal_fetch(height), |e| {
+                        error!(%height, "Error when fetching WAL entries: {e}");
+                        error!(%height, "Consensus may be in an inconsistent state after WAL fetch failure");
+                    })
+                    .await
                 };
 
                 if !wal_entries.is_empty() {
@@ -398,7 +417,11 @@ where
                 }
 
                 if !wal_entries.is_empty() {
-                    self.wal_replay(&myself, state, height, wal_entries).await;
+                    hang_on_failure(self.wal_replay(&myself, state, height, wal_entries), |e| {
+                        error!(%height, "Error when replaying WAL: {e}");
+                        error!(%height, "Consensus may be in an inconsistent state after WAL replay failure");
+                    })
+                    .await;
                 }
 
                 // Set the phase to `Running` now that we have replayed the WAL
@@ -669,7 +692,7 @@ where
         myself: &ActorRef<Msg<Ctx>>,
         state: &mut State<Ctx>,
         timeout: Timeout,
-    ) -> Result<(), ActorProcessingErr> {
+    ) -> Result<(), ConsensusError<Ctx>> {
         // Make sure the associated timer is cancelled
         state.timers.cancel(&timeout);
 
@@ -700,10 +723,18 @@ where
                 // Success
             }
             Ok(Err(e)) => {
-                error!("Resetting the WAL failed: {e}");
+                error!(%height, "Failed to reset WAL: {e}");
+                return Err(e
+                    .wrap_err(format!("Failed to reset WAL for height {height}"))
+                    .into());
             }
             Err(e) => {
-                error!("Failed to send Reset command to WAL actor: {e}");
+                error!(%height, "Failed to send Reset command to WAL actor: {e}");
+                return Err(eyre!(e)
+                    .wrap_err(format!(
+                        "Failed to send Reset command to WAL actor for height {height}"
+                    ))
+                    .into());
             }
         }
 
@@ -713,17 +744,18 @@ where
     async fn wal_fetch(
         &self,
         height: Ctx::Height,
-    ) -> Result<Vec<WalEntry<Ctx>>, ActorProcessingErr> {
+    ) -> Result<Vec<io::Result<WalEntry<Ctx>>>, ActorProcessingErr> {
         let result = ractor::call!(self.wal, WalMsg::StartedHeight, height)?;
 
         match result {
-            Ok(None) => {
-                // Nothing to replay
+            Ok(entries) if entries.is_empty() => {
                 debug!(%height, "No WAL entries to replay");
-                Ok(Default::default())
+
+                // Nothing to replay
+                Ok(Vec::new())
             }
 
-            Ok(Some(entries)) => {
+            Ok(entries) => {
                 info!("Found {} WAL entries", entries.len());
 
                 Ok(entries)
@@ -731,9 +763,10 @@ where
 
             Err(e) => {
                 error!(%height, "Error when notifying WAL of started height: {e}");
-                self.tx_event
-                    .send(|| Event::WalReplayError(Arc::new(e.into())));
-                Ok(Default::default())
+
+                self.tx_event.send(|| Event::WalResetError(Arc::new(e)));
+
+                Err(eyre!("Failed to fetch WAL entries for height {height}").into())
             }
         }
     }
@@ -743,22 +776,38 @@ where
         myself: &ActorRef<Msg<Ctx>>,
         state: &mut State<Ctx>,
         height: Ctx::Height,
-        entries: Vec<WalEntry<Ctx>>,
-    ) {
+        entries: Vec<io::Result<WalEntry<Ctx>>>,
+    ) -> Result<(), Arc<ConsensusError<Ctx>>> {
         use SignedConsensusMsg::*;
 
         assert_eq!(state.phase, Phase::Recovering);
 
-        info!("Replaying {} WAL entries", entries.len());
-
         if entries.is_empty() {
-            return;
+            return Ok(());
         }
+
+        info!("Replaying {} WAL entries", entries.len());
 
         self.tx_event
             .send(|| Event::WalReplayBegin(height, entries.len()));
 
+        // Replay WAL entries, stopping at the first corrupted entry
         for entry in entries {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(e) => {
+                    error!("Corrupted WAL entry encountered: {e}");
+
+                    let error = Arc::new(e);
+
+                    // Report corrupted entries if any were found
+                    self.tx_event
+                        .send(|| Event::WalCorrupted(Arc::clone(&error)));
+
+                    return Err(Arc::new(ConsensusError::WalCorrupted(error)));
+                }
+            };
+
             self.tx_event.send(|| Event::WalReplayEntry(entry.clone()));
 
             match entry {
@@ -771,8 +820,13 @@ where
                     {
                         error!("Error when replaying vote: {e}");
 
-                        self.tx_event
-                            .send(|| Event::WalReplayError(Arc::new(e.into())));
+                        let e = Arc::new(e);
+                        self.tx_event.send({
+                            let e = Arc::clone(&e);
+                            || Event::WalReplayError(e)
+                        });
+
+                        return Err(e);
                     }
                 }
 
@@ -785,8 +839,13 @@ where
                     {
                         error!("Error when replaying Proposal: {e}");
 
-                        self.tx_event
-                            .send(|| Event::WalReplayError(Arc::new(e.into())));
+                        let e = Arc::new(e);
+                        self.tx_event.send({
+                            let e = Arc::clone(&e);
+                            || Event::WalReplayError(e)
+                        });
+
+                        return Err(e);
                     }
                 }
 
@@ -796,7 +855,13 @@ where
                     if let Err(e) = self.timeout_elapsed(myself, state, timeout).await {
                         error!("Error when replaying TimeoutElapsed: {e}");
 
-                        self.tx_event.send(|| Event::WalReplayError(Arc::new(e)));
+                        let e = Arc::new(e);
+                        self.tx_event.send({
+                            let e = Arc::clone(&e);
+                            || Event::WalReplayError(e)
+                        });
+
+                        return Err(e);
                     }
                 }
 
@@ -813,14 +878,21 @@ where
                     {
                         error!("Error when replaying LocallyProposedValue: {e}");
 
-                        self.tx_event
-                            .send(|| Event::WalReplayError(Arc::new(e.into())));
+                        let e = Arc::new(e);
+                        self.tx_event.send({
+                            let e = Arc::clone(&e);
+                            || Event::WalReplayError(e)
+                        });
+
+                        return Err(e);
                     }
                 }
             }
         }
 
         self.tx_event.send(|| Event::WalReplayDone(state.height()));
+
+        Ok(())
     }
 
     fn get_value(
@@ -1406,4 +1478,28 @@ fn span_round<Ctx: Context>(round: Round, msg: &Msg<Ctx>) -> Round {
     } else {
         round
     }
+}
+
+async fn hang_on_failure<A, E>(
+    f: impl Future<Output = Result<A, E>>,
+    on_error: impl FnOnce(E),
+) -> A {
+    match f.await {
+        Ok(value) => value,
+        Err(e) => {
+            on_error(e);
+            error!("Critical consensus failure, hanging to prevent safety violations. Manual intervention required!");
+            hang().await
+        }
+    }
+}
+
+/// Hangs the consensus actor indefinitely to prevent safety violations.
+///
+/// This is called when WAL operations fail and consensus cannot safely continue.
+/// The node operator should investigate the WAL issue and restart the node
+/// only after ensuring data integrity.
+async fn hang() -> ! {
+    pending::<()>().await;
+    unreachable!()
 }

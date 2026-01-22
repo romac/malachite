@@ -132,18 +132,25 @@ pub struct Log<S> {
     len: usize,
 }
 
-const VERSION_SIZE: u64 = size_of::<Version>() as u64;
-const SEQUENCE_SIZE: u64 = size_of::<u64>() as u64;
-const HEADER_SIZE: u64 = VERSION_SIZE + SEQUENCE_SIZE;
+pub mod constants {
+    use super::Version;
 
-const VERSION_OFFSET: u64 = 0;
-const SEQUENCE_OFFSET: u64 = VERSION_OFFSET + VERSION_SIZE;
-const FIRST_ENTRY_OFFSET: u64 = HEADER_SIZE;
+    pub const VERSION_SIZE: u64 = size_of::<Version>() as u64;
+    pub const SEQUENCE_SIZE: u64 = size_of::<u64>() as u64;
+    pub const HEADER_SIZE: u64 = VERSION_SIZE + SEQUENCE_SIZE;
 
-const ENTRY_LENGTH_SIZE: u64 = size_of::<u64>() as u64;
-const ENTRY_CRC_SIZE: u64 = size_of::<u32>() as u64;
-const ENTRY_COMPRESSION_FLAG_SIZE: u64 = size_of::<u8>() as u64;
-const ENTRY_HEADER_SIZE: u64 = ENTRY_COMPRESSION_FLAG_SIZE + ENTRY_LENGTH_SIZE + ENTRY_CRC_SIZE;
+    pub const VERSION_OFFSET: u64 = 0;
+    pub const SEQUENCE_OFFSET: u64 = VERSION_OFFSET + VERSION_SIZE;
+    pub const FIRST_ENTRY_OFFSET: u64 = HEADER_SIZE;
+
+    pub const ENTRY_CRC_SIZE: u64 = size_of::<u32>() as u64;
+    pub const ENTRY_LENGTH_SIZE: u64 = size_of::<u64>() as u64;
+    pub const ENTRY_COMPRESSION_FLAG_SIZE: u64 = size_of::<u8>() as u64;
+    pub const ENTRY_HEADER_SIZE: u64 =
+        ENTRY_COMPRESSION_FLAG_SIZE + ENTRY_LENGTH_SIZE + ENTRY_CRC_SIZE;
+}
+
+use constants::*;
 
 enum WriteEntry<'a> {
     Raw(&'a [u8]),
@@ -462,7 +469,7 @@ where
         })
     }
 
-    /// Restarts the WAL with a new sequence number.
+    /// Reset the WAL with a new sequence number.
     ///
     /// This truncates all existing entries and resets the WAL to an empty state
     /// with the specified sequence number.
@@ -473,7 +480,7 @@ where
     /// # Returns
     /// * `Ok(())` - WAL was successfully restarted
     /// * `Err` - If file operations fail
-    pub fn restart(&mut self, sequence: u64) -> io::Result<()> {
+    pub fn reset(&mut self, sequence: u64) -> io::Result<()> {
         // Reset sequence number and entry count
         self.sequence = sequence;
         self.len = 0;
@@ -489,6 +496,70 @@ where
 
         // Sync changes to disk
         self.storage.sync_all()?;
+
+        Ok(())
+    }
+
+    /// Truncates the WAL to the specified entry index.
+    ///
+    /// All entries from `from_entry` onwards will be removed.
+    /// If `from_entry` is greater than or equal to the current length,
+    /// no action is taken.
+    ///
+    /// # Arguments
+    /// * `from_entry` - The entry index to truncate from
+    ///
+    /// # Returns
+    /// * `Ok(())` - WAL was successfully truncated
+    /// * `Err` - If file operations fail
+    pub fn truncate(&mut self, from_entry: u64) -> io::Result<()> {
+        if from_entry >= self.len as u64 {
+            return Ok(());
+        }
+
+        let mut pos = FIRST_ENTRY_OFFSET;
+
+        self.storage.seek(SeekFrom::Start(pos))?;
+
+        for _ in 0..from_entry {
+            // Skip compression flag
+            let _ = read_u8(&mut self.storage)?;
+            pos += ENTRY_COMPRESSION_FLAG_SIZE;
+
+            // Read entry length
+            let data_length = read_u64(&mut self.storage)?;
+            pos += ENTRY_LENGTH_SIZE;
+
+            // Skip CRC
+            let _ = read_u32(&mut self.storage)?;
+            pos += ENTRY_CRC_SIZE;
+
+            // Compute seek offset to skip over data
+            let seek_offset = i64::try_from(data_length).map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Entry length too large for seeking",
+                )
+            })?;
+
+            // Skip to next entry
+            let new_pos = self.storage.seek(SeekFrom::Current(seek_offset))?;
+
+            // Check consistency
+            assert_eq!(new_pos, pos + data_length);
+
+            // Update position
+            pos = new_pos;
+        }
+
+        // Truncate the storage to the computed position
+        self.storage.truncate_to(pos)?;
+
+        // Sync changes to disk
+        self.storage.sync_all()?;
+
+        // Update entry count
+        self.len = from_entry as usize;
 
         Ok(())
     }

@@ -1,9 +1,10 @@
 use libp2p::{identify, swarm::ConnectionId, PeerId, Swarm};
 use tracing::{debug, info, warn};
 
-use crate::config::BootstrapProtocol;
-use crate::OutboundState;
-use crate::{request::RequestData, Discovery, DiscoveryClient, State};
+use crate::{
+    config::BootstrapProtocol, request::RequestData, util::strip_peer_id_from_multiaddr, Discovery,
+    DiscoveryClient, OutboundState, State,
+};
 
 impl<C> Discovery<C>
 where
@@ -13,7 +14,7 @@ where
     ///
     /// ## Bootstrap Discovery Flow:
     /// - Bootstrap configuration: bootstrap nodes configured with addresses but `peer_id = None`
-    ///    ```rust
+    ///    ```text
     ///    bootstrap_nodes:
     ///      [
     ///       (None, ["/ip4/1.2.3.4/tcp/8000", "/ip4/5.6.7.8/tcp/8000"]),
@@ -21,7 +22,7 @@ where
     ///      ]
     ///    ```
     /// - Initial dial: create `DialData` with `peer_id = None` and dial the **first** address
-    ///    ```rust
+    ///    ```text
     ///    DialData::new(None, vec![multiaddr]) // peer_id initially unknown
     ///    ```
     /// - Connection established: `handle_connection()` called with the actual `peer_id`
@@ -29,11 +30,18 @@ where
     /// - Identify protocol: peer sends identity information including supported protocols
     /// - Protocol check: only compatible peers reach `handle_new_peer()`
     /// - Bootstrap matching: **This function** matches the peer against bootstrap nodes:
-    ///    - Check if peer's advertised addresses match any bootstrap node addresses
+    ///    - For outbound: check addresses we dialed (from dial_data)
+    ///    - For inbound: check actual connection remote address
     ///    - If match found: update `bootstrap_nodes[i].0 = Some(peer_id)`
     ///
+    /// ## Note
+    /// For inbound connections, we use the actual TCP connection remote address from
+    /// `self.connections`, not the self-reported `identify::Info.listen_addrs`.
+    /// This prevents address spoofing attacks where a malicious peer claims to be
+    /// listening on a bootstrap node's address.
+    ///
     /// Called after connection is established but before peer is added to active_connections
-    fn update_bootstrap_node_peer_id(&mut self, peer_id: PeerId) {
+    fn update_bootstrap_node_peer_id(&mut self, connection_id: ConnectionId, peer_id: PeerId) {
         debug!(
             "Checking peer {} against {} bootstrap nodes",
             peer_id,
@@ -55,26 +63,53 @@ where
 
         // Find the dial_data that was updated in handle_connection
         // This dial_data originally had peer_id=None but now should have peer_id=Some(peer_id)
-        let Some((_, dial_data)) = self
+        let dial_data = self
             .controller
             .dial
             .get_in_progress_iter()
             .find(|(_, dial_data)| dial_data.peer_id() == Some(peer_id))
-        else {
-            // This happens for incoming connections (peers that dialed this node)
-            // since no dial_data was created for them
-            return;
-        };
+            .map(|(_, dial_data)| dial_data);
 
-        // Match dial addresses against bootstrap node configurations
+        // Get the connection remote address for inbound connections
+        // This prevents spoofing via self-reported identify addresses
+        let connection_remote_addr = self.connections.get(&connection_id).map(|c| &c.remote_addr);
+
+        // Match addresses against bootstrap node configurations
+        // For outbound connections, check dial_data addresses (trusted since we initiated)
+        // For inbound connections, check the connection remote address (trusted since it's TCP layer)
         for (maybe_peer_id, listen_addrs) in self.bootstrap_nodes.iter_mut() {
-            // Check if this bootstrap node is unidentified and addresses match
-            if maybe_peer_id.is_none()
-                && dial_data
+            // Check if this bootstrap node is unidentified
+            if maybe_peer_id.is_some() {
+                continue;
+            }
+
+            let addresses_match = if let Some(dial_data) = dial_data {
+                // Outbound connection, check addresses we dialed
+                dial_data
                     .listen_addrs()
                     .iter()
                     .any(|dial_addr| listen_addrs.contains(dial_addr))
-            {
+            } else if let Some(remote_addr) = connection_remote_addr {
+                // Inbound connection, check actual TCP remote address.
+                // Strip /p2p/ component if present, since addresses may include a peer ID.
+                // Note: This only matches if peer uses port reuse (source port == listen port).
+                // With ephemeral source ports, peer gets identified as bootstrap when we
+                // later dial their configured listen address.
+                let remote_addr_stripped = strip_peer_id_from_multiaddr(remote_addr);
+                listen_addrs.iter().any(|bootstrap_addr| {
+                    let bootstrap_stripped = strip_peer_id_from_multiaddr(bootstrap_addr);
+                    remote_addr_stripped == bootstrap_stripped
+                })
+            } else {
+                // No connection info available, cannot verify
+                debug!(
+                    "No connection info for peer {} - cannot verify bootstrap status",
+                    peer_id
+                );
+                false
+            };
+
+            if addresses_match {
                 // Bootstrap discovery completed: None -> Some(peer_id)
                 info!("Bootstrap peer {} successfully identified", peer_id);
                 *maybe_peer_id = Some(peer_id);
@@ -107,17 +142,32 @@ where
         }
 
         // Match peer against bootstrap nodes
-        self.update_bootstrap_node_peer_id(peer_id);
+        self.update_bootstrap_node_peer_id(connection_id, peer_id);
 
-        if self
-            .controller
-            .dial
-            .remove_in_progress(&connection_id)
-            .is_none()
-        {
-            // Remove any matching in progress connections to avoid dangling data
+        if self.config.persistent_peers_only && !self.is_persistent_peer(&peer_id) {
+            warn!(
+                peer = %peer_id, %connection_id,
+                "Rejecting connection from non-persistent peer as persistent_peers_only mode is on"
+            );
+
             self.controller
-                .dial_remove_matching_in_progress_connections(&peer_id);
+                .close
+                .add_to_queue((peer_id, connection_id), None);
+
+            return is_already_connected;
+        }
+
+        // Remove from dial in-progress if this was an outbound connection we initiated.
+        // For inbound connections, this will return None and we don't touch dial data.
+        self.controller.dial.remove_in_progress(&connection_id);
+
+        // Store signed peer record if available
+        if let Some(envelope) = &info.signed_peer_record {
+            self.signed_peer_records.insert(peer_id, envelope.clone());
+            debug!(
+                peer = %peer_id,
+                "Stored signed peer record for secure peer exchange"
+            );
         }
 
         match self.discovered_peers.insert(peer_id, info.clone()) {
@@ -141,7 +191,7 @@ where
             if connection_ids.len() >= self.config.max_connections_per_peer {
                 warn!(
                     peer = %peer_id, %connection_id,
-                    "Peer has has already reached the maximum number of connections ({}), closing connection",
+                    "Peer has already reached the maximum number of connections ({}), closing connection",
                     self.config.max_connections_per_peer
                 );
 
@@ -214,26 +264,36 @@ where
             }
             // Add the address to the Kademlia routing table
             if self.config.bootstrap_protocol == BootstrapProtocol::Kademlia {
-                swarm
-                    .behaviour_mut()
-                    .add_address(&peer_id, info.listen_addrs.first().unwrap().clone());
+                if let Some(addr) = info.listen_addrs.first() {
+                    swarm.behaviour_mut().add_address(&peer_id, addr.clone());
+                }
             }
         } else {
-            // If discovery is disabled, all peers are inbound. The
-            // maximum number of inbound peers is enforced by the
-            // corresponding parameter in the configuration.
-            if self.inbound_peers.len() < self.config.num_inbound_peers {
-                debug!(peer = %peer_id, %connection_id, "Connection is inbound");
+            // If discovery is disabled, classify based on actual connection direction
+            let we_dialed = self
+                .controller
+                .dial
+                .get_in_progress_iter()
+                .any(|(_, dial_data)| dial_data.peer_id() == Some(peer_id))
+                || self
+                    .controller
+                    .dial
+                    .is_done_on(&crate::controller::PeerData::PeerId(peer_id));
 
+            if we_dialed {
+                // Accept all peers we dial (no capacity check)
+                // When discovery is disabled, these are explicitly configured peers
+                debug!(peer = %peer_id, %connection_id, "Connection is outbound");
+                self.outbound_peers
+                    .insert(peer_id, OutboundState::Confirmed);
+            } else if self.inbound_peers.len() < self.config.num_inbound_peers {
+                debug!(peer = %peer_id, %connection_id, "Connection is inbound");
                 self.inbound_peers.insert(peer_id);
             } else {
-                warn!(peer = %peer_id, %connection_id, "Peers limit reached, refusing connection");
-
+                warn!(peer = %peer_id, %connection_id, "Inbound peers limit reached, refusing connection");
                 self.controller
                     .close
                     .add_to_queue((peer_id, connection_id), None);
-
-                // Set to true to avoid triggering new connection logic
                 is_already_connected = true;
             }
         }

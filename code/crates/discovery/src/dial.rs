@@ -7,6 +7,9 @@ pub struct DialData {
     peer_id: Option<PeerId>,
     listen_addrs: Vec<Multiaddr>,
     pub retry: Retry,
+    /// Whether this dial originated from bootstrap/persistent peer configuration.
+    /// Used to determine retry behavior, only bootstrap dials get unlimited retries.
+    is_bootstrap: bool,
 }
 
 impl DialData {
@@ -15,7 +18,23 @@ impl DialData {
             peer_id,
             listen_addrs,
             retry: Retry::new(),
+            is_bootstrap: false,
         }
+    }
+
+    /// Create a DialData for a bootstrap/persistent peer
+    pub fn new_bootstrap(peer_id: Option<PeerId>, listen_addrs: Vec<Multiaddr>) -> Self {
+        Self {
+            peer_id,
+            listen_addrs,
+            retry: Retry::new(),
+            is_bootstrap: true,
+        }
+    }
+
+    /// Returns true if this dial originated from bootstrap/persistent peer configuration
+    pub fn is_bootstrap(&self) -> bool {
+        self.is_bootstrap
     }
 
     pub fn set_peer_id(&mut self, peer_id: PeerId) {

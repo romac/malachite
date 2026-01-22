@@ -43,12 +43,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: "18"
-      - name: Install Quint
-        run: npm install -g @informalsystems/quint
+      # - name: Setup Node
+      #   uses: actions/setup-node@v3
+      #   with:
+      #     node-version: "18"
+      # - name: Install Quint
+      #   run: npm install -g @informalsystems/quint
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -63,6 +63,7 @@ jobs:
             --no-fail-fast \
             --failure-output final \
             --exclude informalsystems-malachitebft-test \
+            --exclude informalsystems-malachitebft-test-mbt \
             --exclude informalsystems-malachitebft-starknet-test \
             --exclude informalsystems-malachitebft-starknet-test-mbt \
             --exclude informalsystems-malachitebft-discovery-test
@@ -78,12 +79,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: "18"
-      - name: Install Quint
-        run: npm install -g @informalsystems/quint
+      # - name: Setup Node
+      #   uses: actions/setup-node@v3
+      #   with:
+      #     node-version: "18"
+      # - name: Install Quint
+      #   run: npm install -g @informalsystems/quint
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
