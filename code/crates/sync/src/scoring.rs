@@ -45,6 +45,24 @@ pub trait ScoringStrategy: Send + Sync {
         -> Score;
 }
 
+impl<T> ScoringStrategy for Box<T>
+where
+    T: ScoringStrategy + ?Sized,
+{
+    fn initial_score(&self, peer_id: PeerId) -> Score {
+        self.as_ref().initial_score(peer_id)
+    }
+
+    fn update_score(
+        &mut self,
+        peer_id: PeerId,
+        previous_score: Score,
+        result: SyncResult,
+    ) -> Score {
+        self.as_mut().update_score(peer_id, previous_score, result)
+    }
+}
+
 #[derive(Copy, Clone, Debug, Default)]
 pub enum Strategy {
     /// Exponential moving average strategy
