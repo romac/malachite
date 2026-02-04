@@ -1,5 +1,5 @@
 use core::fmt;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use rand::distributions::weighted::WeightedIndex;
@@ -44,6 +44,17 @@ pub trait ScoringStrategy: Send + Sync {
     /// The updated score must be in the `0.0..=1.0` range.
     fn update_score(&mut self, peer_id: PeerId, previous_score: Score, result: SyncResult)
         -> Score;
+
+    /// Indicates whether the strategy maintains state per peer.
+    fn is_stateful(&self) -> bool {
+        false
+    }
+
+    /// Retain only the scores for the given peer IDs, removing any others.
+    /// This is used to prune scores for peers that are no longer active.
+    fn retain_only(&mut self, _peer_ids: HashSet<&PeerId>) {
+        // By default, do nothing
+    }
 }
 
 impl<T> ScoringStrategy for Box<T>
@@ -61,6 +72,10 @@ where
         result: SyncResult,
     ) -> Score {
         self.as_mut().update_score(peer_id, previous_score, result)
+    }
+
+    fn retain_only(&mut self, peer_ids: HashSet<&PeerId>) {
+        self.as_mut().retain_only(peer_ids)
     }
 }
 
@@ -196,6 +211,10 @@ impl PeerScorer {
 
         self.scores
             .retain(|_, score| now.duration_since(score.last_update) < inactive_threshold);
+
+        if self.strategy.is_stateful() {
+            self.strategy.retain_only(self.scores.keys().collect());
+        }
     }
 }
 

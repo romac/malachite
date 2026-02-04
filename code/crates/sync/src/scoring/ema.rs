@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::time::Duration;
 
 use malachitebft_peer::PeerId;
@@ -108,5 +109,13 @@ impl ScoringStrategy for ExponentialMovingAverage {
                 (1.0 - self.alpha_failure) * previous_score
             }
         }
+    }
+
+    fn is_stateful(&self) -> bool {
+        false
+    }
+
+    fn retain_only(&mut self, _peer_ids: HashSet<&PeerId>) {
+        // No per-peer state to retain in this strategy
     }
 }
