@@ -9,6 +9,7 @@ use tracing::debug;
 
 use malachitebft_peer::PeerId;
 
+pub mod credit;
 pub mod ema;
 pub mod metrics;
 
@@ -63,11 +64,14 @@ where
     }
 }
 
+/// Scoring strategies
 #[derive(Copy, Clone, Debug, Default)]
 pub enum Strategy {
     /// Exponential moving average strategy
     #[default]
     Ema,
+    /// Credit-based strategy
+    Credit,
 }
 
 #[derive(Copy, Clone)]
@@ -257,17 +261,54 @@ mod tests {
         })
     }
 
-    fn arb_strategy(u: &mut Unstructured) -> Result<ema::ExponentialMovingAverage> {
+    fn arb_strategy(u: &mut Unstructured) -> Result<(Box<dyn ScoringStrategy>, Duration)> {
+        let slow_threshold = Duration::from_millis(u.int_in_range(1000..=5000)?);
+        eprintln!("slow_threshold = {slow_threshold:?}");
+
+        let strategy = if u.arbitrary()? {
+            eprintln!("Testing with EMA strategy");
+            arb_ema_strategy(u, slow_threshold).map(|s| Box::new(s) as Box<dyn ScoringStrategy>)
+        } else {
+            eprintln!("Testing with Credit strategy");
+            arb_credit_strategy(u, slow_threshold).map(|s| Box::new(s) as Box<dyn ScoringStrategy>)
+        }?;
+
+        Ok((strategy, slow_threshold))
+    }
+
+    fn arb_ema_strategy(
+        u: &mut Unstructured,
+        slow_threshold: Duration,
+    ) -> Result<ema::ExponentialMovingAverage> {
         let alpha_success = u.choose(&[0.20, 0.25, 0.30])?;
         let alpha_timeout = u.choose(&[0.10, 0.15, 0.20])?;
         let alpha_failure = u.choose(&[0.10, 0.15, 0.20])?;
-        let slow_threshold = u.int_in_range(1000..=5000)?;
 
         Ok(ema::ExponentialMovingAverage::new(
             *alpha_success,
             *alpha_timeout,
             *alpha_failure,
-            Duration::from_millis(slow_threshold),
+            slow_threshold,
+        ))
+    }
+
+    fn arb_credit_strategy(
+        u: &mut Unstructured,
+        slow_threshold: Duration,
+    ) -> Result<credit::Credit> {
+        let credit_fast_success = u.choose(&[30, 40, 50])?;
+        let credit_slow_success = u.choose(&[-5, -10, -15])?;
+        let credit_failure = u.choose(&[-15, -20, -25])?;
+        let credit_timeout = u.choose(&[-10, -15, -20])?;
+
+        Ok(credit::Credit::new(
+            slow_threshold,
+            *credit_fast_success,
+            *credit_slow_success,
+            *credit_failure,
+            *credit_timeout,
+            -100,
+            100,
         ))
     }
 
@@ -284,10 +325,10 @@ mod tests {
     #[test]
     fn scores_are_bounded() {
         arbtest(|u| {
-            let strategy = arb_strategy(u)?;
+            let (strategy, slow_threshold) = arb_strategy(u)?;
             let results = arb_vec(
                 u,
-                |u| arb_sync_result_success_fast(u, strategy.slow_threshold),
+                |u| arb_sync_result_success_fast(u, slow_threshold),
                 10..=100,
             )?;
 
@@ -312,7 +353,7 @@ mod tests {
         });
 
         arbtest(|u| {
-            let strategy = arb_strategy(u)?;
+            let (strategy, _) = arb_strategy(u)?;
             let results = arb_vec(u, arb_sync_result_failure, 10..=100)?;
 
             let mut scorer = PeerScorer::new(strategy);
@@ -340,8 +381,8 @@ mod tests {
     #[test]
     fn fast_responses_improve_score() {
         arbtest(|u| {
-            let strategy = arb_strategy(u)?;
-            let response_time = arb_response_time_fast(u, strategy.slow_threshold)?;
+            let (strategy, slow_threshold) = arb_strategy(u)?;
+            let response_time = arb_response_time_fast(u, slow_threshold)?;
 
             let mut scorer = PeerScorer::new(strategy);
             let peer_id = PeerId::random();
@@ -557,7 +598,7 @@ mod tests {
     #[ignore]
     fn monotonic_score_updates() {
         arbtest(|u| {
-            let strategy = arb_strategy(u)?;
+            let (strategy, slow_threshold) = arb_strategy(u)?;
             let result = arb_sync_result(u)?;
             let update_count = u.int_in_range(1_usize..=20)?;
             let peer_id = PeerId::random();
@@ -578,7 +619,7 @@ mod tests {
 
             // Check monotonicity based on result type
             match result {
-                SyncResult::Success(rt) if rt < strategy.slow_threshold => {
+                SyncResult::Success(rt) if rt < slow_threshold => {
                     // For fast response, scores should increase
                     for window in scores.windows(2) {
                         let diff = window[1] - window[0];
@@ -662,7 +703,7 @@ mod tests {
     #[test]
     fn response_time_affects_success_score() {
         arbtest(|u| {
-            let strategy = arb_strategy(u)?;
+            let (strategy, _) = arb_strategy(u)?;
             let fast_time = u.int_in_range(10_u64..=100)?;
             let slow_time = u.int_in_range(1000_u64..=5000)?;
 
@@ -695,7 +736,7 @@ mod tests {
     #[test]
     fn updating_one_peer_does_not_affect_others() {
         arbtest(|u| {
-            let strategy = arb_strategy(u)?;
+            let (strategy, _) = arb_strategy(u)?;
             let results = arb_vec(u, arb_sync_result, 0..=10)?;
 
             let mut scorer = PeerScorer::new(strategy);
@@ -727,8 +768,8 @@ mod tests {
     #[test]
     fn fast_response_help_recover_score_quickly() {
         arbtest(|u| {
-            let strategy = arb_strategy(u)?;
-            let response_time = arb_response_time_fast(u, strategy.slow_threshold)?;
+            let (strategy, slow_threshold) = arb_strategy(u)?;
+            let response_time = arb_response_time_fast(u, slow_threshold)?;
 
             let mut scorer = PeerScorer::new(strategy);
             let peer_id = PeerId::random();
@@ -763,8 +804,8 @@ mod tests {
     #[test]
     fn pruning_inactive_peers_resets_scores() {
         arbtest(|u| {
-            let strategy = arb_strategy(u)?;
-            let mut scorer = PeerScorer::new(strategy);
+            let (strategy, _) = arb_strategy(u)?;
+
             let peer_id = PeerId::random();
             let initial_score = strategy.initial_score(peer_id);
 
