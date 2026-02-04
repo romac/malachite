@@ -8,7 +8,7 @@ use bytesize::ByteSize;
 use derive_where::derive_where;
 use eyre::eyre;
 use ractor::{Actor, ActorProcessingErr, ActorRef};
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn, Instrument};
 
@@ -145,7 +145,7 @@ enum StatusUpdateMode {
     Interval(JoinHandle<()>), // the ticker task handle
 
     /// Send status updates only upon decisions
-    OnDecision(Duration), // jitter
+    OnDecision,
 }
 
 pub struct State<Ctx: Context> {
@@ -436,9 +436,9 @@ where
                     .await?;
 
                 // If in OnDecision mode, schedule the next tick with some jitter
-                if let &StatusUpdateMode::OnDecision(jitter) = &state.status_update_mode {
+                if let StatusUpdateMode::OnDecision = &state.status_update_mode {
                     let myself = myself.clone();
-                    delay(jitter, move || {
+                    delay(&mut state.sync.rng, move || {
                         let _ = myself.cast(Msg::Tick);
                     });
                 }
@@ -527,9 +527,7 @@ where
 {
     if interval == Duration::ZERO {
         info!("Using status update mode: OnDecision");
-
-        let jitter = Duration::from_millis(rng.gen_range(0..50));
-        StatusUpdateMode::OnDecision(jitter)
+        StatusUpdateMode::OnDecision
     } else {
         info!("Using status update mode: Interval");
 
@@ -652,10 +650,14 @@ where
     }
 }
 
-fn delay<F>(jitter: Duration, f: F)
+const MAX_JITTER_MS: u64 = 50;
+
+fn delay<R, F>(rng: &mut R, f: F)
 where
+    R: Rng,
     F: FnOnce() + Send + 'static,
 {
+    let jitter = Duration::from_millis(rng.gen_range(0..MAX_JITTER_MS));
     tokio::spawn(async move {
         tokio::time::sleep(jitter).await;
         f();
