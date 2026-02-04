@@ -75,7 +75,12 @@ impl ScoringStrategy for ExponentialMovingAverage {
         0.5 // All peers start with a neutral score of 0.5
     }
 
-    fn update_score(&mut self, previous_score: Score, result: SyncResult) -> Score {
+    fn update_score(
+        &mut self,
+        _peer_id: PeerId,
+        previous_score: Score,
+        result: SyncResult,
+    ) -> Score {
         match result {
             SyncResult::Success(response_time) => {
                 // Calculate quality score between 0-1 based on response time
