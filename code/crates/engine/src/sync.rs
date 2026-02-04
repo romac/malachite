@@ -8,7 +8,7 @@ use bytesize::ByteSize;
 use derive_where::derive_where;
 use eyre::eyre;
 use ractor::{Actor, ActorProcessingErr, ActorRef};
-use rand::{Rng as _, SeedableRng};
+use rand::SeedableRng;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn, Instrument};
 
@@ -139,6 +139,15 @@ impl Default for Params {
     }
 }
 
+/// The mode for sending status updates
+enum StatusUpdateMode {
+    /// Send status updates at regular intervals
+    Interval(JoinHandle<()>), // the ticker task handle
+
+    /// Send status updates only upon decisions
+    OnDecision(Duration), // jitter
+}
+
 pub struct State<Ctx: Context> {
     /// The state of the sync state machine
     sync: sync::State<Ctx>,
@@ -149,8 +158,8 @@ pub struct State<Ctx: Context> {
     /// In-flight requests
     inflight: InflightRequests<Ctx>,
 
-    /// Task for sending status updates
-    ticker: JoinHandle<()>,
+    /// Status update mode
+    status_update_mode: StatusUpdateMode,
 }
 
 #[allow(dead_code)]
@@ -425,6 +434,14 @@ where
             Msg::Decided(height) => {
                 self.process_input(&myself, state, sync::Input::Decided(height))
                     .await?;
+
+                // If in OnDecision mode, schedule the next tick with some jitter
+                if let &StatusUpdateMode::OnDecision(jitter) = &state.status_update_mode {
+                    let myself = myself.clone();
+                    delay(jitter, move || {
+                        let _ = myself.cast(Msg::Tick);
+                    });
+                }
             }
 
             // Received decided values from host
@@ -499,6 +516,35 @@ where
     }
 }
 
+fn status_update_mode<Ctx, R>(
+    interval: Duration,
+    sync: &ActorRef<Msg<Ctx>>,
+    rng: &mut R,
+) -> StatusUpdateMode
+where
+    Ctx: Context,
+    R: rand::Rng,
+{
+    if interval == Duration::ZERO {
+        info!("Using status update mode: OnDecision");
+
+        let jitter = Duration::from_millis(rng.gen_range(0..50));
+        StatusUpdateMode::OnDecision(jitter)
+    } else {
+        info!("Using status update mode: Interval");
+
+        // One-time uniform adjustment factor [-1%, +1%]
+        const ADJ_RATE: f64 = 0.01;
+        let adjustment = rng.gen_range(-ADJ_RATE..=ADJ_RATE);
+
+        let ticker = tokio::spawn(
+            ticker(interval, sync.clone(), adjustment, || Msg::Tick).in_current_span(),
+        );
+
+        StatusUpdateMode::Interval(ticker)
+    }
+}
+
 fn truncate_values_to_size_limit<Ctx, Codec>(
     values: &mut Vec<RawDecidedValue<Ctx>>,
     max_response_size: ByteSize,
@@ -560,25 +606,14 @@ where
 
         let mut rng = Box::new(rand::rngs::StdRng::from_entropy());
 
-        // One-time uniform adjustment factor [-1%, +1%]
-        const ADJ_RATE: f64 = 0.01;
-        let adjustment = rng.gen_range(-ADJ_RATE..=ADJ_RATE);
-
-        let ticker = tokio::spawn(
-            ticker(
-                self.params.status_update_interval,
-                myself.clone(),
-                adjustment,
-                || Msg::Tick,
-            )
-            .in_current_span(),
-        );
+        let status_update_mode =
+            status_update_mode(self.params.status_update_interval, &myself, &mut rng);
 
         Ok(State {
             sync: sync::State::new(rng, self.sync_config),
             timers: Timers::new(Box::new(myself.clone())),
             inflight: HashMap::new(),
-            ticker,
+            status_update_mode,
         })
     }
 
@@ -609,7 +644,20 @@ where
         _myself: ActorRef<Self::Msg>,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        state.ticker.abort();
+        if let StatusUpdateMode::Interval(ticker) = &state.status_update_mode {
+            ticker.abort();
+        }
+
         Ok(())
     }
+}
+
+fn delay<F>(jitter: Duration, f: F)
+where
+    F: FnOnce() + Send + 'static,
+{
+    tokio::spawn(async move {
+        tokio::time::sleep(jitter).await;
+        f();
+    });
 }
