@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use malachitebft_peer::PeerId;
@@ -150,5 +150,13 @@ impl ScoringStrategy for Credit {
         );
 
         self.credit_to_score(new_credit)
+    }
+
+    fn is_stateful(&self) -> bool {
+        true
+    }
+
+    fn retain_only(&mut self, peer_ids: HashSet<&PeerId>) {
+        self.credits.retain(|peer_id, _| peer_ids.contains(peer_id));
     }
 }
