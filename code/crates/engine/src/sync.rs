@@ -126,7 +126,13 @@ impl<Ctx: Context> From<TimeoutElapsed<Timeout>> for Msg<Ctx> {
 
 #[derive(Debug)]
 pub struct Params {
+    /// Interval at which to update other peers of our status
+    /// If set to 0s, status updates are sent eagerly right after each decision.
+    /// Default: 5s
     pub status_update_interval: Duration,
+
+    /// Timeout duration for sync requests
+    /// Default: 10s
     pub request_timeout: Duration,
 }
 
