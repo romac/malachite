@@ -162,6 +162,14 @@ pub struct State<Ctx: Context> {
     status_update_mode: StatusUpdateMode,
 }
 
+impl<Ctx: Context> State<Ctx> {
+    const MAX_JITTER_MS: u64 = 50;
+
+    fn random_jitter(&mut self) -> Duration {
+        Duration::from_millis(self.sync.rng.gen_range(0..Self::MAX_JITTER_MS))
+    }
+}
+
 #[allow(dead_code)]
 pub struct Sync<Ctx, Codec>
 where
@@ -437,10 +445,7 @@ where
 
                 // If in OnDecision mode, schedule the next tick with some jitter
                 if let StatusUpdateMode::OnDecision = &state.status_update_mode {
-                    let myself = myself.clone();
-                    delay(&mut state.sync.rng, move || {
-                        let _ = myself.cast(Msg::Tick);
-                    });
+                    myself.send_after(state.random_jitter(), || Msg::Tick);
                 }
             }
 
@@ -648,18 +653,4 @@ where
 
         Ok(())
     }
-}
-
-const MAX_JITTER_MS: u64 = 50;
-
-fn delay<R, F>(rng: &mut R, f: F)
-where
-    R: Rng,
-    F: FnOnce() + Send + 'static,
-{
-    let jitter = Duration::from_millis(rng.gen_range(0..MAX_JITTER_MS));
-    tokio::spawn(async move {
-        tokio::time::sleep(jitter).await;
-        f();
-    });
 }
