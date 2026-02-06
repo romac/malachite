@@ -8,7 +8,7 @@ use bytesize::ByteSize;
 use derive_where::derive_where;
 use eyre::eyre;
 use ractor::{Actor, ActorProcessingErr, ActorRef};
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn, Instrument};
 
@@ -166,14 +166,6 @@ pub struct State<Ctx: Context> {
 
     /// Status update mode
     status_update_mode: StatusUpdateMode,
-}
-
-impl<Ctx: Context> State<Ctx> {
-    const MAX_JITTER_MS: u64 = 50;
-
-    fn random_jitter(&mut self) -> Duration {
-        Duration::from_millis(self.sync.rng.gen_range(0..Self::MAX_JITTER_MS))
-    }
 }
 
 #[allow(dead_code)]
@@ -449,9 +441,9 @@ where
                 self.process_input(&myself, state, sync::Input::Decided(height))
                     .await?;
 
-                // If in OnDecision mode, schedule the next tick with some jitter
+                // If in OnDecision mode, schedule the next tick
                 if let StatusUpdateMode::OnDecision = &state.status_update_mode {
-                    myself.send_after(state.random_jitter(), || Msg::Tick);
+                    let _ = myself.cast(Msg::Tick);
                 }
             }
 
