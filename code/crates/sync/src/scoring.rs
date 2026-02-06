@@ -319,20 +319,20 @@ mod tests {
         u: &mut Unstructured,
         slow_threshold: Duration,
     ) -> Result<credit::Credit> {
-        let credit_fast_success = u.choose(&[30, 40, 50])?;
-        let credit_slow_success = u.choose(&[-5, -10, -15])?;
-        let credit_failure = u.choose(&[-15, -20, -25])?;
-        let credit_timeout = u.choose(&[-10, -15, -20])?;
+        let credit_fast_success = *u.choose(&[30, 40, 50])?;
+        let credit_slow_success = *u.choose(&[-5, -10, -15])?;
+        let credit_failure = *u.choose(&[-15, -20, -25])?;
+        let credit_timeout = *u.choose(&[-10, -15, -20])?;
 
-        Ok(credit::Credit::new(
+        Ok(credit::Credit::new(credit::CreditConfig {
             slow_threshold,
-            *credit_fast_success,
-            *credit_slow_success,
-            *credit_failure,
-            *credit_timeout,
-            -100,
-            100,
-        ))
+            credit_fast_success,
+            credit_slow_success,
+            credit_failure,
+            credit_timeout,
+            min_credit: -100,
+            max_credit: 100,
+        }))
     }
 
     fn arb_vec<T>(

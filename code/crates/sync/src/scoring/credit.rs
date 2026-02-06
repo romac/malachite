@@ -5,6 +5,38 @@ use malachitebft_peer::PeerId;
 
 use super::{Score, ScoringStrategy, SyncResult};
 
+#[derive(Copy, Clone, Debug)]
+pub struct CreditConfig {
+    /// Threshold for what is considered "fast enough".
+    pub slow_threshold: Duration,
+    /// Credit deltas
+    pub credit_fast_success: i32,
+    /// Credit delta for a success that's slower than the slow_threshold.
+    pub credit_slow_success: i32,
+    /// Credit delta for a failure.
+    pub credit_failure: i32,
+    /// Credit delta for a timeout.
+    pub credit_timeout: i32,
+    /// Minimum credit (worst score).
+    pub min_credit: i32,
+    /// Maximum credit (best score).
+    pub max_credit: i32,
+}
+
+impl Default for CreditConfig {
+    fn default() -> Self {
+        CreditConfig {
+            slow_threshold: Duration::from_millis(500),
+            credit_fast_success: 2,
+            credit_slow_success: 1,
+            credit_failure: -2,
+            credit_timeout: -3,
+            min_credit: -20,
+            max_credit: 20,
+        }
+    }
+}
+
 /// Credit-based scoring strategy
 ///
 /// Maintain an integer "credit" per peer.
@@ -15,18 +47,7 @@ use super::{Score, ScoringStrategy, SyncResult};
 /// Score is a normalized mapping of credit -> [0.0, 1.0].
 #[derive(Clone, Debug)]
 pub struct Credit {
-    /// Threshold for what is considered "fast enough".
-    pub slow_threshold: Duration,
-
-    /// Credit deltas
-    pub credit_fast_success: i32,
-    pub credit_slow_success: i32,
-    pub credit_failure: i32,
-    pub credit_timeout: i32,
-
-    /// Clamp bounds
-    pub min_credit: i32,
-    pub max_credit: i32,
+    config: CreditConfig,
 
     /// Per-peer credits
     credits: HashMap<PeerId, i32>,
@@ -34,55 +55,36 @@ pub struct Credit {
 
 impl Default for Credit {
     fn default() -> Self {
-        Self::new(
-            Duration::from_secs(1), // slow_threshold
-            2,                      // fast success
-            1,                      // slow success
-            -2,                     // failure
-            -3,                     // timeout
-            -20,                    // min_credit
-            20,                     // max_credit
-        )
+        Self::new(CreditConfig::default())
     }
 }
 
 impl Credit {
-    pub fn new(
-        slow_threshold: Duration,
-        credit_fast_success: i32,
-        credit_slow_success: i32,
-        credit_failure: i32,
-        credit_timeout: i32,
-        min_credit: i32,
-        max_credit: i32,
-    ) -> Self {
+    pub fn new(config: CreditConfig) -> Self {
         assert!(
-            slow_threshold.as_secs_f64() > 0.0,
+            config.slow_threshold.as_secs_f64() > 0.0,
             "slow_threshold must be > 0"
         );
 
-        assert!(min_credit < max_credit, "min_credit must be < max_credit");
+        assert!(
+            config.min_credit < config.max_credit,
+            "min_credit must be < max_credit"
+        );
 
         Self {
-            slow_threshold,
-            credit_fast_success,
-            credit_slow_success,
-            credit_failure,
-            credit_timeout,
-            min_credit,
-            max_credit,
+            config,
             credits: HashMap::new(),
         }
     }
 
     fn clamp_credit(&self, c: i32) -> i32 {
-        c.clamp(self.min_credit, self.max_credit)
+        c.clamp(self.config.min_credit, self.config.max_credit)
     }
 
     /// Map credit in [min_credit, max_credit] to score in [0.0, 1.0].
     fn credit_to_score(&self, credit: i32) -> Score {
-        let min = self.min_credit as f64;
-        let max = self.max_credit as f64;
+        let min = self.config.min_credit as f64;
+        let max = self.config.max_credit as f64;
         let c = credit as f64;
 
         // Avoid division by zero if min and max are the same
@@ -96,7 +98,7 @@ impl Credit {
 
     fn initial_credit(&self) -> i32 {
         // Neutral: midpoint of the clamp range.
-        self.min_credit + (self.max_credit - self.min_credit) / 2
+        self.config.min_credit + (self.config.max_credit - self.config.min_credit) / 2
     }
 
     fn get_credit(&mut self, peer_id: PeerId) -> i32 {
@@ -111,7 +113,7 @@ impl Credit {
     }
 
     fn is_fast(&self, response_time: Duration) -> bool {
-        response_time < self.slow_threshold
+        response_time < self.config.slow_threshold
     }
 }
 
@@ -132,13 +134,13 @@ impl ScoringStrategy for Credit {
         let delta = match result {
             SyncResult::Success(rt) => {
                 if self.is_fast(rt) {
-                    self.credit_fast_success
+                    self.config.credit_fast_success
                 } else {
-                    self.credit_slow_success
+                    self.config.credit_slow_success
                 }
             }
-            SyncResult::Failure => self.credit_failure,
-            SyncResult::Timeout => self.credit_timeout,
+            SyncResult::Failure => self.config.credit_failure,
+            SyncResult::Timeout => self.config.credit_timeout,
         };
 
         let new_credit = self.set_credit(peer_id, credit.saturating_add(delta));
