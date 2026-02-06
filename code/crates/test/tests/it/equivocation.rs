@@ -7,8 +7,6 @@ use malachitebft_test_framework::{HandlerResult, TestParams};
 use crate::TestBuilder;
 
 fn check_evidence<Ctx: Context>(evidence: &MisbehaviorEvidence<Ctx>) {
-    dbg!(evidence);
-
     for addr in evidence.proposals.iter() {
         let list = evidence.proposals.get(addr).unwrap();
         if let Some((p1, p2)) = list.first() {
@@ -28,7 +26,7 @@ fn check_evidence<Ctx: Context>(evidence: &MisbehaviorEvidence<Ctx>) {
 
 // Verifies that sharing a validator key across two nodes
 // induces equivocation and that decide-time `MisbehaviorEvidence`
-// contains double proposals and double prevotes for the equivocator.
+// contains double proposals for the equivocator.
 // Node 3 checks for proposal equivocation evidence.
 #[tokio::test]
 pub async fn equivocation_two_vals_same_pk_proposal() {
@@ -49,6 +47,8 @@ pub async fn equivocation_two_vals_same_pk_proposal() {
     test.add_node()
         .start()
         .on_decided(|_c, evidence, _s| {
+            dbg!(&evidence);
+
             if evidence.proposals.is_empty() {
                 eyre::bail!("Expected proposal equivocation evidence, but none was found");
             }
@@ -65,7 +65,7 @@ pub async fn equivocation_two_vals_same_pk_proposal() {
 
 // Verifies that sharing a validator key across two nodes
 // induces equivocation and that decide-time `MisbehaviorEvidence`
-// contains double proposals and double prevotes for the equivocator.
+// contains double prevotes for the equivocator.
 // Node 3 checks for vote equivocation evidence.
 #[tokio::test]
 pub async fn equivocation_two_vals_same_pk_vote() {
@@ -86,6 +86,8 @@ pub async fn equivocation_two_vals_same_pk_vote() {
     test.add_node()
         .start()
         .on_decided(|_c, evidence, _s| {
+            dbg!(&evidence);
+
             if evidence.votes.is_empty() {
                 eyre::bail!("Expected vote equivocation evidence, but none was found");
             }
