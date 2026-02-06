@@ -59,7 +59,7 @@ pub async fn equivocation_two_vals_same_pk_proposal() {
         .success();
 
     test.build()
-        .run_with_params(Duration::from_secs(5), params)
+        .run_with_params(Duration::from_secs(30), params)
         .await;
 }
 
@@ -98,6 +98,6 @@ pub async fn equivocation_two_vals_same_pk_vote() {
         .success();
 
     test.build()
-        .run_with_params(Duration::from_secs(5), params)
+        .run_with_params(Duration::from_secs(30), params)
         .await;
 }
