@@ -28,7 +28,7 @@ impl Default for CreditConfig {
         CreditConfig {
             slow_threshold: Duration::from_millis(500),
             credit_fast_success: 2,
-            credit_slow_success: 1,
+            credit_slow_success: 0,
             credit_failure: -2,
             credit_timeout: -4,
             min_credit: -20,
