@@ -432,6 +432,13 @@ where
 
             // (Re)Started a new height
             Msg::StartedHeight(height, restart) => {
+                // If in OnDecision mode, schedule the next tick to send a status update for the
+                // previous decision, now that we know for sure that the application has stored the decided value.
+                if let StatusUpdateMode::OnDecision = &state.status_update_mode {
+                    self.process_input(&myself, state, sync::Input::Tick)
+                        .await?;
+                }
+
                 self.process_input(&myself, state, sync::Input::StartedHeight(height, restart))
                     .await?
             }
@@ -440,11 +447,6 @@ where
             Msg::Decided(height) => {
                 self.process_input(&myself, state, sync::Input::Decided(height))
                     .await?;
-
-                // If in OnDecision mode, schedule the next tick
-                if let StatusUpdateMode::OnDecision = &state.status_update_mode {
-                    let _ = myself.cast(Msg::Tick);
-                }
             }
 
             // Received decided values from host
