@@ -280,8 +280,12 @@ mod tests {
         })
     }
 
+    fn arb_slow_threshold(u: &mut Unstructured) -> Result<Duration> {
+        u.int_in_range(1000..=5000).map(Duration::from_millis)
+    }
+
     fn arb_strategy(u: &mut Unstructured) -> Result<(Box<dyn ScoringStrategy>, Duration)> {
-        let slow_threshold = Duration::from_millis(u.int_in_range(1000..=5000)?);
+        let slow_threshold = arb_slow_threshold(u)?;
         eprintln!("slow_threshold = {slow_threshold:?}");
 
         let strategy = if u.arbitrary()? {
@@ -433,7 +437,7 @@ mod tests {
 
             let initial_score = 1.0;
             let update_score = scorer.strategy.update_score(
-                peer_id,
+                PeerId::random(),
                 initial_score,
                 SyncResult::Success(response_time),
             );
@@ -612,12 +616,15 @@ mod tests {
     }
 
     // Property: Score updates should be monotonic for sequences of same result type
-    // Note: This test does not apply to EMA anymore, but it can be useful for testing other strategies that have more deterministic score changes.
+    //
+    // Note: This test does not apply to EMA but does apply to Credit strategy,
+    // where we expect consistent improvements for fast successes and consistent
+    // penalties for failures and timeouts.
     #[test]
-    #[ignore]
     fn monotonic_score_updates() {
         arbtest(|u| {
-            let (strategy, slow_threshold) = arb_strategy(u)?;
+            let slow_threshold = arb_slow_threshold(u)?;
+            let strategy = arb_credit_strategy(u, slow_threshold)?;
             let result = arb_sync_result(u)?;
             let update_count = u.int_in_range(1_usize..=20)?;
             let peer_id = PeerId::random();
@@ -628,7 +635,7 @@ mod tests {
 
             println!(
                 "Testing monotonicity for result {:?} over {} updates, threshold={:?}",
-                result, update_count, strategy.slow_threshold
+                result, update_count, slow_threshold
             );
 
             for _ in 0..update_count {
