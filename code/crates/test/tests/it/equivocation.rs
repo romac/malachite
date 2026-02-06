@@ -7,6 +7,8 @@ use malachitebft_test_framework::{HandlerResult, TestParams};
 use crate::TestBuilder;
 
 fn check_evidence<Ctx: Context>(evidence: &MisbehaviorEvidence<Ctx>) {
+    dbg!(evidence);
+
     for addr in evidence.proposals.iter() {
         let list = evidence.proposals.get(addr).unwrap();
         if let Some((p1, p2)) = list.first() {
@@ -85,7 +87,7 @@ pub async fn equivocation_two_vals_same_pk_vote() {
         .start()
         .on_decided(|_c, evidence, _s| {
             if evidence.votes.is_empty() {
-                eyre::bail!("Expected proposal equivocation evidence, but none was found");
+                eyre::bail!("Expected vote equivocation evidence, but none was found");
             }
 
             check_evidence(&evidence);
