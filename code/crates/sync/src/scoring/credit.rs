@@ -30,7 +30,7 @@ impl Default for CreditConfig {
             credit_fast_success: 2,
             credit_slow_success: 1,
             credit_failure: -2,
-            credit_timeout: -3,
+            credit_timeout: -4,
             min_credit: -20,
             max_credit: 20,
         }
