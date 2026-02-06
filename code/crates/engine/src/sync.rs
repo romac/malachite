@@ -432,15 +432,16 @@ where
 
             // (Re)Started a new height
             Msg::StartedHeight(height, restart) => {
+                self.process_input(&myself, state, sync::Input::StartedHeight(height, restart))
+                    .await?;
+
                 // If in OnDecision mode, send a status update for the previous decision,
-                // now that we know for sure that the application has stored the decided value.
+                // now that we know for sure that the application has stored the decided value,
+                // and we have updated our tip height.
                 if let StatusUpdateMode::OnDecision = &state.status_update_mode {
                     self.process_input(&myself, state, sync::Input::SendStatusUpdate)
                         .await?;
                 }
-
-                self.process_input(&myself, state, sync::Input::StartedHeight(height, restart))
-                    .await?
             }
 
             // Decided on a value
