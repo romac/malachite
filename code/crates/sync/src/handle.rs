@@ -17,7 +17,7 @@ use crate::{
 
 #[derive_where(Debug)]
 pub enum Input<Ctx: Context> {
-    /// Scheduled tick for sending status update to peers
+    /// Periodical event triggering the broadcast of a status update
     SendStatusUpdate,
 
     /// A status update has been received from a peer
