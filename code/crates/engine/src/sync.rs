@@ -364,7 +364,7 @@ where
     ) -> Result<(), ActorProcessingErr> {
         match msg {
             Msg::Tick => {
-                self.process_input(&myself, state, sync::Input::Tick)
+                self.process_input(&myself, state, sync::Input::SendStatusUpdate)
                     .await?;
             }
 
@@ -432,10 +432,10 @@ where
 
             // (Re)Started a new height
             Msg::StartedHeight(height, restart) => {
-                // If in OnDecision mode, schedule the next tick to send a status update for the
-                // previous decision, now that we know for sure that the application has stored the decided value.
+                // If in OnDecision mode, send a status update for the previous decision,
+                // now that we know for sure that the application has stored the decided value.
                 if let StatusUpdateMode::OnDecision = &state.status_update_mode {
-                    self.process_input(&myself, state, sync::Input::Tick)
+                    self.process_input(&myself, state, sync::Input::SendStatusUpdate)
                         .await?;
                 }
 
