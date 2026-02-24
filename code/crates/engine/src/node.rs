@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use ractor::{Actor, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::task::JoinHandle;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use malachitebft_core_types::Context;
 
@@ -74,8 +74,8 @@ where
         self.host.link(myself.get_cell());
         self.wal.link(myself.get_cell());
 
-        if let Some(actor) = &self.sync {
-            actor.link(myself.get_cell());
+        if let Some(sync) = &self.sync {
+            sync.link(myself.get_cell());
         }
 
         Ok(())
@@ -94,24 +94,33 @@ where
     #[tracing::instrument(name = "node", parent = &self.span, skip_all)]
     async fn handle_supervisor_evt(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         evt: SupervisionEvent,
         _state: &mut (),
     ) -> Result<(), ActorProcessingErr> {
         match evt {
-            SupervisionEvent::ActorStarted(cell) => {
-                info!(actor = %cell.get_id(), "Actor has started");
+            SupervisionEvent::ActorStarted(who) => {
+                info!(actor = %who.get_id(), "Actor has started");
             }
-            SupervisionEvent::ActorTerminated(cell, _state, reason) => {
-                warn!(
-                    "Actor {} has terminated: {}",
-                    cell.get_id(),
-                    reason.unwrap_or_default()
-                );
+
+            SupervisionEvent::ActorTerminated(who, _state, reason) => {
+                let reason = reason.unwrap_or_else(|| "no reason provided".to_string());
+
+                error!(actor = %who.get_id(), "Actor has terminated, shutting down node: {reason}");
+
+                myself.stop(Some(format!(
+                    "Shutting down node due to child actor termination: {reason}",
+                )));
             }
+
             SupervisionEvent::ActorFailed(cell, error) => {
-                error!("Actor {} has failed: {error}", cell.get_id());
+                error!(actor = %cell.get_id(), "Actor has failed, shutting down node: {error:?}");
+
+                myself.stop(Some(format!(
+                    "Shutting down node due to child actor failure: {error:?}",
+                )));
             }
+
             SupervisionEvent::ProcessGroupChanged(_) => (),
         }
 
