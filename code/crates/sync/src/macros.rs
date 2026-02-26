@@ -19,7 +19,7 @@
 /// ```
 #[macro_export]
 macro_rules! process {
-    (input: $input:expr_2021, state: $state:expr_2021, metrics: $metrics:expr_2021, with: $effect:ident => $handle:expr_2021) => {{
+    (input: $input:expr, state: $state:expr, metrics: $metrics:expr, with: $effect:ident => $handle:expr) => {{
         let mut r#gen =
             $crate::co::Gen::new(|co| $crate::handle::handle(co, $state, $metrics, $input));
 
@@ -70,16 +70,16 @@ macro_rules! process {
 /// [error]: crate::handle::Error::UnexpectedResume
 #[macro_export]
 macro_rules! perform {
-    ($co:expr_2021, $effect:expr_2021) => {
+    ($co:expr, $effect:expr) => {
         perform!($co, $effect, $crate::Resume::Continue(_))
     };
 
-    ($co:expr_2021, $effect:expr_2021, $pat:pat) => {
+    ($co:expr, $effect:expr, $pat:pat) => {
         perform!($co, $effect, $pat => ())
     };
 
     // TODO: Add support for multiple patterns + if guards
-    ($co:expr_2021, $effect:expr_2021, $pat:pat => $expr:expr_2021 $(,)?) => {
+    ($co:expr, $effect:expr, $pat:pat => $expr:expr $(,)?) => {
         match $co.yield_($effect).await {
             $pat => $expr,
             resume => {

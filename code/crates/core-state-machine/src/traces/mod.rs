@@ -12,7 +12,7 @@ pub use trace::Trace;
 #[doc(hidden)]
 #[macro_export]
 macro_rules! debug_trace {
-    ($state:expr_2021, $line:expr_2021) => {
+    ($state:expr, $line:expr) => {
         #[cfg(feature = "debug")]
         {
             #[allow(unused_imports)]

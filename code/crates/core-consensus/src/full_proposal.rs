@@ -101,7 +101,7 @@ pub struct FullProposalKeeper<Ctx: Context> {
 /// In our case, it temporarily replaces the entry with `Entry::Empty`,
 /// and then replaces it with the new entry if the pattern matches.
 macro_rules! replace_with {
-    ($e:expr_2021, $p:pat => $r:expr_2021) => {
+    ($e:expr, $p:pat => $r:expr) => {
         *$e = match ::std::mem::take($e) {
             $p => $r,
             e => e,
