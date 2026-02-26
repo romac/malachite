@@ -175,21 +175,21 @@ impl HostState {
             .part_store
             .store(stream_id, height, round, part.clone());
 
-        if let ProposalPart::Transactions(txes) = &part {
-            if self.host.params.exec_time_per_tx > Duration::from_secs(0) {
-                debug!("Simulating tx execution and proof verification");
+        if let ProposalPart::Transactions(txes) = &part
+            && self.host.params.exec_time_per_tx > Duration::from_secs(0)
+        {
+            debug!("Simulating tx execution and proof verification");
 
-                // Simulate Tx execution. In the real implementation the results of the execution would be
-                // accumulated in some intermediate state structure based on which the proposal commitment
-                // will be computed once all parts are received and checked against the received
-                // `ProposalCommitment` part (e.g. `state_diff_commitment`) and the `proposal_commitment_hash`
-                // in the `Fin` part.
-                let num_txes = txes.len() as u32;
-                let exec_time = self.host.params.exec_time_per_tx * num_txes;
-                tokio::time::sleep(exec_time).await;
+            // Simulate Tx execution. In the real implementation the results of the execution would be
+            // accumulated in some intermediate state structure based on which the proposal commitment
+            // will be computed once all parts are received and checked against the received
+            // `ProposalCommitment` part (e.g. `state_diff_commitment`) and the `proposal_commitment_hash`
+            // in the `Fin` part.
+            let num_txes = txes.len() as u32;
+            let exec_time = self.host.params.exec_time_per_tx * num_txes;
+            tokio::time::sleep(exec_time).await;
 
-                trace!("Simulation took {exec_time:?} to execute {num_txes} txes");
-            }
+            trace!("Simulation took {exec_time:?} to execute {num_txes} txes");
         }
 
         let parts = self

@@ -55,12 +55,12 @@ impl Behaviour {
 
     /// Decrement connection count when a connection closes or fails.
     fn untrack_connection(&mut self, connection_id: ConnectionId) {
-        if let Some(ip) = self.connection_ips.remove(&connection_id) {
-            if let Some(count) = self.connections_per_ip.get_mut(&ip) {
-                *count = count.saturating_sub(1);
-                if *count == 0 {
-                    self.connections_per_ip.remove(&ip);
-                }
+        if let Some(ip) = self.connection_ips.remove(&connection_id)
+            && let Some(count) = self.connections_per_ip.get_mut(&ip)
+        {
+            *count = count.saturating_sub(1);
+            if *count == 0 {
+                self.connections_per_ip.remove(&ip);
             }
         }
     }

@@ -125,10 +125,10 @@ impl<Ctx: Context> FullProposalKeeper<Ctx> {
 
         for (_, proposals) in entries {
             for entry in proposals {
-                if let Entry::Full(p) = entry {
-                    if p.proposal.value().id() == proposed_value.value.id() {
-                        results.push(p.proposal.clone());
-                    }
+                if let Entry::Full(p) = entry
+                    && p.proposal.value().id() == proposed_value.value.id()
+                {
+                    results.push(p.proposal.clone());
                 }
             }
         }
@@ -148,10 +148,10 @@ impl<Ctx: Context> FullProposalKeeper<Ctx> {
             .filter(|entries| !entries.is_empty())?;
 
         for entry in entries {
-            if let Entry::Full(p) = entry {
-                if p.proposal.value().id() == *value_id {
-                    return Some(p);
-                }
+            if let Entry::Full(p) = entry
+                && p.proposal.value().id() == *value_id
+            {
+                return Some(p);
             }
         }
 
@@ -170,10 +170,10 @@ impl<Ctx: Context> FullProposalKeeper<Ctx> {
             .filter(|entries| !entries.is_empty())?;
 
         for entry in entries {
-            if let Entry::Full(p) = entry {
-                if p.proposal.validator_address() == proposer {
-                    return Some(p);
-                }
+            if let Entry::Full(p) = entry
+                && p.proposal.validator_address() == proposer
+            {
+                return Some(p);
             }
         }
 
@@ -425,16 +425,15 @@ impl<Ctx: Context> FullProposalKeeper<Ctx> {
             // Iterate over the vector of full proposals and determine if a new entry needs
             // to be appended or an existing one has to be modified.
             for entry in proposals {
-                if let Entry::ProposalOnly(proposal) = entry {
-                    if proposal.value().id() == new_value.value.id()
-                        && (proposal.round() == new_value.round
-                            || proposal.pol_round() == new_value.round)
-                    {
-                        // Found a matching proposal. Change the entry at index i
-                        replace_with!(entry, Entry::ProposalOnly(proposal) => {
-                            Entry::full(new_value.value.clone(), new_value.validity, proposal)
-                        });
-                    }
+                if let Entry::ProposalOnly(proposal) = entry
+                    && proposal.value().id() == new_value.value.id()
+                    && (proposal.round() == new_value.round
+                        || proposal.pol_round() == new_value.round)
+                {
+                    // Found a matching proposal. Change the entry at index i
+                    replace_with!(entry, Entry::ProposalOnly(proposal) => {
+                        Entry::full(new_value.value.clone(), new_value.validity, proposal)
+                    });
                 }
             }
         }

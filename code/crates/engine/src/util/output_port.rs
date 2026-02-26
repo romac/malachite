@@ -149,11 +149,11 @@ impl OutputPortSubscription {
                         tracing::warn!("Output port is lagging, we've dropped {l} messages!");
                     }
                     Ok(Some(msg)) => {
-                        if let Some(new_msg) = converter(msg) {
-                            if receiver.cast(new_msg).is_err() {
-                                // kill the subscription process, as the forwarding agent is stopped
-                                return;
-                            }
+                        if let Some(new_msg) = converter(msg)
+                            && receiver.cast(new_msg).is_err()
+                        {
+                            // kill the subscription process, as the forwarding agent is stopped
+                            return;
                         }
                     }
                     Ok(None) => {

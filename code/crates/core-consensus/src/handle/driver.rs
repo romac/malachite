@@ -38,24 +38,24 @@ where
             // presence of asynchrony or Byzantine behavior. Moreover,
             // it guarantees that after GST, all correct replicas will receive
             // the round certificate and enter the same round within bounded time.
-            if round > &Round::new(0) && state.is_active_validator() {
-                if let Some(cert) = state.driver.round_certificate() {
-                    if cert.enter_round == *round {
-                        info!(
-                            %cert.certificate.height,
-                            %cert.enter_round,
-                            number_of_votes = cert.certificate.round_signatures.len(),
-                            "Sending round certificate"
-                        );
-                        perform!(
-                            co,
-                            Effect::PublishLivenessMsg(
-                                LivenessMsg::SkipRoundCertificate(cert.certificate.clone()),
-                                Default::default()
-                            )
-                        );
-                    }
-                }
+            if round > &Round::new(0)
+                && state.is_active_validator()
+                && let Some(cert) = state.driver.round_certificate()
+                && cert.enter_round == *round
+            {
+                info!(
+                    %cert.certificate.height,
+                    %cert.enter_round,
+                    number_of_votes = cert.certificate.round_signatures.len(),
+                    "Sending round certificate"
+                );
+                perform!(
+                    co,
+                    Effect::PublishLivenessMsg(
+                        LivenessMsg::SkipRoundCertificate(cert.certificate.clone()),
+                        Default::default()
+                    )
+                );
             }
 
             let role = if state.address() == proposer {
@@ -113,14 +113,13 @@ where
             }
 
             #[cfg(feature = "metrics")]
-            if state.finalization_period && vote.vote_type() == VoteType::Precommit {
-                if let Some((decided_round, decided_value)) = state.driver.decided_value() {
-                    if vote.round() == decided_round
-                        && *vote.value() == NilOrVal::Val(decided_value.id())
-                    {
-                        metrics.additional_precommits.inc();
-                    }
-                }
+            if state.finalization_period
+                && vote.vote_type() == VoteType::Precommit
+                && let Some((decided_round, decided_value)) = state.driver.decided_value()
+                && vote.round() == decided_round
+                && *vote.value() == NilOrVal::Val(decided_value.id())
+            {
+                metrics.additional_precommits.inc();
             }
         }
 
@@ -178,13 +177,13 @@ where
     if prev_step != new_step {
         debug!(step.previous = ?prev_step, step.new = ?new_step, "Transitioned to new step");
 
-        if let Some(valid) = &state.driver.valid_value() {
-            if state.driver.step_is_propose() {
-                info!(
-                    round = %valid.round,
-                    "Entering Propose step with a valid value"
-                );
-            }
+        if let Some(valid) = &state.driver.valid_value()
+            && state.driver.step_is_propose()
+        {
+            info!(
+                round = %valid.round,
+                "Entering Propose step with a valid value"
+            );
         }
 
         #[cfg(feature = "metrics")]
@@ -334,52 +333,52 @@ where
                 // Prune all votes and certificates for the previous rounds as we know we are not going to use them anymore.
                 state.driver.prune_votes_and_certificates(vote.round());
 
-                if state.driver.round() >= HIDDEN_LOCK_ROUND && state.is_active_validator() {
-                    if let Some((signed_proposal, Validity::Valid)) = state
+                if state.driver.round() >= HIDDEN_LOCK_ROUND
+                    && state.is_active_validator()
+                    && let Some((signed_proposal, Validity::Valid)) = state
                         .driver
                         .proposal_and_validity_for_round_and_value(vote.round(), value_id.clone())
-                    {
+                {
+                    perform!(
+                        co,
+                        Effect::RestreamProposal(
+                            signed_proposal.height(),
+                            signed_proposal.round(),
+                            signed_proposal.pol_round(),
+                            signed_proposal.validator_address().clone(),
+                            signed_proposal.value().id(),
+                            Default::default()
+                        )
+                    );
+
+                    if state.params.value_payload.include_proposal() {
                         perform!(
                             co,
-                            Effect::RestreamProposal(
-                                signed_proposal.height(),
-                                signed_proposal.round(),
-                                signed_proposal.pol_round(),
-                                signed_proposal.validator_address().clone(),
-                                signed_proposal.value().id(),
-                                Default::default()
-                            )
-                        );
-
-                        if state.params.value_payload.include_proposal() {
-                            perform!(
-                                co,
-                                Effect::PublishConsensusMsg(
-                                    SignedConsensusMsg::Proposal(signed_proposal.clone()),
-                                    Default::default()
-                                )
-                            );
-                        }
-
-                        let polka_certificate = state
-                            .polka_certificate(vote.round(), value_id)
-                            .ok_or_else(|| {
-                                Error::MissingPolkaCertificate(
-                                    state.driver.height(),
-                                    vote.round(),
-                                    value_id.clone(),
-                                    "precommit",
-                                )
-                            })?;
-
-                        perform!(
-                            co,
-                            Effect::PublishLivenessMsg(
-                                LivenessMsg::PolkaCertificate(polka_certificate.clone()),
+                            Effect::PublishConsensusMsg(
+                                SignedConsensusMsg::Proposal(signed_proposal.clone()),
                                 Default::default()
                             )
                         );
                     }
+
+                    let polka_certificate = state
+                        .polka_certificate(vote.round(), value_id)
+                        .ok_or_else(|| {
+                            Error::MissingPolkaCertificate(
+                                state.driver.height(),
+                                vote.round(),
+                                value_id.clone(),
+                                "precommit",
+                            )
+                        })?;
+
+                    perform!(
+                        co,
+                        Effect::PublishLivenessMsg(
+                            LivenessMsg::PolkaCertificate(polka_certificate.clone()),
+                            Default::default()
+                        )
+                    );
                 }
             }
 

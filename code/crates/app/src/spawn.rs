@@ -130,10 +130,10 @@ where
     Ctx: Context,
     Codec: WalCodec<Ctx>,
 {
-    if !path.exists() {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
+    if !path.exists()
+        && let Some(parent) = path.parent()
+    {
+        std::fs::create_dir_all(parent)?;
     }
 
     Wal::spawn(

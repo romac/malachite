@@ -32,20 +32,20 @@ where
             perform!(co, Effect::RepublishVote(vote.clone(), Default::default()));
         };
 
-        if let Some(cert) = state.round_certificate() {
-            if cert.enter_round == round {
-                info!(
-                    %cert.certificate.height,
-                    %round,
-                    %cert.certificate.round,
-                    number_of_votes = cert.certificate.round_signatures.len(),
-                    "Rebroadcasting round certificate"
-                );
-                perform!(
-                    co,
-                    Effect::RepublishRoundCertificate(cert.certificate.clone(), Default::default())
-                );
-            }
+        if let Some(cert) = state.round_certificate()
+            && cert.enter_round == round
+        {
+            info!(
+                %cert.certificate.height,
+                %round,
+                %cert.certificate.round,
+                number_of_votes = cert.certificate.round_signatures.len(),
+                "Rebroadcasting round certificate"
+            );
+            perform!(
+                co,
+                Effect::RepublishRoundCertificate(cert.certificate.clone(), Default::default())
+            );
         };
     }
 

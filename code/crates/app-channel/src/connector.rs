@@ -224,10 +224,10 @@ where
 
                 // Do not block processing of other messages while waiting for the next height
                 tokio::spawn(async move {
-                    if let Ok(next) = rx.await {
-                        if let Err(e) = reply_to.send(next) {
-                            error!("Finalized: connector failed to send StartHeight: {e}");
-                        }
+                    if let Ok(next) = rx.await
+                        && let Err(e) = reply_to.send(next)
+                    {
+                        error!("Finalized: connector failed to send StartHeight: {e}");
                     }
                 });
             }

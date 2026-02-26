@@ -263,10 +263,10 @@ where
                 }
             }
             // Add the address to the Kademlia routing table
-            if self.config.bootstrap_protocol == BootstrapProtocol::Kademlia {
-                if let Some(addr) = info.listen_addrs.first() {
-                    swarm.behaviour_mut().add_address(&peer_id, addr.clone());
-                }
+            if self.config.bootstrap_protocol == BootstrapProtocol::Kademlia
+                && let Some(addr) = info.listen_addrs.first()
+            {
+                swarm.behaviour_mut().add_address(&peer_id, addr.clone());
             }
         } else {
             // If discovery is disabled, classify based on actual connection direction

@@ -378,29 +378,29 @@ async fn run(
         return;
     }
 
-    if config.enable_consensus {
-        if let Err(e) = pubsub::subscribe(
+    if config.enable_consensus
+        && let Err(e) = pubsub::subscribe(
             &mut swarm,
             config.pubsub_protocol,
             Channel::consensus(),
             config.channel_names,
-        ) {
-            error!("Error subscribing to consensus channels: {e}");
-            return;
-        };
-    }
+        )
+    {
+        error!("Error subscribing to consensus channels: {e}");
+        return;
+    };
 
-    if config.enable_sync {
-        if let Err(e) = pubsub::subscribe(
+    if config.enable_sync
+        && let Err(e) = pubsub::subscribe(
             &mut swarm,
             PubSubProtocol::Broadcast,
             &[Channel::Sync],
             config.channel_names,
-        ) {
-            error!("Error subscribing to Sync channel: {e}");
-            return;
-        };
-    }
+        )
+    {
+        error!("Error subscribing to Sync channel: {e}");
+        return;
+    };
 
     // Timer to perform periodic network operations (peer reconnection, metrics updates, etc.)
     // TODO: Using 1 second for now, for faster reconnection during testing
@@ -689,14 +689,13 @@ async fn handle_swarm_event(
                 .discovery
                 .handle_closed_connection(swarm, peer_id, connection_id);
 
-            if num_established == 0 {
-                if let Err(e) = tx_event
+            if num_established == 0
+                && let Err(e) = tx_event
                     .send(Event::PeerDisconnected(PeerId::from_libp2p(&peer_id)))
                     .await
-                {
-                    error!("Error sending peer disconnected event to handle: {e}");
-                    return ControlFlow::Break(());
-                }
+            {
+                error!("Error sending peer disconnected event to handle: {e}");
+                return ControlFlow::Break(());
             }
         }
 
@@ -732,14 +731,13 @@ async fn handle_swarm_event(
                     let score = state.update_peer(peer_id, connection_id, &info);
                     set_peer_score(swarm, peer_id, score);
 
-                    if !is_already_connected {
-                        if let Err(e) = tx_event
+                    if !is_already_connected
+                        && let Err(e) = tx_event
                             .send(Event::PeerConnected(PeerId::from_libp2p(&peer_id)))
                             .await
-                        {
-                            error!("Error sending peer connected event to handle: {e}");
-                            return ControlFlow::Break(());
-                        }
+                    {
+                        error!("Error sending peer connected event to handle: {e}");
+                        return ControlFlow::Break(());
                     }
                 } else {
                     trace!(
