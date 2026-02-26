@@ -202,11 +202,14 @@ impl Mempool {
                 let mut txes = Vec::with_capacity(count);
 
                 for _ in 0..count {
-                    if let Some((_, tx)) = state.transactions.pop_first() {
-                        txes.push(tx);
-                    } else {
-                        // No more transactions to reap
-                        break;
+                    match state.transactions.pop_first() {
+                        Some((_, tx)) => {
+                            txes.push(tx);
+                        }
+                        _ => {
+                            // No more transactions to reap
+                            break;
+                        }
                     }
                 }
 

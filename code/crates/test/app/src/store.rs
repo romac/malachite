@@ -139,14 +139,13 @@ impl Db {
         let tx = self.db.begin_read()?;
         let table = tx.open_table(UNDECIDED_PROPOSALS_TABLE)?;
 
-        let value = if let Ok(Some(value)) = table.get(&(height, round, value_id)) {
-            Some(
+        let value = match table.get(&(height, round, value_id)) {
+            Ok(Some(value)) => Some(
                 ProtobufCodec
                     .decode(Bytes::from(value.value()))
                     .map_err(StoreError::Protobuf)?,
-            )
-        } else {
-            None
+            ),
+            _ => None,
         };
 
         Ok(value)

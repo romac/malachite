@@ -6,9 +6,9 @@ pub use malachitebft_core_types::*;
 
 pub use crate::effect::{Effect, Resume};
 pub use crate::error::Error;
-pub use crate::gen::Co;
 pub use crate::input::Input;
 pub use crate::perform;
+pub use crate::r#gen::Co;
 pub use crate::state::State;
 
 #[cfg(feature = "metrics")]

@@ -116,7 +116,7 @@ fn entry_sizes() -> io::Result<()> {
 
     for &size in &entry_sizes {
         // Create entry with random data
-        let entry: Vec<u8> = (0..size).map(|_| thread_rng().gen::<u8>()).collect();
+        let entry: Vec<u8> = (0..size).map(|_| thread_rng().r#gen::<u8>()).collect();
 
         let start = Instant::now();
 

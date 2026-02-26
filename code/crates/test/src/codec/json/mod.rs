@@ -106,8 +106,10 @@ impl HasEncodedLen<Response<TestContext>> for JsonCodec {
         &self,
         msg: &Response<TestContext>,
     ) -> Result<usize, <Self as Codec<Response<TestContext>>>::Error> {
-        warn!("encoded_len serializes the data to compute the length; consider using ProtobufCodec if \
-        you want to compute the length of the encoded data without encoding them");
+        warn!(
+            "encoded_len serializes the data to compute the length; consider using ProtobufCodec if \
+        you want to compute the length of the encoded data without encoding them"
+        );
         serde_json::to_vec(&RawResponse::from(msg.clone())).map(|b| b.len())
     }
 }

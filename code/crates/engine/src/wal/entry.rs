@@ -153,7 +153,7 @@ fn decode_timeout(mut buf: impl Read) -> io::Result<Timeout> {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "commit timeouts are no longer supported, ignoring",
-            ))
+            ));
         }
 
         // Prevote/precommit rebroadcast timeouts have been removed in PR #1037,
@@ -162,7 +162,7 @@ fn decode_timeout(mut buf: impl Read) -> io::Result<Timeout> {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "prevote/precommit time limit timeouts are no longer supported, ignoring",
-            ))
+            ));
         }
 
         // Consensus will typically not want to store these timeouts in the WAL,
@@ -174,14 +174,14 @@ fn decode_timeout(mut buf: impl Read) -> io::Result<Timeout> {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "FinalizeHeight timeouts are not persisted to WAL, ignoring",
-            ))
+            ));
         }
 
         _ => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "invalid timeout step",
-            ))
+            ));
         }
     };
 

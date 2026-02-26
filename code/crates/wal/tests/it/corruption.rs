@@ -13,7 +13,7 @@ static TESTDIR: LazyLock<NumberedDir> =
     LazyLock::new(|| NumberedDirBuilder::new("wal".to_string()).create().unwrap());
 
 macro_rules! testwal {
-    ($e:expr) => {{
+    ($e:expr_2021) => {{
         let module_path = ::std::module_path!();
         let test_name = ::testdir::private::extract_test_name(&module_path);
         let subdir_path = ::std::path::Path::new(&module_path.replace("::", "/")).join(&test_name);

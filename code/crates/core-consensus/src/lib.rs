@@ -32,7 +32,7 @@ mod ser;
 
 // Only used in macros
 #[doc(hidden)]
-pub mod gen;
+pub mod r#gen;
 
 // Only used in macros
 mod handle;

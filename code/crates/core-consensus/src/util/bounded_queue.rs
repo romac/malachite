@@ -83,7 +83,7 @@ where
     }
 
     /// Combination of `shift` and `take` methods.
-    pub fn shift_and_take(&mut self, min_index: &I) -> impl Iterator<Item = T>
+    pub fn shift_and_take(&mut self, min_index: &I) -> impl Iterator<Item = T> + use<I, T>
     where
         I: Display,
     {
@@ -112,7 +112,7 @@ where
     }
 
     /// Take all entries with indices equal to `index` and return them.
-    pub fn take(&mut self, index: &I) -> impl Iterator<Item = T> {
+    pub fn take(&mut self, index: &I) -> impl Iterator<Item = T> + use<I, T> {
         self.queue
             .remove(index)
             .into_iter()

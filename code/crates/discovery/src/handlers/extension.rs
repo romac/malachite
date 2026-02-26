@@ -91,7 +91,8 @@ where
 
             self.state = State::Idle;
         } else {
-            debug!("Discovery extension in progress ({}ms), {} pending connections ({} in queue), {} pending requests ({} in queue)",
+            debug!(
+                "Discovery extension in progress ({}ms), {} pending connections ({} in queue), {} pending requests ({} in queue)",
                 self.metrics.elapsed().as_millis(),
                 pending_connections_len,
                 rx_dial_len,

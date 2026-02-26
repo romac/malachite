@@ -90,7 +90,12 @@ impl ItfRunner for VoteKeeperRunner {
 
                 println!(
                     "🔵 step: vote={:?}, round={:?}, value={:?}, validator={:?}, weight={:?}, current_round={:?}",
-                    input_vote.vote_type, round, value, input_vote.src_address, weight, current_round
+                    input_vote.vote_type,
+                    round,
+                    value,
+                    input_vote.src_address,
+                    weight,
+                    current_round
                 );
 
                 debug_assert_eq!(*weight as u64, validator.voting_power);

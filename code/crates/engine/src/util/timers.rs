@@ -161,8 +161,7 @@ where
 
                 trace!(
                     "Received timer {key:?} from old generation {}, expected generation {}, discarding",
-                    timer_msg.generation,
-                    timer.generation,
+                    timer_msg.generation, timer.generation,
                 );
 
                 None

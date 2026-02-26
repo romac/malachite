@@ -101,7 +101,7 @@ where
             }
         }
 
-        DriverInput::Vote(ref vote) => {
+        DriverInput::Vote(vote) => {
             if vote.height() != state.driver.height() {
                 warn!(
                     "Received vote for wrong height {}, current height: {}",

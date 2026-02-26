@@ -77,7 +77,10 @@ impl<Ctx: Context> fmt::Display for Event<Ctx> {
                 write!(f, "StartedHeight(height: {height}, restart: {restart})")
             }
             Event::StartedRound(height, round, proposer, role) => {
-                write!(f, "StartedRound(height: {height}, round: {round}, proposer: {proposer}, role: {role:?})")
+                write!(
+                    f,
+                    "StartedRound(height: {height}, round: {round}, proposer: {proposer}, role: {role:?})"
+                )
             }
             Event::Published(msg) => write!(f, "Published(msg: {msg:?})"),
             Event::Received(msg) => write!(f, "Received(msg: {msg:?})"),

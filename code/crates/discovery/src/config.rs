@@ -51,7 +51,9 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         if DEFAULT_NUM_INBOUND_PEERS < DEFAULT_NUM_OUTBOUND_PEERS {
-            panic!("Number of inbound peers should be greater than or equal to number of outbound peers");
+            panic!(
+                "Number of inbound peers should be greater than or equal to number of outbound peers"
+            );
         }
 
         Self {
@@ -104,7 +106,9 @@ impl Config {
 
     pub fn set_peers_bounds(&mut self, num_outbound_peers: usize, num_inbound_peers: usize) {
         if num_inbound_peers < num_outbound_peers {
-            panic!("Number of inbound peers should be greater than or equal to number of outbound peers");
+            panic!(
+                "Number of inbound peers should be greater than or equal to number of outbound peers"
+            );
         }
 
         self.num_outbound_peers = num_outbound_peers;

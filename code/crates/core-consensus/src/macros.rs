@@ -19,13 +19,13 @@
 /// ```
 #[macro_export]
 macro_rules! process {
-    (input: $input:expr, state: $state:expr, metrics: $metrics:expr, with: $effect:ident => $handle:expr) => {{
-        let mut gen = $crate::gen::Gen::new(|co| $crate::handle(co, $state, $metrics, $input));
-        let mut co_result = gen.resume_with($crate::Resume::Start);
+    (input: $input:expr_2021, state: $state:expr_2021, metrics: $metrics:expr_2021, with: $effect:ident => $handle:expr_2021) => {{
+        let mut r#gen = $crate::r#gen::Gen::new(|co| $crate::handle(co, $state, $metrics, $input));
+        let mut co_result = r#gen.resume_with($crate::Resume::Start);
 
         'proc: loop {
             match co_result {
-                $crate::gen::CoResult::Yielded($effect) => {
+                $crate::r#gen::CoResult::Yielded($effect) => {
                     let resume = match $handle {
                         Ok(resume) => resume,
                         Err(error) => {
@@ -33,9 +33,11 @@ macro_rules! process {
                             $crate::Resume::Continue
                         }
                     };
-                    co_result = gen.resume_with(resume)
+                    co_result = r#gen.resume_with(resume)
                 }
-                $crate::gen::CoResult::Complete(result) => break 'proc result.map_err(Into::into),
+                $crate::r#gen::CoResult::Complete(result) => {
+                    break 'proc result.map_err(Into::into);
+                }
             }
         }
     }};
@@ -64,16 +66,16 @@ macro_rules! process {
 /// [error]: crate::error::Error::UnexpectedResume
 #[macro_export]
 macro_rules! perform {
-    ($co:expr, $effect:expr) => {
+    ($co:expr_2021, $effect:expr_2021) => {
         perform!($co, $effect, $crate::effect::Resume::Continue)
     };
 
-    ($co:expr, $effect:expr, $pat:pat) => {
+    ($co:expr_2021, $effect:expr_2021, $pat:pat) => {
         perform!($co, $effect, $pat => ())
     };
 
     // TODO: Add support for multiple patterns + if guards
-    ($co:expr, $effect:expr, $pat:pat => $expr:expr $(,)?) => {
+    ($co:expr_2021, $effect:expr_2021, $pat:pat => $expr:expr_2021 $(,)?) => {
         match $co.yield_($effect).await {
             $pat => $expr,
             resume => {

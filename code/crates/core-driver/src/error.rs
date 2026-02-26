@@ -22,7 +22,9 @@ where
     ValidatorNotFound(Ctx::Address),
 
     /// Received a proposal for another height
-    #[error("Received proposal for height {proposal_height} different from consensus height {consensus_height}")]
+    #[error(
+        "Received proposal for height {proposal_height} different from consensus height {consensus_height}"
+    )]
     InvalidProposalHeight {
         /// Proposal height
         proposal_height: Ctx::Height,
@@ -42,7 +44,9 @@ where
     },
 
     /// Received a certificate for another height
-    #[error("Received certificate for height {certificate_height} different from consensus height {consensus_height}")]
+    #[error(
+        "Received certificate for height {certificate_height} different from consensus height {consensus_height}"
+    )]
     InvalidCertificateHeight {
         /// Certificate height
         certificate_height: Ctx::Height,

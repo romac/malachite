@@ -330,27 +330,32 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
             } => {
                 info!(%height, %round, "Processing synced value");
 
-                if let Some(value) = decode_value(value_bytes) {
-                    let proposed_value = ProposedValue {
-                        height,
-                        round,
-                        valid_round: Round::Nil,
-                        proposer,
-                        value,
-                        validity: Validity::Valid,
-                    };
+                match decode_value(value_bytes) {
+                    Some(value) => {
+                        let proposed_value = ProposedValue {
+                            height,
+                            round,
+                            valid_round: Round::Nil,
+                            proposer,
+                            value,
+                            validity: Validity::Valid,
+                        };
 
-                    // TODO: We plan to add some validation here in the future.
-                    state
-                        .store
-                        .store_undecided_proposal(proposed_value.clone())
-                        .await?;
+                        // TODO: We plan to add some validation here in the future.
+                        state
+                            .store
+                            .store_undecided_proposal(proposed_value.clone())
+                            .await?;
 
-                    if reply.send(Some(proposed_value)).is_err() {
-                        error!("Failed to send ProcessSyncedValue reply");
+                        if reply.send(Some(proposed_value)).is_err() {
+                            error!("Failed to send ProcessSyncedValue reply");
+                        }
                     }
-                } else if reply.send(None).is_err() {
-                    error!("Failed to send ProcessSyncedValue reply");
+                    _ => {
+                        if reply.send(None).is_err() {
+                            error!("Failed to send ProcessSyncedValue reply");
+                        }
+                    }
                 }
             }
 

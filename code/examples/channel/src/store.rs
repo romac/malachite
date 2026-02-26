@@ -177,17 +177,18 @@ impl Db {
         let tx = self.db.begin_read()?;
         let table = tx.open_table(UNDECIDED_PROPOSALS_TABLE)?;
 
-        let value = if let Ok(Some(value)) = table.get(&(height, round, value_id)) {
-            let bytes = value.value();
-            read_bytes += bytes.len() as u64;
+        let value = match table.get(&(height, round, value_id)) {
+            Ok(Some(value)) => {
+                let bytes = value.value();
+                read_bytes += bytes.len() as u64;
 
-            let proposal = ProtobufCodec
-                .decode(Bytes::from(bytes))
-                .map_err(StoreError::Protobuf)?;
+                let proposal = ProtobufCodec
+                    .decode(Bytes::from(bytes))
+                    .map_err(StoreError::Protobuf)?;
 
-            Some(proposal)
-        } else {
-            None
+                Some(proposal)
+            }
+            _ => None,
         };
 
         self.metrics.observe_read_time(start.elapsed());

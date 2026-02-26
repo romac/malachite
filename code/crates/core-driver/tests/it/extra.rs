@@ -1170,7 +1170,13 @@ fn driver_steps_polka_previous_with_no_locked() {
             new_state: precommit_state_with_proposal_and_valid(
                 Round::new(0),
                 Round::new(0),
-                Proposal::new(Height::new(1), Round::new(0), value.clone(), Round::Nil, v3.address),
+                Proposal::new(
+                    Height::new(1),
+                    Round::new(0),
+                    value.clone(),
+                    Round::Nil,
+                    v3.address,
+                ),
             ),
         },
         TestStep {
@@ -1180,7 +1186,13 @@ fn driver_steps_polka_previous_with_no_locked() {
             expected_round: Round::new(1),
             new_state: new_round_with_proposal_and_valid(
                 Round::new(1),
-                Proposal::new(Height::new(1), Round::new(0), value.clone(), Round::Nil, v3.address),
+                Proposal::new(
+                    Height::new(1),
+                    Round::new(0),
+                    value.clone(),
+                    Round::Nil,
+                    v3.address,
+                ),
             ),
         },
         TestStep {
@@ -1196,7 +1208,13 @@ fn driver_steps_polka_previous_with_no_locked() {
             new_state: propose_state_with_proposal_and_valid(
                 Round::new(1),
                 Round::new(0),
-                Proposal::new(Height::new(1), Round::new(0), value.clone(), Round::Nil, v2.address),
+                Proposal::new(
+                    Height::new(1),
+                    Round::new(0),
+                    value.clone(),
+                    Round::Nil,
+                    v2.address,
+                ),
             ),
         },
         TestStep {
@@ -1213,7 +1231,13 @@ fn driver_steps_polka_previous_with_no_locked() {
             new_state: prevote_state_with_proposal_and_valid(
                 Round::new(1),
                 Round::new(0),
-                Proposal::new(Height::new(1), Round::new(0), value.clone(), Round::Nil, v2.address),
+                Proposal::new(
+                    Height::new(1),
+                    Round::new(0),
+                    value.clone(),
+                    Round::Nil,
+                    v2.address,
+                ),
             ),
         },
     ];
@@ -1397,10 +1421,16 @@ fn driver_steps_polka_any_then_proposal_other() {
         },
         TestStep {
             desc: "Receive a proposal from v1 - L22 send prevote, replay polkaAny, start timeout prevote",
-            input: proposal_input(Round::new(0), value.clone(), Round::Nil, Validity::Valid, v1.address),
+            input: proposal_input(
+                Round::new(0),
+                value.clone(),
+                Round::Nil,
+                Validity::Valid,
+                v1.address,
+            ),
             expected_outputs: vec![
-                prevote_output(Round::new(0),value.clone(), &my_addr),
-                start_prevote_timer_output(Round::new(0))
+                prevote_output(Round::new(0), value.clone(), &my_addr),
+                start_prevote_timer_output(Round::new(0)),
             ],
             expected_round: Round::new(0),
             new_state: prevote_state(Round::new(0)),

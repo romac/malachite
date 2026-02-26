@@ -422,7 +422,7 @@ impl State {
         &mut self,
         value: LocallyProposedValue<TestContext>,
         pol_round: Round,
-    ) -> impl Iterator<Item = StreamMessage<ProposalPart>> {
+    ) -> impl Iterator<Item = StreamMessage<ProposalPart>> + use<> {
         let parts = self.value_to_parts(value, pol_round);
         let stream_id = self.stream_id();
 
