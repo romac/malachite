@@ -33,9 +33,9 @@ use malachitebft_core_state_machine::input::Input as RoundInput;
 use malachitebft_core_state_machine::state::Step;
 use malachitebft_core_types::{CommitCertificate, PolkaCertificate, SignedProposal};
 use malachitebft_core_types::{Context, Proposal, Round, Validity, Value, ValueId, VoteType};
+use malachitebft_core_votekeeper::Threshold;
 use malachitebft_core_votekeeper::keeper::Output as VKOutput;
 use malachitebft_core_votekeeper::keeper::VoteKeeper;
-use malachitebft_core_votekeeper::Threshold;
 
 use crate::Driver;
 
@@ -217,10 +217,9 @@ where
         // Check for associated Proposal: if found and valid, decide it
         if let Some((signed_proposal, validity)) =
             self.proposal_and_validity_for_round_and_value(certificate_round, certificate_value_id)
+            && validity.is_valid()
         {
-            if validity.is_valid() {
-                return RoundInput::ProposalAndPrecommitValue(signed_proposal.message.clone());
-            }
+            return RoundInput::ProposalAndPrecommitValue(signed_proposal.message.clone());
         }
         // Proposal not received or deemed invalid
         RoundInput::PrecommitAny
