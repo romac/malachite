@@ -1,5 +1,5 @@
-use genawaiter::sync as r#gen;
 use genawaiter::GeneratorState;
+use genawaiter::sync as r#gen;
 
 use crate::{Effect, Error, Resume};
 

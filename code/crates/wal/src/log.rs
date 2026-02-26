@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use cfg_if::cfg_if;
 
-use crate::ext::{read_u32, read_u64, read_u8, write_u32, write_u64, write_u8};
+use crate::ext::{read_u8, read_u32, read_u64, write_u8, write_u32, write_u64};
 use crate::{Storage, Version};
 
 /// The maximum size of a single log entry in bytes. (1 GiB)
@@ -102,11 +102,7 @@ where
         let pos = self.log.storage.stream_position()?;
         let len = self.log.storage.size_bytes()?;
 
-        if pos < len {
-            Ok(Some(self))
-        } else {
-            Ok(None)
-        }
+        if pos < len { Ok(Some(self)) } else { Ok(None) }
     }
 }
 

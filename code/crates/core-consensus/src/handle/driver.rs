@@ -2,6 +2,7 @@ use malachitebft_core_driver::Input as DriverInput;
 use malachitebft_core_driver::Output as DriverOutput;
 use malachitebft_core_types::{NilOrVal, VoteType};
 
+use crate::Role;
 use crate::handle::decide::decide;
 use crate::handle::on_proposal;
 use crate::handle::signature::sign_proposal;
@@ -13,7 +14,6 @@ use crate::types::{
     LivenessMsg, {LocallyProposedValue, SignedConsensusMsg},
 };
 use crate::util::pretty::PrettyVal;
-use crate::Role;
 
 use super::propose::on_propose;
 

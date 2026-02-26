@@ -1,4 +1,4 @@
-use libp2p::{swarm::ConnectionId, PeerId, Swarm};
+use libp2p::{PeerId, Swarm, swarm::ConnectionId};
 use tracing::{debug, warn};
 
 use crate::{Discovery, DiscoveryClient, State};

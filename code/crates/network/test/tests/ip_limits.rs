@@ -8,8 +8,8 @@ use std::time::Duration;
 use malachitebft_config::TransportProtocol;
 use malachitebft_metrics::SharedRegistry;
 use malachitebft_network::{
-    spawn, ChannelNames, Config, DiscoveryConfig, GossipSubConfig, Keypair, NetworkIdentity,
-    ProtocolNames, PubSubProtocol,
+    ChannelNames, Config, DiscoveryConfig, GossipSubConfig, Keypair, NetworkIdentity,
+    ProtocolNames, PubSubProtocol, spawn,
 };
 
 fn init_logging() {

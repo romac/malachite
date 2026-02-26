@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use axum::async_trait;
@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tokio::time::error::Elapsed;
 use tokio::time::sleep;
-use tracing::{debug, error, error_span, info, Instrument};
+use tracing::{Instrument, debug, error, error_span, info};
 
 use malachitebft_core_types::{Context, Height};
 

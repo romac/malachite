@@ -5,9 +5,9 @@ use libp2p::swarm::NetworkBehaviour;
 use libp2p::{PeerId, StreamProtocol};
 use thiserror::Error;
 
+use crate::Config;
 use crate::rpc::Codec;
 use crate::types::{RawRequest, RawResponse, ResponseChannel};
-use crate::Config;
 
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "Event")]

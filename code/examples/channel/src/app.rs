@@ -16,7 +16,7 @@ use malachitebft_app_channel::{
 };
 use malachitebft_test::{Height, TestContext};
 
-use crate::state::{decode_value, encode_value, State};
+use crate::state::{State, decode_value, encode_value};
 
 /// Periodically request a state dump from consensus and print it to the console
 fn monitor_state(tx_request: mpsc::Sender<ConsensusRequest<TestContext>>) {

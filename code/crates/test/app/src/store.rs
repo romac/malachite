@@ -6,9 +6,9 @@ use prost::Message;
 use redb::ReadableTable;
 use thiserror::Error;
 
+use malachitebft_app_channel::app::types::ProposedValue;
 use malachitebft_app_channel::app::types::codec::Codec;
 use malachitebft_app_channel::app::types::core::{CommitCertificate, Round};
-use malachitebft_app_channel::app::types::ProposedValue;
 use malachitebft_proto::{Error as ProtoError, Protobuf};
 use malachitebft_test::codec::proto as codec;
 use malachitebft_test::codec::proto::ProtobufCodec;

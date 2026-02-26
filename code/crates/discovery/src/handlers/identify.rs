@@ -1,9 +1,9 @@
-use libp2p::{identify, swarm::ConnectionId, PeerId, Swarm};
+use libp2p::{PeerId, Swarm, identify, swarm::ConnectionId};
 use tracing::{debug, info, warn};
 
 use crate::{
-    config::BootstrapProtocol, request::RequestData, util::strip_peer_id_from_multiaddr, Discovery,
-    DiscoveryClient, OutboundState, State,
+    Discovery, DiscoveryClient, OutboundState, State, config::BootstrapProtocol,
+    request::RequestData, util::strip_peer_id_from_multiaddr,
 };
 
 impl<C> Discovery<C>

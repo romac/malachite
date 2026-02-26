@@ -5,8 +5,8 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 use malachitebft_config::mempool_load::UniformLoadConfig;
 use malachitebft_starknet_host::config::Config;

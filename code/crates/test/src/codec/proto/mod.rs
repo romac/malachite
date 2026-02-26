@@ -13,8 +13,8 @@ use malachitebft_proto::{Error as ProtoError, Protobuf};
 use malachitebft_signing_ed25519::Signature;
 use malachitebft_sync::{self as sync, PeerId};
 
-use crate::{decode_votetype, encode_votetype, proto};
 use crate::{Address, Height, Proposal, ProposalPart, TestContext, Value, ValueId, Vote};
+use crate::{decode_votetype, encode_votetype, proto};
 
 #[derive(Copy, Clone, Debug)]
 pub struct ProtobufCodec;

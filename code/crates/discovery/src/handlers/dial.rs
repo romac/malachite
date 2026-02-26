@@ -1,13 +1,13 @@
 use libp2p::{
+    PeerId, Swarm,
     core::ConnectedPoint,
     swarm::{ConnectionId, DialError},
-    PeerId, Swarm,
 };
 use tracing::{debug, error, warn};
 
 use crate::{
-    controller::PeerData, dial::DialData, ConnectionDirection, ConnectionInfo, Discovery,
-    DiscoveryClient,
+    ConnectionDirection, ConnectionInfo, Discovery, DiscoveryClient, controller::PeerData,
+    dial::DialData,
 };
 
 impl<C> Discovery<C>

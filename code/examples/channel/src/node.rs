@@ -10,8 +10,8 @@ use tracing::Instrument;
 
 use malachitebft_app_channel::app::events::{RxEvent, TxEvent};
 use malachitebft_app_channel::app::metrics::SharedRegistry;
-use malachitebft_app_channel::app::types::core::{Height as _, VotingPower};
 use malachitebft_app_channel::app::types::Keypair;
+use malachitebft_app_channel::app::types::core::{Height as _, VotingPower};
 use malachitebft_app_channel::{
     ConsensusContext, EngineHandle, NetworkContext, NetworkIdentity, RequestContext, SyncContext,
     WalContext,
@@ -30,7 +30,7 @@ use malachitebft_test::{
 };
 use malachitebft_test_cli::metrics;
 
-use crate::config::{load_config, Config, ValidatorRotationConfig};
+use crate::config::{Config, ValidatorRotationConfig, load_config};
 use crate::metrics::DbMetrics;
 use crate::state::State;
 use crate::store::Store;
@@ -223,8 +223,8 @@ impl CanMakeConfig for App {
 /// Generate configuration for node "index" out of "total" number of nodes.
 fn make_config(index: usize, total: usize, settings: MakeConfigSettings) -> Config {
     use itertools::Itertools;
-    use rand::seq::IteratorRandom;
     use rand::Rng;
+    use rand::seq::IteratorRandom;
 
     use malachitebft_app_channel::app::config::*;
 

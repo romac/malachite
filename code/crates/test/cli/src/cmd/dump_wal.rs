@@ -5,7 +5,7 @@ use color_eyre::eyre;
 use malachitebft_core_types::Context;
 use tracing::{error, info};
 
-use malachitebft_app::engine::wal::{log_entries, WalCodec};
+use malachitebft_app::engine::wal::{WalCodec, log_entries};
 use malachitebft_app::wal::Log;
 
 #[derive(Parser, Debug, Clone, Default, PartialEq)]

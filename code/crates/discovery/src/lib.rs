@@ -5,7 +5,7 @@ use tracing::{debug, error, info, warn};
 use malachitebft_metrics::Registry;
 
 use libp2p::core::SignedEnvelope;
-use libp2p::{identify, kad, request_response, swarm::ConnectionId, Multiaddr, PeerId, Swarm};
+use libp2p::{Multiaddr, PeerId, Swarm, identify, kad, request_response, swarm::ConnectionId};
 
 mod behaviour;
 pub use behaviour::*;

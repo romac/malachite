@@ -4,10 +4,10 @@ use std::time::Duration;
 
 use malachitebft_app_channel::app::metrics;
 
+use metrics::SharedRegistry;
 use metrics::prometheus::metrics::counter::Counter;
 use metrics::prometheus::metrics::gauge::Gauge;
-use metrics::prometheus::metrics::histogram::{exponential_buckets, Histogram};
-use metrics::SharedRegistry;
+use metrics::prometheus::metrics::histogram::{Histogram, exponential_buckets};
 
 #[derive(Clone, Debug)]
 pub struct DbMetrics(Arc<Inner>);

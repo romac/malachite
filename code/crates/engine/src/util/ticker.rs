@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use ractor::message::Message;
 use ractor::ActorRef;
+use ractor::message::Message;
 
 fn compute_adjusted_duration(base: Duration, adjustment: f64) -> Duration {
     let ref_nanos = base.as_nanos() as f64;

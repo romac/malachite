@@ -1,5 +1,5 @@
 mod registry;
-pub use registry::{export, Registry, SharedRegistry};
+pub use registry::{Registry, SharedRegistry, export};
 
 mod metrics;
 pub use metrics::Metrics;

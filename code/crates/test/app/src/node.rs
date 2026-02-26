@@ -10,8 +10,8 @@ use tracing::Instrument;
 
 use malachitebft_app_channel::app::config::*;
 use malachitebft_app_channel::app::events::{RxEvent, TxEvent};
-use malachitebft_app_channel::app::types::core::VotingPower;
 use malachitebft_app_channel::app::types::Keypair;
+use malachitebft_app_channel::app::types::core::VotingPower;
 use malachitebft_app_channel::{
     ConsensusContext, EngineBuilder, EngineHandle, NetworkContext, NetworkIdentity, RequestContext,
     SyncContext, WalContext,

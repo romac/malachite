@@ -10,10 +10,10 @@ use eyre::eyre;
 use futures::StreamExt;
 use libp2p::metrics::{Metrics, Recorder};
 use libp2p::swarm::{self, SwarmEvent};
-use libp2p::{gossipsub, identify, SwarmBuilder};
+use libp2p::{SwarmBuilder, gossipsub, identify};
 use prost::bytes::Bytes;
 use tokio::sync::mpsc;
-use tracing::{debug, error, error_span, trace, Instrument};
+use tracing::{Instrument, debug, error, error_span, trace};
 
 use malachitebft_metrics::SharedRegistry;
 

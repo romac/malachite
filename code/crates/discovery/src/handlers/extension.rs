@@ -1,7 +1,7 @@
 use libp2p::{PeerId, Swarm};
 use tracing::{debug, info, warn};
 
-use crate::{request::RequestData, Discovery, DiscoveryClient, State};
+use crate::{Discovery, DiscoveryClient, State, request::RequestData};
 
 impl<C> Discovery<C>
 where

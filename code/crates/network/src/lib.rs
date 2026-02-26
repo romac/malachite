@@ -6,10 +6,10 @@ use futures::StreamExt;
 use libp2p::metrics::{Metrics, Recorder};
 use libp2p::request_response::{InboundRequestId, OutboundRequestId};
 use libp2p::swarm::{self, SwarmEvent};
-use libp2p::{gossipsub, identify, quic, SwarmBuilder};
+use libp2p::{SwarmBuilder, gossipsub, identify, quic};
 use libp2p_broadcast as broadcast;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, error_span, info, trace, warn, Instrument};
+use tracing::{Instrument, debug, error, error_span, info, trace, warn};
 
 use malachitebft_discovery::{self as discovery};
 use malachitebft_metrics::SharedRegistry;
@@ -18,9 +18,9 @@ use malachitebft_sync::{self as sync};
 pub use malachitebft_peer::PeerId;
 
 pub use bytes::Bytes;
+pub use libp2p::Multiaddr;
 pub use libp2p::gossipsub::MessageId;
 pub use libp2p::identity::Keypair;
-pub use libp2p::Multiaddr;
 
 pub mod behaviour;
 pub mod handle;

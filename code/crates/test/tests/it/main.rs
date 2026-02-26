@@ -23,8 +23,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use tempfile::TempDir;
 
 use malachitebft_signing_ed25519::PrivateKey;

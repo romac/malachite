@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::path::PathBuf;
 
 use eyre::eyre;
-use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SpawnErr};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SpawnErr, async_trait};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 

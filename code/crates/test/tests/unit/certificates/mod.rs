@@ -8,8 +8,8 @@ use std::marker::PhantomData;
 
 pub mod types {
     pub use arc_malachitebft_test::{
-        utils, Address, Ed25519Provider, Height, TestContext, Validator, ValidatorSet, ValueId,
-        Vote,
+        Address, Ed25519Provider, Height, TestContext, Validator, ValidatorSet, ValueId, Vote,
+        utils,
     };
     pub use malachitebft_core_types::{
         CertificateError, Context, NilOrVal, Round, RoundCertificateType, SignedVote,

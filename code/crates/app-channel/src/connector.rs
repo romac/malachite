@@ -1,6 +1,6 @@
 //! Implementation of a host actor for bridiging consensus and the application via a set of channels.
 
-use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef, SpawnErr};
+use ractor::{Actor, ActorProcessingErr, ActorRef, SpawnErr, async_trait};
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tracing::{error, warn};

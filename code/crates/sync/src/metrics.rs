@@ -3,10 +3,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
+use malachitebft_metrics::SharedRegistry;
 use malachitebft_metrics::prometheus::metrics::counter::Counter;
 use malachitebft_metrics::prometheus::metrics::gauge::Gauge;
-use malachitebft_metrics::prometheus::metrics::histogram::{exponential_buckets, Histogram};
-use malachitebft_metrics::SharedRegistry;
+use malachitebft_metrics::prometheus::metrics::histogram::{Histogram, exponential_buckets};
 
 #[derive(Clone, Debug)]
 pub struct Metrics(Arc<Inner>);

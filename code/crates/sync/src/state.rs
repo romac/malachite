@@ -5,7 +5,7 @@ use std::ops::RangeInclusive;
 use malachitebft_core_types::{Context, Height};
 use malachitebft_peer::PeerId;
 
-use crate::scoring::{ema, PeerScorer, Strategy};
+use crate::scoring::{PeerScorer, Strategy, ema};
 use crate::{Config, OutboundRequestId, Status};
 
 pub struct State<Ctx>

@@ -4,7 +4,7 @@ use tracing::error;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt, reload, Registry};
+use tracing_subscriber::{Registry, fmt, reload};
 
 use malachitebft_config::LogFormat;
 

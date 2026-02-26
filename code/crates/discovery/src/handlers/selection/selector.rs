@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
-use libp2p::{identify, PeerId, Swarm};
+use libp2p::{PeerId, Swarm, identify};
 use tracing::info;
 
 use crate::config;

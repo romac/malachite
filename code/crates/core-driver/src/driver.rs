@@ -15,11 +15,11 @@ use malachitebft_core_types::{
 use malachitebft_core_votekeeper::keeper::Output as VKOutput;
 use malachitebft_core_votekeeper::keeper::VoteKeeper;
 
+use crate::Error;
+use crate::ThresholdParams;
 use crate::input::Input;
 use crate::output::Output;
 use crate::proposal_keeper::{self, ProposalKeeper};
-use crate::Error;
-use crate::ThresholdParams;
 
 /// Driver for the state machine of the Malachite consensus engine at a given height.
 pub struct Driver<Ctx>

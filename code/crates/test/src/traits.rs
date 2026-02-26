@@ -36,7 +36,7 @@ pub trait CanGeneratePrivateKey: Node {
 
 pub trait CanMakePrivateKeyFile: Node {
     fn make_private_key_file(&self, private_key: PrivateKey<Self::Context>)
-        -> Self::PrivateKeyFile;
+    -> Self::PrivateKeyFile;
 }
 
 pub trait CanMakeGenesis: Node {

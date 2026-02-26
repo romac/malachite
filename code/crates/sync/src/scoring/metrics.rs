@@ -1,11 +1,11 @@
 use std::fmt::Write;
 
+use malachitebft_metrics::Registry;
 use malachitebft_metrics::prometheus::encoding::{
     EncodeLabelSet, EncodeLabelValue, LabelValueEncoder,
 };
 use malachitebft_metrics::prometheus::metrics::family::Family;
-use malachitebft_metrics::prometheus::metrics::histogram::{linear_buckets, Histogram};
-use malachitebft_metrics::Registry;
+use malachitebft_metrics::prometheus::metrics::histogram::{Histogram, linear_buckets};
 use malachitebft_peer::PeerId;
 
 use malachitebft_metrics::prometheus as prometheus_client;

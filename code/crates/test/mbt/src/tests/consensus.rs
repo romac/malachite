@@ -1,6 +1,6 @@
 use glob::glob;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 use crate::consensus::State;
 use crate::utils::{generate_test_traces, quint_seed};

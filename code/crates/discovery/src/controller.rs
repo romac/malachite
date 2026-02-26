@@ -4,11 +4,11 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::time::Duration;
 
-use libp2p::{request_response::OutboundRequestId, swarm::ConnectionId, Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, request_response::OutboundRequestId, swarm::ConnectionId};
 use tokio::sync::mpsc;
 use tracing::error;
 
-use crate::{request::RequestData, DialData};
+use crate::{DialData, request::RequestData};
 
 const DEFAULT_DIAL_CONCURRENT_FACTOR: usize = 20;
 const DEFAULT_PEERS_REQUEST_CONCURRENT_FACTOR: usize = 20;
@@ -273,17 +273,23 @@ mod tests {
         controller.dial_register_done_on(&poisoned_dial, false);
 
         // Attacker's peer_id should be in done_on
-        assert!(controller
-            .dial
-            .is_done_on(&PeerData::PeerId(attacker_peer_id)));
+        assert!(
+            controller
+                .dial
+                .is_done_on(&PeerData::PeerId(attacker_peer_id))
+        );
 
         // Victim's address should NOT be in done_on (prevents address poisoning)
-        assert!(!controller
-            .dial
-            .is_done_on(&PeerData::Multiaddr(victim_addr.clone())));
-        assert!(!controller
-            .dial
-            .is_done_on(&PeerData::Multiaddr(attacker_addr.clone())));
+        assert!(
+            !controller
+                .dial
+                .is_done_on(&PeerData::Multiaddr(victim_addr.clone()))
+        );
+        assert!(
+            !controller
+                .dial
+                .is_done_on(&PeerData::Multiaddr(attacker_addr.clone()))
+        );
 
         // Later: victim's real peer info arrives
         let victim_peer_id = PeerId::random();
@@ -308,11 +314,15 @@ mod tests {
         controller.dial_register_done_on(&bootstrap_dial, true);
 
         // Both peer_id and address should be in done_on
-        assert!(controller
-            .dial
-            .is_done_on(&PeerData::PeerId(bootstrap_peer_id)));
-        assert!(controller
-            .dial
-            .is_done_on(&PeerData::Multiaddr(bootstrap_addr)));
+        assert!(
+            controller
+                .dial
+                .is_done_on(&PeerData::PeerId(bootstrap_peer_id))
+        );
+        assert!(
+            controller
+                .dial
+                .is_done_on(&PeerData::Multiaddr(bootstrap_addr))
+        );
     }
 }

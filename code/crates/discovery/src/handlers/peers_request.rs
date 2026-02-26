@@ -1,15 +1,15 @@
 use libp2p::{
+    PeerId, Swarm,
     core::{PeerRecord, SignedEnvelope},
     request_response::{OutboundRequestId, ResponseChannel},
-    PeerId, Swarm,
 };
 use tracing::{debug, error, trace, warn};
 
 use crate::{
+    Discovery, DiscoveryClient,
     behaviour::{self, Response, SignedPeerRecordBytes},
     dial::DialData,
     request::RequestData,
-    Discovery, DiscoveryClient,
 };
 
 impl<C> Discovery<C>

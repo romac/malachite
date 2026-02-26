@@ -2,8 +2,8 @@ use std::time::{Duration, Instant};
 
 use malachitebft_metrics::prometheus::metrics::counter::Counter;
 
-use malachitebft_metrics::prometheus::metrics::gauge::Gauge;
 use malachitebft_metrics::Registry;
+use malachitebft_metrics::prometheus::metrics::gauge::Gauge;
 
 #[derive(Debug)]
 pub(crate) struct Metrics {

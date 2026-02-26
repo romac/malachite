@@ -11,13 +11,13 @@ use eyre::eyre;
 use ractor::{Actor, ActorProcessingErr, ActorRef};
 use rand::SeedableRng;
 use tokio::task::JoinHandle;
-use tracing::{debug, error, info, warn, Instrument};
+use tracing::{Instrument, debug, error, info, warn};
 
 use malachitebft_codec as codec;
-use malachitebft_core_consensus::util::bounded_queue::BoundedQueue;
 use malachitebft_core_consensus::PeerId;
-use malachitebft_core_types::utils::height::DisplayRange;
+use malachitebft_core_consensus::util::bounded_queue::BoundedQueue;
 use malachitebft_core_types::ValueResponse as CoreValueResponse;
+use malachitebft_core_types::utils::height::DisplayRange;
 use malachitebft_core_types::{CommitCertificate, Context};
 use malachitebft_sync::{
     self as sync, HeightStartType, InboundRequestId, OutboundRequestId, RawDecidedValue, Request,

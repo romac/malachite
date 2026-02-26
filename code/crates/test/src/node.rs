@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use malachitebft_app::config::NodeConfig;
 use malachitebft_app::events::RxEvent;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use malachitebft_signing::SigningProvider;
 
@@ -54,5 +54,5 @@ pub trait Node {
     fn load_genesis(&self) -> eyre::Result<Self::Genesis>;
 
     fn get_signing_provider(&self, private_key: PrivateKey<Self::Context>)
-        -> Self::SigningProvider;
+    -> Self::SigningProvider;
 }

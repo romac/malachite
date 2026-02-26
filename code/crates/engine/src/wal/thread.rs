@@ -1,16 +1,16 @@
 use std::ops::ControlFlow;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::thread::JoinHandle;
 use std::{io, thread};
 
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info};
 
 use malachitebft_core_types::{Context, Height};
 use malachitebft_wal as wal;
 
-use super::entry::{decode_entry, encode_entry, WalCodec, WalEntry};
+use super::entry::{WalCodec, WalEntry, decode_entry, encode_entry};
 use super::iter::log_entries;
 
 pub type ReplyTo<T> = oneshot::Sender<Result<T>>;

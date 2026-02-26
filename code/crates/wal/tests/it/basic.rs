@@ -204,10 +204,11 @@ fn concurrent_access() -> io::Result<()> {
 
     let wal = Log::open(path);
 
-    assert!(wal
-        .unwrap_err()
-        .to_string()
-        .contains("Failed to acquire exclusive advisory lock"));
+    assert!(
+        wal.unwrap_err()
+            .to_string()
+            .contains("Failed to acquire exclusive advisory lock")
+    );
 
     write_thread.join().unwrap()?;
 

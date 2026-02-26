@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use clap::Parser;
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::{Result, eyre};
 use tracing::info;
 
 use malachitebft_config::*;

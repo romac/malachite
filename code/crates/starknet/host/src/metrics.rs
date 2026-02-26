@@ -1,9 +1,9 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use malachitebft_metrics::prometheus::metrics::counter::Counter;
-use malachitebft_metrics::prometheus::metrics::histogram::{linear_buckets, Histogram};
 use malachitebft_metrics::SharedRegistry;
+use malachitebft_metrics::prometheus::metrics::counter::Counter;
+use malachitebft_metrics::prometheus::metrics::histogram::{Histogram, linear_buckets};
 
 #[derive(Clone, Debug)]
 pub struct Metrics(Arc<Inner>);

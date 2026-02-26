@@ -1,5 +1,5 @@
 use arc_malachitebft_core_consensus::{
-    process, Effect, Error, Input, Params, ProposedValue, Resumable, Resume, State,
+    Effect, Error, Input, Params, ProposedValue, Resumable, Resume, State, process,
 };
 use malachitebft_core_types::{
     NilOrVal, Round, SignedProposal, SignedVote, Validity, ValueOrigin, ValuePayload,

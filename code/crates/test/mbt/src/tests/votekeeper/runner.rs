@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use malachitebft_core_types::{Context, NilOrVal, Round, SignedVote, Value};
-use malachitebft_core_votekeeper::keeper::{Output, VoteKeeper};
 use malachitebft_core_votekeeper::ThresholdParams;
+use malachitebft_core_votekeeper::keeper::{Output, VoteKeeper};
 use malachitebft_test::{Address, Height, Signature, TestContext, Vote};
 
 use itf::Runner as ItfRunner;
@@ -66,11 +66,12 @@ impl ItfRunner for VoteKeeperRunner {
         self.skip_step = false;
 
         if let Some(last_state) = self.last_state.replace(expected.clone())
-            && &last_state == expected {
-                println!("➡️ Skipping duplicate step");
-                self.skip_step = true;
-                return Ok(None);
-            }
+            && &last_state == expected
+        {
+            println!("➡️ Skipping duplicate step");
+            self.skip_step = true;
+            return Ok(None);
+        }
 
         match &expected.weighted_vote {
             WeightedVote::NoVote => Err(()),

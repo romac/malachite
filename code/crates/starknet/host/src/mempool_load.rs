@@ -2,14 +2,14 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bytesize::ByteSize;
-use ractor::{concurrency::JoinHandle, Actor, ActorProcessingErr, ActorRef};
+use ractor::{Actor, ActorProcessingErr, ActorRef, concurrency::JoinHandle};
 use rand::rngs::SmallRng;
 use rand::seq::IteratorRandom;
 use rand::{Rng, RngCore, SeedableRng};
 use tracing::info;
 
-use malachitebft_config::mempool_load::{NonUniformLoadConfig, UniformLoadConfig};
 use malachitebft_config::MempoolLoadType;
+use malachitebft_config::mempool_load::{NonUniformLoadConfig, UniformLoadConfig};
 use malachitebft_starknet_p2p_types::{Transaction, TransactionBatch};
 
 use crate::mempool::{MempoolMsg, MempoolRef};

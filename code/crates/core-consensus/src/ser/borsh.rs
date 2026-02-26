@@ -1,8 +1,8 @@
 use {
     crate::{LivenessMsg, ProposedValue, SignedConsensusMsg},
     ::borsh::{
-        io::{Read, Result, Write},
         BorshDeserialize, BorshSerialize,
+        io::{Read, Result, Write},
     },
     malachitebft_core_types::{
         Context, PolkaCertificate, Round, RoundCertificate, SignedProposal, SignedVote, Validity,

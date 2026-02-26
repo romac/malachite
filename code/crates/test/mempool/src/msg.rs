@@ -4,8 +4,8 @@ use prost_types::Any;
 
 use malachitebft_proto::{Error as ProtoError, Protobuf};
 
-use crate::types::MempoolTransactionBatch;
 use crate::Channel;
+use crate::types::MempoolTransactionBatch;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NetworkMsg {

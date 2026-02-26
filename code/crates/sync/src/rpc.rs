@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use bytes::Bytes;
-use libp2p::futures::{io, AsyncRead, AsyncWrite};
 use libp2p::StreamProtocol;
+use libp2p::futures::{AsyncRead, AsyncWrite, io};
 
-use crate::types::{RawRequest, RawResponse};
 use crate::Config;
+use crate::types::{RawRequest, RawResponse};
 
 #[derive(Copy, Clone)]
 pub struct Codec {

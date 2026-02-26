@@ -5,12 +5,12 @@ use malachitebft_core_types::Context;
 
 /// All the types used in the state dump.
 pub mod types {
+    pub use malachitebft_core_consensus::Input as ConsensusInput;
+    pub use malachitebft_core_consensus::Params as ConsensusParams;
     pub use malachitebft_core_consensus::full_proposal::{
         Entry as FullProposalEntry, FullProposal, FullProposalKeeper,
     };
     pub use malachitebft_core_consensus::util::bounded_queue::BoundedQueue;
-    pub use malachitebft_core_consensus::Input as ConsensusInput;
-    pub use malachitebft_core_consensus::Params as ConsensusParams;
     pub use malachitebft_core_driver::proposal_keeper::EvidenceMap as ProposalEvidenceMap;
     pub use malachitebft_core_driver::proposal_keeper::PerRound as ProposalPerRound;
     pub use malachitebft_core_state_machine::state::State;

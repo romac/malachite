@@ -139,8 +139,8 @@ impl malachitebft_core_types::ValidatorSet<TestContext> for ValidatorSet {
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     use super::*;
 

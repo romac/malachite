@@ -4,9 +4,9 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use itertools::Itertools;
-use ractor::{async_trait, Actor, ActorProcessingErr, RpcReplyPort, SpawnErr};
-use rand::rngs::StdRng;
+use ractor::{Actor, ActorProcessingErr, RpcReplyPort, SpawnErr, async_trait};
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use tokio::time::Instant;
 use tracing::{debug, error, info, trace, warn};
 

@@ -3,7 +3,7 @@ use std::io;
 use std::sync::LazyLock;
 use std::time::Instant;
 
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use testdir::NumberedDir;
 use testdir::NumberedDirBuilder;
 

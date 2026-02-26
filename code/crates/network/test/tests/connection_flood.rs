@@ -16,10 +16,10 @@ use std::time::Duration;
 use malachitebft_config::TransportProtocol;
 use malachitebft_metrics::SharedRegistry;
 use malachitebft_network::{
-    spawn, ChannelNames, Config, DiscoveryConfig, GossipSubConfig, Keypair, NetworkIdentity,
-    ProtocolNames, PubSubProtocol,
+    ChannelNames, Config, DiscoveryConfig, GossipSubConfig, Keypair, NetworkIdentity,
+    ProtocolNames, PubSubProtocol, spawn,
 };
-use netstat2::{get_sockets_info, AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, TcpState};
+use netstat2::{AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, TcpState, get_sockets_info};
 
 /// Count established TCP connections to a specific port.
 /// Works cross-platform (Linux, macOS, Windows).

@@ -628,8 +628,7 @@ fn driver_steps_not_proposer_invalid() {
             },
         },
         TestStep {
-            desc:
-                "v3 prevotes v1's proposal, we have a polka for any, schedule prevote timeout (v2)",
+            desc: "v3 prevotes v1's proposal, we have a polka for any, schedule prevote timeout (v2)",
             input: Some(Input::Vote(new_signed_prevote(
                 Height::new(1),
                 Round::new(0),

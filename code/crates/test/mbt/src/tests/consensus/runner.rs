@@ -14,7 +14,7 @@ use crate::consensus::{Input as ModelInput, Output as ModelOutput, State};
 use crate::types::Step;
 
 use super::utils::{
-    value_from_model, value_from_string, value_id_from_model, value_id_from_string, OTHER_PROCESS,
+    OTHER_PROCESS, value_from_model, value_from_string, value_id_from_model, value_id_from_string,
 };
 
 pub struct ConsensusRunner {
@@ -61,11 +61,12 @@ impl ItfRunner for ConsensusRunner {
         self.skip_step = false;
 
         if let Some(last_state) = self.last_state.replace(expected.clone())
-            && &last_state == expected {
-                println!("➡️ Skipping duplicate step");
-                self.skip_step = true;
-                return Ok(None);
-            }
+            && &last_state == expected
+        {
+            println!("➡️ Skipping duplicate step");
+            self.skip_step = true;
+            return Ok(None);
+        }
 
         println!("🔸 step: actual state={actual:?}");
         println!("🔸 step: model input={:?}", expected.input);

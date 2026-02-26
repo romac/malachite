@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use tokio::task::JoinHandle;
 use tracing::Span;
 
@@ -24,8 +24,8 @@ use malachitebft_sync as sync;
 
 use crate::config::{ConsensusConfig, ValueSyncConfig};
 use crate::metrics::{Metrics, SharedRegistry};
-use crate::types::core::Context;
 use crate::types::ValuePayload;
+use crate::types::core::Context;
 
 pub async fn spawn_node_actor<Ctx>(
     ctx: Ctx,

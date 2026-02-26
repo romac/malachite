@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use libp2p::{identify, PeerId, Swarm};
+use libp2p::{PeerId, Swarm, identify};
 use rand::seq::SliceRandom;
 
 use crate::DiscoveryClient;

@@ -15,7 +15,7 @@ use malachitebft_app_channel::{AppMsg, Channels, NetworkMsg};
 use malachitebft_test::codec::json::JsonCodec;
 use malachitebft_test::{Height, TestContext};
 
-use crate::state::{decode_value, State};
+use crate::state::{State, decode_value};
 
 pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyre::Result<()> {
     while let Some(msg) = channels.consensus.recv().await {

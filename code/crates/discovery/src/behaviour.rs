@@ -7,13 +7,13 @@ use libp2p::identity::Keypair;
 use libp2p::kad::store::MemoryStore;
 use libp2p::kad::{Addresses, KBucketKey, KBucketRef, Mode, RoutingUpdate};
 use libp2p::request_response::{self, OutboundRequestId, ProtocolSupport, ResponseChannel};
-use libp2p::swarm::behaviour::toggle::Toggle;
 use libp2p::swarm::NetworkBehaviour;
-use libp2p::{kad, Multiaddr, PeerId, StreamProtocol};
+use libp2p::swarm::behaviour::toggle::Toggle;
+use libp2p::{Multiaddr, PeerId, StreamProtocol, kad};
 use serde::{Deserialize, Serialize};
 
-use crate::config::BootstrapProtocol;
 use crate::Config;
+use crate::config::BootstrapProtocol;
 
 /// Protobuf-encoded signed peer record bytes.
 /// Use `SignedEnvelope::from_protobuf_encoding()` to decode.

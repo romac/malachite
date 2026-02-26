@@ -3,8 +3,8 @@
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use serde::{Deserialize, Serializer};
 
 pub fn serialize<S>(s: &[u8], ser: S) -> Result<S::Ok, S::Error>

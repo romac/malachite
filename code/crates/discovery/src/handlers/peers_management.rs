@@ -1,7 +1,7 @@
-use libp2p::{swarm::ConnectionId, PeerId, Swarm};
+use libp2p::{PeerId, Swarm, swarm::ConnectionId};
 use tracing::{debug, warn};
 
-use crate::{request::RequestData, Discovery, DiscoveryClient, OutboundState};
+use crate::{Discovery, DiscoveryClient, OutboundState, request::RequestData};
 
 use super::selection::selector::Selection;
 

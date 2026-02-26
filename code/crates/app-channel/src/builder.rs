@@ -239,18 +239,18 @@ where
 
 // Implementation for configuration methods (available on any builder state)
 impl<
-        Ctx,
-        Config,
-        Signer,
-        WalCodec,
-        NetCodec,
-        SyncCodec,
-        const HAS_WAL: bool,
-        const HAS_NETWORK: bool,
-        const HAS_SYNC: bool,
-        const HAS_CONSENSUS: bool,
-        const HAS_REQUEST: bool,
-    >
+    Ctx,
+    Config,
+    Signer,
+    WalCodec,
+    NetCodec,
+    SyncCodec,
+    const HAS_WAL: bool,
+    const HAS_NETWORK: bool,
+    const HAS_SYNC: bool,
+    const HAS_CONSENSUS: bool,
+    const HAS_REQUEST: bool,
+>
     EngineBuilder<
         Ctx,
         Config,
@@ -328,16 +328,16 @@ where
 
 // Implementation for default WAL actor (allows changing the WalCodec type)
 impl<
-        Ctx,
-        Config,
-        Signer,
-        NetCodec,
-        SyncCodec,
-        const HAS_NETWORK: bool,
-        const HAS_SYNC: bool,
-        const HAS_CONSENSUS: bool,
-        const HAS_REQUEST: bool,
-    >
+    Ctx,
+    Config,
+    Signer,
+    NetCodec,
+    SyncCodec,
+    const HAS_NETWORK: bool,
+    const HAS_SYNC: bool,
+    const HAS_CONSENSUS: bool,
+    const HAS_REQUEST: bool,
+>
     EngineBuilder<
         Ctx,
         Config,
@@ -386,16 +386,16 @@ where
 
 // Implementation for default Network actor (allows changing the NetCodec type)
 impl<
-        Ctx,
-        Config,
-        Signer,
-        WalCodec,
-        SyncCodec,
-        const HAS_WAL: bool,
-        const HAS_SYNC: bool,
-        const HAS_CONSENSUS: bool,
-        const HAS_REQUEST: bool,
-    >
+    Ctx,
+    Config,
+    Signer,
+    WalCodec,
+    SyncCodec,
+    const HAS_WAL: bool,
+    const HAS_SYNC: bool,
+    const HAS_CONSENSUS: bool,
+    const HAS_REQUEST: bool,
+>
     EngineBuilder<
         Ctx,
         Config,
@@ -444,16 +444,16 @@ where
 
 // Implementation for default Sync actor (allows changing the SyncCodec type)
 impl<
-        Ctx,
-        Config,
-        Signer,
-        WalCodec,
-        NetCodec,
-        const HAS_WAL: bool,
-        const HAS_NETWORK: bool,
-        const HAS_CONSENSUS: bool,
-        const HAS_REQUEST: bool,
-    >
+    Ctx,
+    Config,
+    Signer,
+    WalCodec,
+    NetCodec,
+    const HAS_WAL: bool,
+    const HAS_NETWORK: bool,
+    const HAS_CONSENSUS: bool,
+    const HAS_REQUEST: bool,
+>
     EngineBuilder<
         Ctx,
         Config,
@@ -502,16 +502,16 @@ where
 
 // Implementation for custom WAL actor
 impl<
-        Ctx,
-        Config,
-        Signer,
-        NetCodec,
-        SyncCodec,
-        const HAS_NETWORK: bool,
-        const HAS_SYNC: bool,
-        const HAS_CONSENSUS: bool,
-        const HAS_REQUEST: bool,
-    >
+    Ctx,
+    Config,
+    Signer,
+    NetCodec,
+    SyncCodec,
+    const HAS_NETWORK: bool,
+    const HAS_SYNC: bool,
+    const HAS_CONSENSUS: bool,
+    const HAS_REQUEST: bool,
+>
     EngineBuilder<
         Ctx,
         Config,
@@ -560,16 +560,16 @@ where
 
 // Implementation for custom Network actor
 impl<
-        Ctx,
-        Config,
-        Signer,
-        WalCodec,
-        SyncCodec,
-        const HAS_WAL: bool,
-        const HAS_SYNC: bool,
-        const HAS_CONSENSUS: bool,
-        const HAS_REQUEST: bool,
-    >
+    Ctx,
+    Config,
+    Signer,
+    WalCodec,
+    SyncCodec,
+    const HAS_WAL: bool,
+    const HAS_SYNC: bool,
+    const HAS_CONSENSUS: bool,
+    const HAS_REQUEST: bool,
+>
     EngineBuilder<
         Ctx,
         Config,
@@ -619,16 +619,16 @@ where
 
 // Implementation for custom Sync actor
 impl<
-        Ctx,
-        Config,
-        Signer,
-        WalCodec,
-        NetCodec,
-        const HAS_WAL: bool,
-        const HAS_NETWORK: bool,
-        const HAS_CONSENSUS: bool,
-        const HAS_REQUEST: bool,
-    >
+    Ctx,
+    Config,
+    Signer,
+    WalCodec,
+    NetCodec,
+    const HAS_WAL: bool,
+    const HAS_NETWORK: bool,
+    const HAS_CONSENSUS: bool,
+    const HAS_REQUEST: bool,
+>
     EngineBuilder<
         Ctx,
         Config,

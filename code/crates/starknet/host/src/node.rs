@@ -19,7 +19,7 @@ use malachitebft_test::traits::{
     CanMakePrivateKeyFile, MakeConfigSettings,
 };
 
-use crate::config::{load_config, Config};
+use crate::config::{Config, load_config};
 use crate::spawn::spawn_node_actor;
 use crate::types::{Address, MockContext, PrivateKey, PublicKey, Validator, ValidatorSet};
 
@@ -233,8 +233,8 @@ impl CanMakeDistributedConfig for StarknetNode {
 /// Generate configuration for node "index" out of "total" number of nodes.
 fn make_config(index: usize, total: usize, settings: MakeConfigSettings) -> Config {
     use itertools::Itertools;
-    use rand::seq::IteratorRandom;
     use rand::Rng;
+    use rand::seq::IteratorRandom;
 
     use malachitebft_config::*;
 
@@ -469,7 +469,7 @@ fn test_starknet_node() {
 
     // Run the node for a few seconds
     const TIMEOUT: u64 = 3;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
     let rt = malachitebft_test_cli::runtime::build_runtime(config.runtime).unwrap();
     let result = rt.block_on(async { timeout(Duration::from_secs(TIMEOUT), node.run()).await });
 

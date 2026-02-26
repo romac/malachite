@@ -11,8 +11,8 @@ use nix::sys::signal::{self, Signal};
 use nix::unistd::Pid;
 use testdir::{NumberedDir, NumberedDirBuilder};
 
-use arc_malachitebft_wal::log::Log;
 use arc_malachitebft_wal::Log as FileLog;
+use arc_malachitebft_wal::log::Log;
 use arc_malachitebft_wal::*;
 
 static TESTDIR: LazyLock<NumberedDir> =
@@ -28,9 +28,7 @@ macro_rules! testdir {
 }
 
 macro_rules! testwal {
-    () => {{
-        testdir!().join("wal.log")
-    }};
+    () => {{ testdir!().join("wal.log") }};
 }
 
 /// Helper struct to simulate failures during writes
@@ -272,15 +270,16 @@ fn process_termination() -> io::Result<()> {
 #[test]
 fn wal_write_test() {
     if std::env::args().any(|arg| arg == "--test")
-        && let Some(path) = std::env::args().nth(3) {
-            let mut wal = FileLog::open(path).unwrap();
-            loop {
-                // Continuously write entries until terminated
-                wal.append(b"test entry").unwrap();
-                wal.flush().unwrap();
-                thread::sleep(Duration::from_millis(10));
-            }
+        && let Some(path) = std::env::args().nth(3)
+    {
+        let mut wal = FileLog::open(path).unwrap();
+        loop {
+            // Continuously write entries until terminated
+            wal.append(b"test entry").unwrap();
+            wal.flush().unwrap();
+            thread::sleep(Duration::from_millis(10));
         }
+    }
 }
 
 #[test]

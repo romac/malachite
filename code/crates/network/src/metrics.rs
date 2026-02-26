@@ -1,17 +1,17 @@
 use std::collections::HashSet;
 
+use malachitebft_metrics::Registry;
 use malachitebft_metrics::prometheus::encoding::EncodeLabelSet;
 use malachitebft_metrics::prometheus::metrics::family::Family;
 use malachitebft_metrics::prometheus::metrics::gauge::Gauge;
-use malachitebft_metrics::Registry;
 use tracing::{debug, warn};
 
 // Make prometheus_client available for the derive macro
 use malachitebft_metrics::prometheus as prometheus_client;
 
+use crate::PeerType;
 use crate::state::{LocalNodeInfo, PeerInfo};
 use crate::utils::Slots;
-use crate::PeerType;
 use libp2p::PeerId;
 
 /// Maximum number of peer slots to track in metrics (to prevent unbounded memory growth)

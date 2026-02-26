@@ -1,6 +1,6 @@
 use std::io::{self, Read, Write};
 
-use byteorder::{ReadBytesExt, WriteBytesExt, BE};
+use byteorder::{BE, ReadBytesExt, WriteBytesExt};
 
 use malachitebft_codec::Codec;
 use malachitebft_core_consensus::{ProposedValue, SignedConsensusMsg};

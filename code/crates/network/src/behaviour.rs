@@ -4,9 +4,9 @@ use std::time::Duration;
 use eyre::Result;
 use libp2p::kad::{Addresses, KBucketKey, KBucketRef};
 use libp2p::request_response::{OutboundRequestId, ResponseChannel};
-use libp2p::swarm::behaviour::toggle::Toggle;
 use libp2p::swarm::NetworkBehaviour;
-use libp2p::{connection_limits, StreamProtocol};
+use libp2p::swarm::behaviour::toggle::Toggle;
+use libp2p::{StreamProtocol, connection_limits};
 use libp2p::{gossipsub, identify, ping};
 use libp2p_broadcast as broadcast;
 
@@ -18,7 +18,7 @@ use malachitebft_metrics::Registry;
 use malachitebft_sync as sync;
 use tracing::info;
 
-use crate::{ip_limits, peer_scoring, Config, GossipSubConfig};
+use crate::{Config, GossipSubConfig, ip_limits, peer_scoring};
 
 /// Multiplier for connection limits.
 /// Connection limits are higher than discovery limits to allow headroom for ephemeral

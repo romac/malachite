@@ -90,7 +90,7 @@ impl ThresholdParam {
 #[cfg(test)]
 mod tests {
     use core::iter;
-    use rand::{rngs::StdRng, Rng, SeedableRng};
+    use rand::{Rng, SeedableRng, rngs::StdRng};
 
     use super::*;
 

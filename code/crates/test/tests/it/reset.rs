@@ -1,8 +1,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use arc_malachitebft_test::middleware::Middleware;
 use arc_malachitebft_test::TestContext;
+use arc_malachitebft_test::middleware::Middleware;
 use eyre::bail;
 use malachitebft_core_consensus::ProposedValue;
 use malachitebft_core_types::CommitCertificate;

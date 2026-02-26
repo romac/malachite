@@ -1,6 +1,6 @@
 use core::fmt;
 use std::collections::BTreeSet;
-use std::future::{pending, Future};
+use std::future::{Future, pending};
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;

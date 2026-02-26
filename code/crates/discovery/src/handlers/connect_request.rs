@@ -1,13 +1,13 @@
 use libp2p::{
-    request_response::{OutboundRequestId, ResponseChannel},
     PeerId, Swarm,
+    request_response::{OutboundRequestId, ResponseChannel},
 };
 use tracing::{debug, error, trace};
 
 use crate::{
+    Discovery, DiscoveryClient, OutboundState,
     behaviour::{self, Response},
     request::RequestData,
-    Discovery, DiscoveryClient, OutboundState,
 };
 
 impl<C> Discovery<C>

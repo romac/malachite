@@ -11,9 +11,9 @@ use tracing::error;
 
 use malachitebft_engine::util::output_port::{OutputPort, OutputPortSubscriber};
 use malachitebft_metrics::SharedRegistry;
+use malachitebft_test_mempool::Channel::Mempool;
 use malachitebft_test_mempool::handle::CtrlHandle;
 use malachitebft_test_mempool::types::MempoolTransactionBatch;
-use malachitebft_test_mempool::Channel::Mempool;
 use malachitebft_test_mempool::{Config, Event, NetworkMsg, PeerId};
 
 pub type MempoolNetworkMsg = Msg;

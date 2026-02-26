@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use malachitebft_config::TransportProtocol;
 use malachitebft_network::{
-    spawn, Config, DiscoveryConfig, Event, Keypair, NetworkIdentity, PersistentPeerError,
-    ProtocolNames,
+    Config, DiscoveryConfig, Event, Keypair, NetworkIdentity, PersistentPeerError, ProtocolNames,
+    spawn,
 };
 use tokio::time::sleep;
 

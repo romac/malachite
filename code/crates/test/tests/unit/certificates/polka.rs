@@ -1,7 +1,7 @@
 use futures::executor::block_on;
 use malachitebft_core_types::PolkaCertificate;
 
-use super::{make_validators, types::*, CertificateBuilder, CertificateTest, DEFAULT_SEED};
+use super::{CertificateBuilder, CertificateTest, DEFAULT_SEED, make_validators, types::*};
 
 pub struct Polka;
 

@@ -2062,8 +2062,7 @@ fn driver_step_change_mux_with_proposal() {
             new_state: new_round(Round::new(1)),
         },
         TestStep {
-            desc:
-                "Start round 1, change step to propose, start propose timer, mux proposal, prevote",
+            desc: "Start round 1, change step to propose, start propose timer, mux proposal, prevote",
             input: new_round_input(Round::new(1), v2.address),
             expected_outputs: vec![
                 start_propose_timer_output(Round::new(1)),
@@ -2134,8 +2133,7 @@ fn driver_step_change_mux_with_proposal_and_polka() {
             new_state: new_round(Round::new(1)),
         },
         TestStep {
-            desc:
-                "Start round 1, change step to propose, start propose timer, mux proposal, prevote",
+            desc: "Start round 1, change step to propose, start propose timer, mux proposal, prevote",
             input: new_round_input(Round::new(1), v2.address),
             expected_outputs: vec![
                 start_propose_timer_output(Round::new(1)),
@@ -2211,8 +2209,7 @@ fn driver_step_change_mux_with_proposal_and_commit_quorum() {
             new_state: new_round(Round::new(1)),
         },
         TestStep {
-            desc:
-                "Start round 1, change step to propose, start propose timer, mux proposal, decide",
+            desc: "Start round 1, change step to propose, start propose timer, mux proposal, decide",
             input: new_round_input(Round::new(1), v2.address),
             expected_outputs: vec![
                 start_propose_timer_output(Round::new(1)),
@@ -2337,8 +2334,7 @@ fn proposal_mux_with_commit_quorum() {
             new_state: propose_state(Round::new(0)),
         },
         TestStep {
-            desc:
-                "v2 precommits value for round 1, we hit f+1 threshold (also 2f+1), move to round 1",
+            desc: "v2 precommits value for round 1, we hit f+1 threshold (also 2f+1), move to round 1",
             input: precommit_input_at(Round::new(1), value.clone(), &v2.address),
             expected_outputs: vec![new_round_output(Round::new(1))],
             expected_round: Round::new(1),
@@ -3801,8 +3797,7 @@ fn commit_certificate_from_driver_verifies_after_reapplied_votes_from_round_cert
             ),
         },
         TestStep {
-            desc:
-                "We receive v4's precommit for nil (+2/3 precommits total, start precommit timer)",
+            desc: "We receive v4's precommit for nil (+2/3 precommits total, start precommit timer)",
             input: precommit_nil_input(round, &validators[3].address),
             expected_outputs: vec![start_precommit_timer_output(Round::new(0))],
             expected_round: Round::new(0),

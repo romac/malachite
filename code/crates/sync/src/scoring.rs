@@ -2,9 +2,9 @@ use core::fmt;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use rand::distributions::weighted::WeightedIndex;
-use rand::distributions::Distribution;
 use rand::Rng;
+use rand::distributions::Distribution;
+use rand::distributions::weighted::WeightedIndex;
 use tracing::debug;
 
 use malachitebft_peer::PeerId;
@@ -186,8 +186,8 @@ impl Default for PeerScorer {
 mod tests {
     use super::*;
     use arbtest::arbtest;
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
     use std::collections::HashSet;
     use std::ops::RangeInclusive;
 

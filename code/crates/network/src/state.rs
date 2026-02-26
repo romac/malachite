@@ -3,9 +3,9 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+use libp2p::Multiaddr;
 use libp2p::identify;
 use libp2p::request_response::InboundRequestId;
-use libp2p::Multiaddr;
 use malachitebft_discovery as discovery;
 use malachitebft_discovery::util::strip_peer_id_from_multiaddr;
 use malachitebft_sync as sync;

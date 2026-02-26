@@ -1,4 +1,4 @@
-use libp2p::{swarm::dial_opts::DialOpts, Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, swarm::dial_opts::DialOpts};
 
 use crate::util::Retry;
 

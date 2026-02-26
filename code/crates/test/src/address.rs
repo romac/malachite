@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use malachitebft_proto::{Error as ProtoError, Protobuf};
 
 use crate::signing::PublicKey;
-use crate::{proto, Hashable};
+use crate::{Hashable, proto};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

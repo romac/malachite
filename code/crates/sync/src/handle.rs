@@ -11,8 +11,8 @@ use malachitebft_core_types::{Context, Height};
 use crate::co::Co;
 use crate::scoring::SyncResult;
 use crate::{
-    perform, Effect, Error, HeightStartType, InboundRequestId, Metrics, OutboundRequestId, PeerId,
-    RawDecidedValue, Request, Resume, State, Status, ValueRequest, ValueResponse,
+    Effect, Error, HeightStartType, InboundRequestId, Metrics, OutboundRequestId, PeerId,
+    RawDecidedValue, Request, Resume, State, Status, ValueRequest, ValueResponse, perform,
 };
 
 #[derive_where(Debug)]
@@ -1034,32 +1034,28 @@ mod tests {
                 initial_height: 12,
                 max_size: 3,
                 pending_ranges: &[(10, 15)],
-                expected_panic_msg:
-                    "Bug: initial_height 12 is already covered by a pending request",
+                expected_panic_msg: "Bug: initial_height 12 is already covered by a pending request",
             },
             PanicTestCase {
                 name: "initial height equals range start",
                 initial_height: 15,
                 max_size: 5,
                 pending_ranges: &[(15, 20)],
-                expected_panic_msg:
-                    "Bug: initial_height 15 is already covered by a pending request",
+                expected_panic_msg: "Bug: initial_height 15 is already covered by a pending request",
             },
             PanicTestCase {
                 name: "sync height equals range end",
                 initial_height: 15,
                 max_size: 3,
                 pending_ranges: &[(10, 15)],
-                expected_panic_msg:
-                    "Bug: initial_height 15 is already covered by a pending request",
+                expected_panic_msg: "Bug: initial_height 15 is already covered by a pending request",
             },
             PanicTestCase {
                 name: "multiple consecutive blocks",
                 initial_height: 16,
                 max_size: 3,
                 pending_ranges: &[(10, 15), (16, 20)],
-                expected_panic_msg:
-                    "Bug: initial_height 16 is already covered by a pending request",
+                expected_panic_msg: "Bug: initial_height 16 is already covered by a pending request",
             },
             PanicTestCase {
                 name: "sync height zero with range starting at zero",

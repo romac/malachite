@@ -1,4 +1,4 @@
-use crate::{handle::signature::verify_commit_certificate, prelude::*, MisbehaviorEvidence};
+use crate::{MisbehaviorEvidence, handle::signature::verify_commit_certificate, prelude::*};
 
 pub async fn finalize_height<Ctx>(
     co: &Co<Ctx>,
