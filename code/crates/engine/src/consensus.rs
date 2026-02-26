@@ -1094,20 +1094,19 @@ where
             }
 
             Effect::ExtendVote(height, round, value_id, r) => {
-                match self.extend_vote(height, round, value_id).await? {
-                    Some(extension) => {
-                        let signed_extension = self
-                            .signing_provider
-                            .sign_vote_extension(extension)
-                            .await
-                            .inspect_err(|e| {
-                                error!("Failed to sign vote extension: {e}");
-                            })
-                            .ok(); // Discard the vote extension if signing fails
+                if let Some(extension) = self.extend_vote(height, round, value_id).await? {
+                    let signed_extension = self
+                        .signing_provider
+                        .sign_vote_extension(extension)
+                        .await
+                        .inspect_err(|e| {
+                            error!("Failed to sign vote extension: {e}");
+                        })
+                        .ok(); // Discard the vote extension if signing fails
 
-                        Ok(r.resume_with(signed_extension))
-                    }
-                    _ => Ok(r.resume_with(None)),
+                    Ok(r.resume_with(signed_extension))
+                } else {
+                    Ok(r.resume_with(None))
                 }
             }
 

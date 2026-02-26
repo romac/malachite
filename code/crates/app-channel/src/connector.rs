@@ -261,15 +261,12 @@ where
                     })
                     .await?;
 
-                match rx.await? {
-                    Some(value) => {
-                        if let Err(e) = reply_to.send(value) {
-                            error!("Failed to send processed synced value: {e}");
-                        }
+                if let Some(value) = rx.await? {
+                    if let Err(e) = reply_to.send(value) {
+                        error!("Failed to send processed synced value: {e}");
                     }
-                    _ => {
-                        warn!("Failed to decode synced value");
-                    }
+                } else {
+                    warn!("Failed to decode synced value");
                 }
             }
         };
