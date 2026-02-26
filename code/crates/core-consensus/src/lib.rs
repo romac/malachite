@@ -32,13 +32,13 @@ mod ser;
 
 // Only used in macros
 #[doc(hidden)]
+pub use malachitebft_coroutine as coroutine;
+
+// Only used in macros
+#[doc(hidden)]
 pub mod gen;
 
 // Only used in macros
 mod handle;
 #[doc(hidden)]
 pub use handle::handle;
-
-// Used in macros
-#[doc(hidden)]
-pub use tracing;

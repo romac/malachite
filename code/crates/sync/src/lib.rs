@@ -28,7 +28,7 @@ pub mod effect;
 pub use effect::{Effect, Error, Resumable, Resume};
 
 #[doc(hidden)]
-pub mod co;
+pub use malachitebft_coroutine as coroutine;
 
 #[doc(hidden)]
-pub use tracing;
+pub mod co;

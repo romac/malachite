@@ -26,7 +26,7 @@ bytes = { workspace = true, features = ["serde"] }
 dashmap = { workspace = true }
 derive-where = { workspace = true }
 displaydoc = { workspace = true }
-fauxgen = { workspace = true, default-features = false }
+malachitebft-coroutine = { workspace = true }
 libp2p = { workspace = true, features = ["request-response", "cbor"] }
 rand = { workspace = true }
 serde = { workspace = true }

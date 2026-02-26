@@ -1,7 +1,7 @@
-pub use fauxgen::Generator;
-pub use fauxgen::GeneratorState;
-pub use fauxgen::GeneratorToken;
-pub use fauxgen::__private as fauxgen_private;
+pub use malachitebft_coroutine::fauxgen_private;
+pub use malachitebft_coroutine::Generator;
+pub use malachitebft_coroutine::GeneratorState;
+pub use malachitebft_coroutine::GeneratorToken;
 
 use crate::{Effect, Error, Resume};
 

@@ -20,31 +20,17 @@
 #[macro_export]
 macro_rules! process {
     (input: $input:expr, state: $state:expr, metrics: $metrics:expr, with: $effect:ident => $handle:expr) => {{
-        let token = $crate::gen::fauxgen_private::token();
-
-        let gen = $crate::gen::fauxgen_private::gen_sync(token.marker(), async {
-            let co: $crate::gen::Co<_> = $crate::gen::fauxgen_private::register_owned(token).await;
-            $crate::handle(co, $state, $metrics, $input).await
-        });
-
-        let mut gen = ::core::pin::pin!(gen);
-        let mut co_result = $crate::gen::Generator::resume(gen.as_mut(), $crate::Resume::Start);
-
-        'proc: loop {
-            match co_result {
-                $crate::gen::CoResult::Yielded($effect) => {
-                    let resume = match $handle {
-                        Ok(resume) => resume,
-                        Err(error) => {
-                            $crate::tracing::error!("Error when processing effect: {error:?}");
-                            $crate::Resume::Continue
-                        }
-                    };
-                    co_result = $crate::gen::Generator::resume(gen.as_mut(), resume)
-                }
-                $crate::gen::CoResult::Complete(result) => break 'proc result.map_err(Into::into),
-            }
-        }
+        $crate::coroutine::process!(
+            co: $crate::gen::Co<_>,
+            handle: $crate::handle,
+            state: $state,
+            metrics: $metrics,
+            input: $input,
+            initial_resume: $crate::Resume::Start,
+            default_resume: $crate::Resume::Continue,
+            with: $effect => $handle,
+            complete: result => result.map_err(Into::into),
+        )
     }};
 }
 
@@ -81,15 +67,6 @@ macro_rules! perform {
 
     // TODO: Add support for multiple patterns + if guards
     ($co:expr, $effect:expr, $pat:pat => $expr:expr $(,)?) => {
-        match $co.yield_($effect).await {
-            $pat => $expr,
-            resume => {
-                return ::core::result::Result::Err($crate::error::Error::UnexpectedResume(
-                    resume,
-                    stringify!($pat)
-                )
-                .into())
-            }
-        }
+        $crate::coroutine::perform!($co, $effect, $crate::error::Error::UnexpectedResume, $pat => $expr)
     };
 }

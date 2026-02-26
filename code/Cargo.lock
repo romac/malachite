@@ -270,6 +270,7 @@ dependencies = [
  "arc-malachitebft-core-driver",
  "arc-malachitebft-core-types",
  "arc-malachitebft-core-votekeeper",
+ "arc-malachitebft-coroutine",
  "arc-malachitebft-metrics",
  "arc-malachitebft-peer",
  "arc-malachitebft-signing",
@@ -277,7 +278,6 @@ dependencies = [
  "async-recursion",
  "borsh",
  "derive-where",
- "fauxgen",
  "futures",
  "multiaddr",
  "thiserror 2.0.16",
@@ -332,6 +332,14 @@ dependencies = [
  "arc-malachitebft-test",
  "derive-where",
  "thiserror 2.0.16",
+ "tracing",
+]
+
+[[package]]
+name = "arc-malachitebft-coroutine"
+version = "0.7.0-pre"
+dependencies = [
+ "fauxgen",
  "tracing",
 ]
 
@@ -643,6 +651,7 @@ version = "0.7.0-pre"
 dependencies = [
  "arbtest",
  "arc-malachitebft-core-types",
+ "arc-malachitebft-coroutine",
  "arc-malachitebft-metrics",
  "arc-malachitebft-peer",
  "arc-malachitebft-test",
@@ -653,7 +662,6 @@ dependencies = [
  "derive-where",
  "displaydoc",
  "eyre",
- "fauxgen",
  "libp2p",
  "rand 0.8.5",
  "serde",

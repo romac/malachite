@@ -29,7 +29,7 @@ malachitebft-peer.workspace = true
 async-recursion = { workspace = true }
 borsh = { workspace = true, optional = true }
 futures = { workspace = true }
-fauxgen = { workspace = true, default-features = false }
+malachitebft-coroutine = { workspace = true }
 derive-where = { workspace = true }
 multiaddr = { workspace = true }
 thiserror = { workspace = true }

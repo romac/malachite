@@ -6,6 +6,7 @@ members = [
   "crates/app-channel",
   "crates/codec",
   "crates/config",
+  "crates/coroutine",
   "crates/core-consensus",
   "crates/core-driver",
   "crates/core-state-machine",
@@ -77,6 +78,7 @@ malachitebft-app                = { version = "0.7.0-pre", package = "arc-malach
 malachitebft-app-channel        = { version = "0.7.0-pre", package = "arc-malachitebft-app-channel", path = "crates/app-channel" }
 malachitebft-codec              = { version = "0.7.0-pre", package = "arc-malachitebft-codec", path = "crates/codec" }
 malachitebft-config             = { version = "0.7.0-pre", package = "arc-malachitebft-config", path = "crates/config" }
+malachitebft-coroutine           = { version = "0.7.0-pre", package = "arc-malachitebft-coroutine", path = "crates/coroutine" }
 malachitebft-core-consensus     = { version = "0.7.0-pre", package = "arc-malachitebft-core-consensus", path = "crates/core-consensus" }
 malachitebft-core-driver        = { version = "0.7.0-pre", package = "arc-malachitebft-core-driver", path = "crates/core-driver" }
 malachitebft-core-state-machine = { version = "0.7.0-pre", package = "arc-malachitebft-core-state-machine", path = "crates/core-state-machine" }
