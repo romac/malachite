@@ -20,8 +20,15 @@
 #[macro_export]
 macro_rules! process {
     (input: $input:expr, state: $state:expr, metrics: $metrics:expr, with: $effect:ident => $handle:expr) => {{
-        let mut gen = $crate::gen::Gen::new(|co| $crate::handle(co, $state, $metrics, $input));
-        let mut co_result = gen.resume_with($crate::Resume::Start);
+        let token = $crate::gen::fauxgen_private::token();
+
+        let gen = $crate::gen::fauxgen_private::gen_sync(token.marker(), async {
+            let co: $crate::gen::Co<_> = $crate::gen::fauxgen_private::register_owned(token).await;
+            $crate::handle(co, $state, $metrics, $input).await
+        });
+
+        let mut gen = ::core::pin::pin!(gen);
+        let mut co_result = $crate::gen::Generator::resume(gen.as_mut(), $crate::Resume::Start);
 
         'proc: loop {
             match co_result {
@@ -33,7 +40,7 @@ macro_rules! process {
                             $crate::Resume::Continue
                         }
                     };
-                    co_result = gen.resume_with(resume)
+                    co_result = $crate::gen::Generator::resume(gen.as_mut(), resume)
                 }
                 $crate::gen::CoResult::Complete(result) => break 'proc result.map_err(Into::into),
             }

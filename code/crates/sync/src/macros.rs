@@ -20,10 +20,13 @@
 #[macro_export]
 macro_rules! process {
     (input: $input:expr, state: $state:expr, metrics: $metrics:expr, with: $effect:ident => $handle:expr) => {{
-        let mut gen =
-            $crate::co::Gen::new(|co| $crate::handle::handle(co, $state, $metrics, $input));
-
-        let mut co_result = gen.resume_with($crate::Resume::default());
+        let token = $crate::co::fauxgen_private::token();
+        let gen = $crate::co::fauxgen_private::gen_sync(token.marker(), async {
+            let co: $crate::co::Co<_> = $crate::co::fauxgen_private::register_owned(token).await;
+            $crate::handle::handle(co, $state, $metrics, $input).await
+        });
+        let mut gen = ::core::pin::pin!(gen);
+        let mut co_result = $crate::co::Generator::resume(gen.as_mut(), $crate::Resume::default());
 
         loop {
             match co_result {
@@ -35,7 +38,7 @@ macro_rules! process {
                             $crate::Resume::default()
                         }
                     };
-                    co_result = gen.resume_with(resume)
+                    co_result = $crate::co::Generator::resume(gen.as_mut(), resume)
                 }
                 $crate::co::CoState::Complete(result) => {
                     return result.map_err(Into::into);
