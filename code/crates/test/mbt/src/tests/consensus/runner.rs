@@ -60,13 +60,12 @@ impl ItfRunner for ConsensusRunner {
     ) -> Result<Self::Result, Self::Error> {
         self.skip_step = false;
 
-        if let Some(last_state) = self.last_state.replace(expected.clone()) {
-            if &last_state == expected {
+        if let Some(last_state) = self.last_state.replace(expected.clone())
+            && &last_state == expected {
                 println!("➡️ Skipping duplicate step");
                 self.skip_step = true;
                 return Ok(None);
             }
-        }
 
         println!("🔸 step: actual state={actual:?}");
         println!("🔸 step: model input={:?}", expected.input);

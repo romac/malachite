@@ -349,10 +349,8 @@ pub async fn run(state: &mut State, channels: &mut Channels<TestContext>) -> eyr
                     if reply.send(Some(proposed_value)).is_err() {
                         error!("Failed to send ProcessSyncedValue reply");
                     }
-                } else {
-                    if reply.send(None).is_err() {
-                        error!("Failed to send ProcessSyncedValue reply");
-                    }
+                } else if reply.send(None).is_err() {
+                    error!("Failed to send ProcessSyncedValue reply");
                 }
             }
 

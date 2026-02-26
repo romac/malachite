@@ -65,13 +65,12 @@ impl ItfRunner for VoteKeeperRunner {
     ) -> Result<Self::Result, Self::Error> {
         self.skip_step = false;
 
-        if let Some(last_state) = self.last_state.replace(expected.clone()) {
-            if &last_state == expected {
+        if let Some(last_state) = self.last_state.replace(expected.clone())
+            && &last_state == expected {
                 println!("➡️ Skipping duplicate step");
                 self.skip_step = true;
                 return Ok(None);
             }
-        }
 
         match &expected.weighted_vote {
             WeightedVote::NoVote => Err(()),

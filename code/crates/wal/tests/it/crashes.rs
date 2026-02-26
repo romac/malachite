@@ -271,8 +271,8 @@ fn process_termination() -> io::Result<()> {
 // Helper binary for process termination test
 #[test]
 fn wal_write_test() {
-    if std::env::args().any(|arg| arg == "--test") {
-        if let Some(path) = std::env::args().nth(3) {
+    if std::env::args().any(|arg| arg == "--test")
+        && let Some(path) = std::env::args().nth(3) {
             let mut wal = FileLog::open(path).unwrap();
             loop {
                 // Continuously write entries until terminated
@@ -281,7 +281,6 @@ fn wal_write_test() {
                 thread::sleep(Duration::from_millis(10));
             }
         }
-    }
 }
 
 #[test]
