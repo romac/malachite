@@ -48,7 +48,7 @@ pub enum Step {
 }
 
 /// The state of the consensus state machine
-#[derive_where(Clone, Debug, Eq)]
+#[derive_where(Clone, Debug, PartialEq, Eq)]
 pub struct State<Ctx>
 where
     Ctx: Context,
@@ -75,29 +75,13 @@ where
 
     /// Timeouts already scheduled for the current round.
     /// Intended to avoid scheduling the same timeout multiple times.
+    #[derive_where(skip(EqHashOrd))]
     pub scheduled_timeouts: [bool; 3],
 
     /// Buffer with traces of tendermint algorithm lines,
     #[cfg(feature = "debug")]
     #[derive_where(skip)]
     pub traces: alloc::vec::Vec<Trace<Ctx>>,
-}
-
-impl<Ctx> PartialEq for State<Ctx>
-where
-    Ctx: Context,
-{
-    /// Compare only relevant consensus variables.
-    ///
-    /// This is used mainly in tests.
-    fn eq(&self, other: &Self) -> bool {
-        self.height == other.height
-            && self.round == other.round
-            && self.step == other.step
-            && self.locked == other.locked
-            && self.valid == other.valid
-            && self.decision == other.decision
-    }
 }
 
 impl<Ctx> State<Ctx>
