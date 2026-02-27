@@ -306,7 +306,6 @@ name = "arc-malachitebft-core-state-machine"
 version = "0.7.0-pre"
 dependencies = [
  "arc-malachitebft-core-types",
- "derivative",
  "derive-where",
  "displaydoc",
  "time",
@@ -1809,17 +1808,6 @@ checksum = "ececcb659e7ba858fb4f10388c250a7252eb0a27373f1a72b8748afdd248e587"
 dependencies = [
  "powerfmt",
  "serde_core",
-]
-
-[[package]]
-name = "derivative"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]

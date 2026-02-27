@@ -1,10 +1,10 @@
 //! The state maintained by the round state machine
 
-use derivative::Derivative;
-
 use crate::input::Input;
 use crate::state_machine::Info;
 use crate::transition::Transition;
+
+use derive_where::derive_where;
 
 #[cfg(feature = "debug")]
 use crate::traces::*;
@@ -48,8 +48,7 @@ pub enum Step {
 }
 
 /// The state of the consensus state machine
-#[derive(Derivative)]
-#[derivative(Clone, Debug, PartialEq, Eq)]
+#[derive_where(Clone, Debug, PartialEq, Eq)]
 pub struct State<Ctx>
 where
     Ctx: Context,
@@ -76,7 +75,6 @@ where
 
     /// Timeouts already scheduled for the current round.
     /// Intended to avoid scheduling the same timeout multiple times.
-    #[derivative(PartialEq = "ignore")]
     pub scheduled_timeouts: [bool; 3],
 
     /// Buffer with traces of tendermint algorithm lines,
