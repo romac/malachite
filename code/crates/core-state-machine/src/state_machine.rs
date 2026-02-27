@@ -259,6 +259,8 @@ where
 /// and ask for a value.
 ///
 /// Ref: L13-L16, L19
+///
+/// Transitions from `Step::Unstarted` to `Step::Propose`, therefore called just once per round.
 pub fn propose_valid_or_get_value<Ctx>(
     ctx: &Ctx,
     mut state: State<Ctx>,
@@ -295,6 +297,7 @@ where
             );
             debug_trace!(state, Line::L18);
 
+            debug_assert!(!state.check_timeout(TimeoutKind::Propose));
             Transition::to(state.with_step(Step::Propose)).with_output(output)
         }
     }
@@ -486,26 +489,24 @@ where
 /// We're not the proposer; schedule timeout propose.
 ///
 /// Ref: L11, L20
+///
+/// Transitions from `Step::Unstarted` to `Step::Propose`, therefore called just once per round.
 pub fn schedule_timeout_propose<Ctx>(mut state: State<Ctx>) -> Transition<Ctx>
 where
     Ctx: Context,
 {
     debug_trace!(state, Line::L21ProposeTimeoutScheduled);
 
-    if !state.check_timeout(TimeoutKind::Propose) {
-        let timeout = Output::schedule_timeout(state.round, TimeoutKind::Propose);
-        Transition::to(state.with_step(Step::Propose)).with_output(timeout)
-    } else {
-        Transition::to(state.with_step(Step::Propose))
-    }
+    debug_assert!(!state.check_timeout(TimeoutKind::Propose));
+    let timeout = Output::schedule_timeout(state.round, TimeoutKind::Propose);
+    Transition::to(state.with_step(Step::Propose)).with_output(timeout)
 }
 
 /// We received a polka for any; schedule timeout prevote.
 ///
 /// Ref: L34
 ///
-/// NOTE: This should only be called once in a round, per the spec,
-///       but it's harmless to schedule more timeouts
+/// This should only be called once in a round, per the spec.
 pub fn schedule_timeout_prevote<Ctx>(mut state: State<Ctx>) -> Transition<Ctx>
 where
     Ctx: Context,
@@ -521,6 +522,8 @@ where
 /// We received +2/3 precommits for any; schedule timeout precommit.
 ///
 /// Ref: L47
+///
+/// This should only be called once in a round, per the spec.
 pub fn schedule_timeout_precommit<Ctx>(mut state: State<Ctx>) -> Transition<Ctx>
 where
     Ctx: Context,
