@@ -1,10 +1,10 @@
 //! The state maintained by the round state machine
 
+use derive_where::derive_where;
+
 use crate::input::Input;
 use crate::state_machine::Info;
 use crate::transition::Transition;
-
-use derive_where::derive_where;
 
 #[cfg(feature = "debug")]
 use crate::traces::*;
