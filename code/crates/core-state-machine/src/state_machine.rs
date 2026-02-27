@@ -88,6 +88,7 @@ where
         (Step::Unstarted, Input::NewRound(round)) if info.is_proposer() => {
             // Update the round
             state.round = round;
+            state.scheduled_timeouts = [false; 3];
 
             debug_trace!(state, Line::L11Proposer);
 
@@ -99,6 +100,7 @@ where
         (Step::Unstarted, Input::NewRound(round)) => {
             // Update the round
             state.round = round;
+            state.scheduled_timeouts = [false; 3];
 
             debug_trace!(state, Line::L11NonProposer);
 
@@ -490,8 +492,17 @@ where
 {
     debug_trace!(state, Line::L21ProposeTimeoutScheduled);
 
-    let timeout = Output::schedule_timeout(state.round, TimeoutKind::Propose);
-    Transition::to(state.with_step(Step::Propose)).with_output(timeout)
+    if !state.scheduled_timeouts[TimeoutKind::Propose.index()] {
+        let timeout = Output::schedule_timeout(state.round, TimeoutKind::Propose);
+        Transition::to(
+            state
+                .with_step(Step::Propose)
+                .with_timeout(TimeoutKind::Propose),
+        )
+        .with_output(timeout)
+    } else {
+        Transition::to(state.with_step(Step::Propose))
+    }
 }
 
 /// We received a polka for any; schedule timeout prevote.
@@ -504,8 +515,12 @@ pub fn schedule_timeout_prevote<Ctx>(state: State<Ctx>) -> Transition<Ctx>
 where
     Ctx: Context,
 {
-    let output = Output::schedule_timeout(state.round, TimeoutKind::Prevote);
-    Transition::to(state).with_output(output)
+    if !state.scheduled_timeouts[TimeoutKind::Prevote.index()] {
+        let output = Output::schedule_timeout(state.round, TimeoutKind::Prevote);
+        Transition::to(state.with_timeout(TimeoutKind::Prevote)).with_output(output)
+    } else {
+        Transition::to(state)
+    }
 }
 
 /// We received +2/3 precommits for any; schedule timeout precommit.
@@ -515,8 +530,12 @@ pub fn schedule_timeout_precommit<Ctx>(state: State<Ctx>) -> Transition<Ctx>
 where
     Ctx: Context,
 {
-    let output = Output::schedule_timeout(state.round, TimeoutKind::Precommit);
-    Transition::to(state).with_output(output)
+    if !state.scheduled_timeouts[TimeoutKind::Precommit.index()] {
+        let output = Output::schedule_timeout(state.round, TimeoutKind::Precommit);
+        Transition::to(state.with_timeout(TimeoutKind::Precommit)).with_output(output)
+    } else {
+        Transition::to(state)
+    }
 }
 
 //---------------------------------------------------------------------
