@@ -492,14 +492,9 @@ where
 {
     debug_trace!(state, Line::L21ProposeTimeoutScheduled);
 
-    if !state.scheduled_timeouts[TimeoutKind::Propose.index()] {
+    if !state.check_timeout(TimeoutKind::Propose) {
         let timeout = Output::schedule_timeout(state.round, TimeoutKind::Propose);
-        Transition::to(
-            state
-                .with_step(Step::Propose)
-                .with_timeout(TimeoutKind::Propose),
-        )
-        .with_output(timeout)
+        Transition::to(state.with_step(Step::Propose)).with_output(timeout)
     } else {
         Transition::to(state.with_step(Step::Propose))
     }
@@ -511,13 +506,13 @@ where
 ///
 /// NOTE: This should only be called once in a round, per the spec,
 ///       but it's harmless to schedule more timeouts
-pub fn schedule_timeout_prevote<Ctx>(state: State<Ctx>) -> Transition<Ctx>
+pub fn schedule_timeout_prevote<Ctx>(mut state: State<Ctx>) -> Transition<Ctx>
 where
     Ctx: Context,
 {
-    if !state.scheduled_timeouts[TimeoutKind::Prevote.index()] {
+    if !state.check_timeout(TimeoutKind::Prevote) {
         let output = Output::schedule_timeout(state.round, TimeoutKind::Prevote);
-        Transition::to(state.with_timeout(TimeoutKind::Prevote)).with_output(output)
+        Transition::to(state).with_output(output)
     } else {
         Transition::to(state)
     }
@@ -526,13 +521,13 @@ where
 /// We received +2/3 precommits for any; schedule timeout precommit.
 ///
 /// Ref: L47
-pub fn schedule_timeout_precommit<Ctx>(state: State<Ctx>) -> Transition<Ctx>
+pub fn schedule_timeout_precommit<Ctx>(mut state: State<Ctx>) -> Transition<Ctx>
 where
     Ctx: Context,
 {
-    if !state.scheduled_timeouts[TimeoutKind::Precommit.index()] {
+    if !state.check_timeout(TimeoutKind::Precommit) {
         let output = Output::schedule_timeout(state.round, TimeoutKind::Precommit);
-        Transition::to(state.with_timeout(TimeoutKind::Precommit)).with_output(output)
+        Transition::to(state).with_output(output)
     } else {
         Transition::to(state)
     }

@@ -114,12 +114,17 @@ where
         Self { step, ..self }
     }
 
-    pub fn with_timeout(self, timeout: TimeoutKind) -> Self {
-        let mut scheduled_timeouts = self.scheduled_timeouts;
-        scheduled_timeouts[timeout.index()] = true;
-        Self {
-            scheduled_timeouts: scheduled_timeouts,
-            ..self
+    /// Check it a timeout was already scheduled.
+    ///
+    /// If so, returns `true` and no change is made to the state.
+    /// Otherwise, returns `false` and set scheduled_timeouts[timeout] to `true`.
+    pub fn check_timeout(&mut self, timeout: TimeoutKind) -> bool {
+        let index = timeout.index();
+        if self.scheduled_timeouts[index] {
+            true
+        } else {
+            self.scheduled_timeouts[index] = true;
+            false
         }
     }
 
