@@ -8,8 +8,6 @@
     rustdoc::private_intra_doc_links,
     variant_size_differences
 )]
-// no_std compatibility
-#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::panic))]
 
 extern crate alloc;

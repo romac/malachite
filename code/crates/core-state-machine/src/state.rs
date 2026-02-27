@@ -1,6 +1,6 @@
 //! The state maintained by the round state machine
 
-use derive_where::derive_where;
+use derivative::Derivative;
 
 use crate::input::Input;
 use crate::state_machine::Info;
@@ -9,7 +9,7 @@ use crate::transition::Transition;
 #[cfg(feature = "debug")]
 use crate::traces::*;
 
-use malachitebft_core_types::{Context, Height, Round};
+use malachitebft_core_types::{Context, Height, Round, TimeoutKind};
 
 /// A value and its associated round
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -48,7 +48,8 @@ pub enum Step {
 }
 
 /// The state of the consensus state machine
-#[derive_where(Clone, Debug, PartialEq, Eq)]
+#[derive(Derivative)]
+#[derivative(Clone, Debug, PartialEq, Eq)]
 pub struct State<Ctx>
 where
     Ctx: Context,
@@ -73,6 +74,11 @@ where
     /// It may be different, lower or higher, than the state machine round.
     pub decision: Option<RoundValue<Ctx::Value>>,
 
+    /// Timeouts already scheduled for the current round.
+    /// Intended to avoid scheduling the same timeout multiple times.
+    #[derivative(PartialEq = "ignore")]
+    pub scheduled_timeouts: [bool; 3],
+
     /// Buffer with traces of tendermint algorithm lines,
     #[cfg(feature = "debug")]
     #[derive_where(skip)]
@@ -92,6 +98,7 @@ where
             locked: None,
             valid: None,
             decision: None,
+            scheduled_timeouts: [false; 3],
             #[cfg(feature = "debug")]
             traces: alloc::vec::Vec::default(),
         }
@@ -105,6 +112,15 @@ where
     /// Set the step.
     pub fn with_step(self, step: Step) -> Self {
         Self { step, ..self }
+    }
+
+    pub fn with_timeout(self, timeout: TimeoutKind) -> Self {
+        let mut scheduled_timeouts = self.scheduled_timeouts;
+        scheduled_timeouts[timeout.index()] = true;
+        Self {
+            scheduled_timeouts: scheduled_timeouts,
+            ..self
+        }
     }
 
     /// Set the locked value.
