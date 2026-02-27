@@ -86,9 +86,7 @@ where
 
         // L11/L14
         (Step::Unstarted, Input::NewRound(round)) if info.is_proposer() => {
-            // Update the round
-            state.round = round;
-            state.scheduled_timeouts = [false; 3];
+            state.update_round(round);
 
             debug_trace!(state, Line::L11Proposer);
 
@@ -98,9 +96,7 @@ where
 
         // L11/L20
         (Step::Unstarted, Input::NewRound(round)) => {
-            // Update the round
-            state.round = round;
-            state.scheduled_timeouts = [false; 3];
+            state.update_round(round);
 
             debug_trace!(state, Line::L11NonProposer);
 

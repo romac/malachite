@@ -142,6 +142,12 @@ where
         !was_scheduled
     }
 
+    /// Update the state's round.
+    pub fn update_round(&mut self, round: Round) {
+        self.round = round;
+        self.scheduled_timeouts = [false; 3];
+    }
+
     /// Set the locked value.
     pub fn set_locked(self, value: Ctx::Value) -> Self {
         Self {
