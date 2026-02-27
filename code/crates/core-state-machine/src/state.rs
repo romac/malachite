@@ -129,18 +129,17 @@ where
         Self { step, ..self }
     }
 
-    /// Check it a timeout was already scheduled.
+    /// Check whether a timeout can be scheduled for the current round.
     ///
-    /// If so, returns `true` and no change is made to the state.
-    /// Otherwise, returns `false` and set scheduled_timeouts[timeout] to `true`.
+    /// Returns `true` and record the timeout as scheduled, if not duplicated.
+    /// Otherwise, the timeout was already scheduled and the method returns `false`.
     pub fn check_timeout(&mut self, timeout: TimeoutKind) -> bool {
         let index = timeout.index();
-        if self.scheduled_timeouts[index] {
-            true
-        } else {
+        let was_scheduled = self.scheduled_timeouts[index];
+        if !was_scheduled {
             self.scheduled_timeouts[index] = true;
-            false
         }
+        !was_scheduled
     }
 
     /// Set the locked value.
