@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 use std::fmt;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tracing::info;
+use web_time::Instant;
 
 use malachitebft_core_driver::Driver;
 

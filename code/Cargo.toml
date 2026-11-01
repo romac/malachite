@@ -19,6 +19,7 @@ members = [
   "crates/proto",
   "crates/sync",
   "crates/wal",
+  "crates/wasm-sim",
 
   # Signing scheme
   "crates/signing",
@@ -176,4 +177,5 @@ tracing            = { version = "0.1.41", default-features = false }
 tracing-appender   = "0.2.3"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 unsigned-varint    = { version = "0.8", features = ["codec", "asynchronous_codec"] }
+web-time           = "1.1.0"
 zeroize            = { version = "1.8.1", default-features = false }

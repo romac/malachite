@@ -280,6 +280,7 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tracing",
+ "web-time",
 ]
 
 [[package]]
@@ -747,6 +748,16 @@ dependencies = [
  "rand 0.8.5",
  "tempfile",
  "testdir",
+]
+
+[[package]]
+name = "arc-malachitebft-wasm-sim"
+version = "0.8.2"
+dependencies = [
+ "arc-malachitebft-core-consensus",
+ "arc-malachitebft-core-types",
+ "bytes",
+ "serde",
 ]
 
 [[package]]

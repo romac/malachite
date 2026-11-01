@@ -1,0 +1,21 @@
+[package]
+name = "arc-malachitebft-wasm-sim"
+description = "Deterministic in-process simulation of Malachite consensus nodes, compilable to WebAssembly"
+publish = false
+
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+malachitebft-core-types = { workspace = true, features = ["serde"] }
+# Metrics are disabled: they read the wall clock, which is unavailable in the browser.
+malachitebft-core-consensus = { package = "arc-malachitebft-core-consensus", path = "../core-consensus", default-features = false, features = ["std"] }
+
+bytes = { workspace = true }
+serde = { workspace = true, features = ["derive", "std"] }
+
+[lints]
+workspace = true
