@@ -30,6 +30,25 @@ const LEGEND_LABELS = {
   SyncResponse: 'Sync resp',
 };
 
+// Tooltips for the message filters and the step legend.
+const MSG_TIPS = {
+  Proposal: 'The round\'s proposer sends the value it proposes for this height to every validator. Drawn as an arrowhead pointing the way it travels.',
+  Prevote: 'A validator\'s first vote in a round: for the proposed value if it is valid and the validator is not locked on another one, otherwise nil. Hollow when nil.',
+  Precommit: 'A validator\'s second vote: for a value once it has seen prevotes for it from more than 2/3 of the validators, otherwise nil. Precommits for one value from more than 2/3 decide it. Hollow when nil.',
+  PolkaCertificate: 'Prevotes for one value from more than 2/3 of the validators, bundled together. Helps validators that missed some of those prevotes catch up.',
+  RoundCertificate: 'Proof that a round is over, from precommits of more than 2/3 of the validators, or proof that more than 1/3 have moved to a later round. Lets validators that are behind jump to the right round.',
+  Status: 'Every validator regularly tells its peers the latest height it decided, so that a validator that fell behind finds out. Hidden by default, as there are a lot of them.',
+  SyncRequest: 'A validator that fell behind asks a peer that is ahead for the value decided at its current height. Drawn as an empty ring. Never dropped.',
+  SyncResponse: 'The decided value and the commit certificate that proves it. The validator that asked checks it and decides that height. Shaped like a block in the chains panel. Never dropped.',
+};
+
+const STEP_TIPS = {
+  Propose: 'Waiting for the round\'s proposal, or building it when it is this validator\'s turn, marked with a P.',
+  Prevote: 'Has sent its prevote, and collects the others\' prevotes.',
+  Precommit: 'Has sent its precommit, and collects the others\' precommits.',
+  Commit: 'Has decided the height. Grey while waiting for the target block time before moving on.',
+};
+
 // Identity colors, used to show who proposed each decided value.
 const NODE_COLORS = [
   '#2f5fd0', '#1f9d6a', '#c8692f', '#1fb5b0', '#d9a21b', '#b33a3a', '#6f8fe0', '#5cbf8a',
@@ -268,7 +287,7 @@ for (const [kind, color] of Object.entries(MSG_COLORS)) {
   const chip = document.createElement('button');
   chip.className = 'chip';
   chip.dataset.kind = kind;
-  chip.title = `Show or hide ${LEGEND_LABELS[kind].toLowerCase()} messages`;
+  chip.dataset.tip = `${MSG_TIPS[kind]} Click to show or hide them.`;
   chip.setAttribute('aria-pressed', 'true');
   const shape = kind.endsWith('Certificate') ? ' square' : { Proposal: ' tri', SyncRequest: ' ring', SyncResponse: ' pill' }[kind] ?? '';
   chip.innerHTML = `<span class="sw${shape}" style="--c:${color}"></span>${LEGEND_LABELS[kind]}`;
@@ -291,11 +310,13 @@ function setShown(kind, on) {
 for (const step of ['Propose', 'Prevote', 'Precommit', 'Commit']) {
   const item = document.createElement('span');
   item.innerHTML = `<i class="ring" style="border-color:${STEP_COLORS[step]}"></i>${step}`;
+  item.dataset.tip = STEP_TIPS[step];
   $('steps').appendChild(item);
 }
 {
   const item = document.createElement('span');
   item.textContent = 'Arcs: votes seen, tick = quorum';
+  item.dataset.tip = 'Around each validator, the inner arc fills with the prevotes it has seen in the current round, and the outer arc with the precommits. The tick marks a quorum: more than 2/3 of the validators.';
   $('steps').prepend(item);
 }
 
