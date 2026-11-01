@@ -312,7 +312,7 @@ for (const step of ['Propose', 'Prevote', 'Precommit', 'Commit']) {
 {
   const item = document.createElement('span');
   item.textContent = 'Dots: votes seen';
-  item.dataset.tip = 'Under each validator, one dot per validator, from v0 on the left: the top row shows the prevotes it has seen in the current round, the bottom row the precommits. Filled for a vote for a value, hollow for nil, faint until the vote arrives. A row brightens once it holds a quorum: votes from more than 2/3 of the validators.';
+  item.dataset.tip = 'Under each validator, one dot per validator, from v0 on the left: the top row shows the prevotes it has seen in the current round, the bottom row the precommits. Filled for a vote for a value, hollow for nil, faint until the vote arrives. A row brightens and gets a check mark once it holds a quorum: votes from more than 2/3 of the validators.';
   $('steps').prepend(item);
 }
 
@@ -797,6 +797,22 @@ function draw() {
             ctx.fill();
           }
           ctx.globalAlpha = look.alpha;
+        }
+        if (full) {
+          // A check mark after the row
+          const cx = x0 + n * gap + 1;
+          const k = Math.max(3, r * 1.4);
+          ctx.strokeStyle = STEP_COLORS[kind];
+          ctx.lineWidth = 1.6;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(cx - k * 0.5, py);
+          ctx.lineTo(cx - k * 0.1, py + k * 0.45);
+          ctx.lineTo(cx + k * 0.7, py - k * 0.55);
+          ctx.stroke();
+          ctx.lineCap = 'butt';
+          ctx.lineJoin = 'miter';
         }
       }
     }
