@@ -270,7 +270,7 @@ function draw() {
   const css = getComputedStyle(document.documentElement);
   const fg = css.getPropertyValue('--fg').trim();
   const muted = css.getPropertyValue('--muted').trim();
-  const panel = css.getPropertyValue('--panel').trim();
+  const panel = css.getPropertyValue('--node').trim();
   const border = css.getPropertyValue('--border').trim();
 
   const { positions, radius, w, h } = layout();

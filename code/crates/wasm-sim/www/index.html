@@ -4,10 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Malachite Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap">
 <style>
   :root {
-    --bg: #f4f4f1;
+    --bg: #f4f3ef;
+    --surface: #ecebe6;
     --panel: #ffffff;
+    --node: #ffffff;
+    --dot: rgba(30, 30, 40, .10);
+    --glow: rgba(47, 111, 223, .10);
     --fg: #1d1d1f;
     --muted: #6b6b70;
     --faint: #a5a5aa;
@@ -21,8 +28,12 @@
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #121214;
-      --panel: #1c1c1f;
+      --bg: #101013;
+      --surface: #17171b;
+      --panel: #1f1f24;
+      --node: #1b1b20;
+      --dot: rgba(255, 255, 255, .07);
+      --glow: rgba(108, 156, 255, .13);
       --fg: #ececee;
       --muted: #9a9aa2;
       --faint: #5f5f66;
@@ -39,6 +50,7 @@
   body {
     margin: 0;
     background: var(--bg);
+    -webkit-font-smoothing: antialiased;
     color: var(--fg);
     font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
@@ -55,13 +67,14 @@
     padding: 10px 14px 14px;
   }
   .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    background: var(--surface);
+    border-radius: 14px;
   }
+  .display { font-family: "Space Grotesk", system-ui, sans-serif; }
   h2 {
-    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-    color: var(--muted); margin: 0; font-weight: 600;
+    font: 600 11px/1.4 "Space Grotesk", system-ui, sans-serif;
+    text-transform: uppercase; letter-spacing: .09em;
+    color: var(--muted); margin: 0;
   }
   button, select, input { font: inherit; color: var(--fg); }
   button {
@@ -82,7 +95,11 @@
     grid-area: top;
     display: flex; align-items: center; gap: 10px 18px; flex-wrap: wrap;
   }
-  h1 { font-size: 16px; margin: 0; font-weight: 650; white-space: nowrap; }
+  h1 {
+    font: 700 19px/1.2 "Space Grotesk", system-ui, sans-serif;
+    letter-spacing: -.01em; margin: 0 6px 0 0; white-space: nowrap;
+  }
+  h1 span { color: var(--accent); }
   .group { display: flex; align-items: center; gap: 6px; }
   .group label { color: var(--muted); }
   #speed { width: 120px; }
@@ -91,7 +108,7 @@
     margin-left: auto; display: flex; gap: 16px; flex-wrap: wrap;
     color: var(--muted); font-variant-numeric: tabular-nums;
   }
-  #stats b { color: var(--fg); font-weight: 600; }
+  #stats b { color: var(--fg); font: 600 15px "Space Grotesk", system-ui, sans-serif; }
 
   /* Settings */
   #settings { grid-area: settings; overflow: auto; padding: 4px 0; }
@@ -121,7 +138,13 @@
   .note { color: var(--muted); font-size: 12px; margin: 6px 0 2px; }
 
   /* Stage */
-  #stage { grid-area: stage; display: flex; flex-direction: column; min-height: 320px; overflow: hidden; }
+  #stage {
+    grid-area: stage; display: flex; flex-direction: column; min-height: 320px; overflow: hidden;
+    border-radius: 14px;
+    background:
+      radial-gradient(ellipse at 50% 52%, var(--glow), transparent 62%),
+      radial-gradient(var(--dot) 1px, transparent 1.4px) 0 0 / 22px 22px;
+  }
   #legend { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 10px 0; }
   #canvasWrap { position: relative; flex: 1; min-height: 0; }
   #net { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -129,7 +152,8 @@
   .chip {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 2px 9px 2px 7px; border-radius: 999px; font-size: 12px;
-    border: 1px solid var(--border); background: var(--panel); cursor: pointer;
+    border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 80%, transparent);
+    backdrop-filter: blur(4px); cursor: pointer;
   }
   .chip.off { color: var(--faint); }
   .chip.off .sw { background: transparent !important; box-shadow: inset 0 0 0 1.5px var(--faint); }
@@ -198,7 +222,7 @@
 <body>
 <main>
   <div id="top">
-    <h1>Malachite consensus simulator</h1>
+    <h1>Malachite <span>consensus simulator</span></h1>
     <div class="group">
       <button class="primary" id="play">Pause</button>
       <button id="stepBtn" title="Advance 100 ms of simulated time">+100 ms</button>
@@ -263,7 +287,7 @@
     </details>
   </section>
 
-  <section class="panel" id="stage">
+  <section id="stage">
     <div id="legend" aria-label="Message types shown"></div>
     <div id="canvasWrap">
       <canvas id="net"></canvas>
