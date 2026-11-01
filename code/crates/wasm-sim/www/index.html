@@ -78,6 +78,11 @@
   .row input[type=range] { flex: 1; min-width: 0; }
   .row output { flex: 0 0 52px; text-align: right; font-variant-numeric: tabular-nums; }
   .row input[type=number] { width: 72px; }
+  .tgrid { display: grid; grid-template-columns: 92px 1fr 1fr; gap: 4px 8px; align-items: center; }
+  .tgrid > span { color: var(--muted); }
+  .tgrid > .hd { font-size: 11px; }
+  .tgrid input { width: 100%; min-width: 0; }
+  .note { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
   button {
     font: inherit; padding: 5px 12px; border-radius: 6px;
     border: 1px solid var(--border); background: var(--bg); color: var(--fg); cursor: pointer;
@@ -164,6 +169,20 @@
         <label for="seed">Seed</label>
         <input type="number" id="seed" min="0" value="0">
       </div>
+    </div>
+
+    <div>
+      <h2>Consensus</h2>
+      <div class="tgrid" id="timeouts">
+        <span class="hd">Timeout (ms)</span><span class="hd">Base</span><span class="hd">+ per round</span>
+        <span>Propose</span><input type="number" min="1" step="100" id="t_propose" value="3000"><input type="number" min="0" step="100" id="t_propose_delta" value="500">
+        <span>Prevote</span><input type="number" min="1" step="100" id="t_prevote" value="1000"><input type="number" min="0" step="100" id="t_prevote_delta" value="500">
+        <span>Precommit</span><input type="number" min="1" step="100" id="t_precommit" value="1000"><input type="number" min="0" step="100" id="t_precommit_delta" value="500">
+        <span>Rebroadcast</span><input type="number" min="1" step="100" id="t_rebroadcast" value="5000"><span></span>
+        <span>Cap</span><input type="number" min="1" step="1000" id="t_max_timeout" value="60000"><span></span>
+        <span>Sync grace</span><input type="number" min="0" step="100" id="syncGrace" value="1000"><span></span>
+      </div>
+      <p class="note">Timeouts apply to timeouts started from now on.</p>
     </div>
 
     <div>

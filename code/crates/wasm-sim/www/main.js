@@ -69,13 +69,37 @@ function delays() {
   return [Math.min(a, b), Math.max(a, b)];
 }
 
+const TIMEOUT_FIELDS = [
+  'propose', 'propose_delta', 'prevote', 'prevote_delta',
+  'precommit', 'precommit_delta', 'rebroadcast', 'max_timeout',
+];
+
+function timeouts() {
+  const t = {};
+  for (const f of TIMEOUT_FIELDS) {
+    const el = $('t_' + f);
+    t[f] = Math.max(+el.min, Math.round(+el.value || 0));
+  }
+  return t;
+}
+
+const syncGrace = () => Math.max(0, Math.round(+$('syncGrace').value || 0));
+
 function reset() {
   const n = Math.max(1, Math.min(16, +$('nodes').value || 4));
   const seed = Math.max(0, +$('seed').value || 0);
   const [min, max] = delays();
 
   if (sim) sim.free();
-  sim = new WasmSim(n, seed, min, max, $('drop').value / 100);
+  sim = new WasmSim(JSON.stringify({
+    num_nodes: n,
+    seed,
+    min_delay_ms: min,
+    max_delay_ms: max,
+    drop_rate: $('drop').value / 100,
+    timeouts: timeouts(),
+    sync_grace_ms: syncGrace(),
+  }));
 
   simTime = 0;
   inflight = [];
@@ -97,6 +121,10 @@ $('stepBtn').onclick = () => advance(100);
 $('reset').onclick = reset;
 $('nodes').onchange = reset;
 $('seed').onchange = reset;
+for (const f of TIMEOUT_FIELDS) {
+  $('t_' + f).onchange = () => sim.set_timeouts(JSON.stringify(timeouts()));
+}
+$('syncGrace').onchange = () => sim.set_sync_grace_ms(syncGrace());
 $('speed').oninput = syncOutputs;
 $('drop').oninput = () => { syncOutputs(); sim.set_drop_rate($('drop').value / 100); };
 for (const id of ['minDelay', 'maxDelay']) {

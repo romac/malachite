@@ -416,6 +416,15 @@ impl Simulation {
         self.config.max_delay_ms = max.max(min);
     }
 
+    /// Change the consensus timeouts. Applies to timeouts scheduled from now on.
+    pub fn set_timeouts(&mut self, timeouts: LinearTimeouts) {
+        self.config.timeouts = timeouts;
+    }
+
+    pub fn set_sync_grace_ms(&mut self, sync_grace_ms: u64) {
+        self.config.sync_grace_ms = sync_grace_ms;
+    }
+
     fn schedule(&mut self, time: u64, event: Event) {
         self.seq += 1;
         self.queue.insert((time, self.seq), event);
