@@ -55,12 +55,31 @@ const shown = new Set(Object.keys(MSG_COLORS));
 // A node sees its own vote when it sends it, and the others' when they arrive.
 let votes = new Map();
 let nodeLook = []; // Per-node display state, eased towards the target every frame.
+let moments = new Set(); // Keys of the one-off moments already shown, eg. `polka|3|0`.
+let chainCounts = []; // Decisions per node at the last chain render.
 
 function recordVote(node, m) {
   const key = `${node}|${m.height}|${m.round}|${m.kind}`;
   let seen = votes.get(key);
   if (!seen) votes.set(key, (seen = new Map()));
   seen.set(m.from, m.value);
+
+  // The first node to see a polka (a quorum of prevotes for a value) lights up
+  // the links between the voters.
+  if (m.kind === 'Prevote' && m.value !== null && once(`polka|${m.height}|${m.round}`, false)) {
+    const voters = [...seen].filter(([, v]) => v === m.value).map(([voter]) => voter);
+    if (voters.length >= quorum(statuses.length)) {
+      once(`polka|${m.height}|${m.round}`);
+      effects.push({ node: -1, kind: 'polka', voters, until: performance.now() + 900 });
+    }
+  }
+}
+
+// Whether `key` has not been seen yet, marking it as seen unless `mark` is false.
+function once(key, mark = true) {
+  if (moments.has(key)) return false;
+  if (mark) moments.add(key);
+  return true;
 }
 
 function votesSeen(node, height, round, kind) {
@@ -133,6 +152,9 @@ function reset() {
   chainKey = '';
   votes = new Map();
   nodeLook = [];
+  moments = new Set();
+  chainCounts = [];
+  $('banner').hidden = true;
   $('log').replaceChildren();
   statuses = JSON.parse(sim.statuses());
   renderChain();
@@ -236,27 +258,46 @@ function handle(ev) {
       if (ev.dropped) counters.dropped++;
       inflight.push(ev);
       if (ev.kind === 'Prevote' || ev.kind === 'Precommit') recordVote(ev.from, ev);
-      if (ev.kind === 'SyncRequest') log(ev.time, `v${ev.from} is behind, requests height ${ev.height} from v${ev.to}`, 'sync');
+      if (ev.kind === 'SyncRequest') {
+        log(ev.time, `v${ev.from} is behind, requests height ${ev.height} from v${ev.to}`, 'sync');
+        effects.push({ node: -1, kind: 'beam', from: ev.from, to: ev.to, until: realNow + 1800 });
+      }
       break;
     case 'RoundStarted':
       proposerOf.set(ev.node, ev.proposer);
       if (ev.round > 0 && ev.node === ev.proposer) {
         log(ev.time, `height ${ev.height} moves to round ${ev.round}, v${ev.proposer} proposes`, 'round');
       }
+      if (ev.round > 0 && once(`round|${ev.height}|${ev.round}`)) {
+        banner(`Height ${ev.height} · Round ${ev.round}`, `v${ev.proposer} proposes`);
+      }
       break;
     case 'TimeoutElapsed':
       if (ev.kind !== 'Rebroadcast') {
         effects.push({ node: ev.node, kind: 'timeout', label: `timeout ${ev.kind.toLowerCase()}`, until: realNow + 1200 });
+        effects.push({ node: ev.node, kind: 'shake', until: realNow + 450 });
       }
       break;
     case 'Decided':
       effects.push({ node: ev.node, kind: 'decided', until: realNow + 700 });
       if (!decidedHeights.has(ev.height)) {
         decidedHeights.set(ev.height, ev);
+        effects.push({ node: -1, kind: 'burst', until: realNow + 1100 });
         log(ev.time, `height ${ev.height} decided: value ${ev.value} (round ${ev.round}, proposed by v${ev.value % 100})`, 'decided');
       }
       break;
   }
+}
+
+function banner(title, subtitle) {
+  const el = $('banner');
+  el.querySelector('b').textContent = title;
+  el.querySelector('span').textContent = subtitle;
+  el.hidden = false;
+  // Restart the animation.
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
 }
 
 function advance(dtSim) {
@@ -338,6 +379,75 @@ function draw() {
       ctx.lineTo(positions[j].x, positions[j].y);
       ctx.stroke();
     }
+  }
+
+  const realNow = performance.now();
+  effects = effects.filter((e) => e.until > realNow);
+
+  // Decision: a green wave rolls out from the center.
+  const center = positions.length > 1
+    ? { x: positions.reduce((t, p) => t + p.x, 0) / positions.length, y: positions.reduce((t, p) => t + p.y, 0) / positions.length }
+    : { x: w / 2, y: h / 2 };
+  const ringRadius = positions.length > 1 ? Math.hypot(positions[0].x - center.x, positions[0].y - center.y) : 60;
+  for (const e of effects) {
+    if (e.kind !== 'burst') continue;
+    const k = 1 - (e.until - realNow) / 1100;
+    for (const lag of [0, 0.18]) {
+      const kk = Math.max(0, k - lag);
+      if (kk <= 0) continue;
+      ctx.strokeStyle = STEP_COLORS.Commit;
+      ctx.globalAlpha = 0.45 * (1 - kk);
+      ctx.lineWidth = 6 * (1 - kk) + 1;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, kk * (ringRadius + radius + 30), 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Polka: the links between the prevoters glow.
+  for (const e of effects) {
+    if (e.kind !== 'polka') continue;
+    const k = 1 - (e.until - realNow) / 900;
+    ctx.strokeStyle = STEP_COLORS.Prevote;
+    ctx.shadowColor = STEP_COLORS.Prevote;
+    ctx.shadowBlur = 12;
+    ctx.lineWidth = 2.5;
+    ctx.globalAlpha = Math.min(1, 4 * (1 - k)) * 0.8;
+    for (let a = 0; a < e.voters.length; a++) {
+      for (let b = a + 1; b < e.voters.length; b++) {
+        const p = positions[e.voters[a]];
+        const q = positions[e.voters[b]];
+        if (!p || !q) continue;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(q.x, q.y);
+        ctx.stroke();
+      }
+    }
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  // Sync: a dashed beam from the node catching up to the peer it asks.
+  for (const e of effects) {
+    if (e.kind !== 'beam') continue;
+    const p = positions[e.from];
+    const q = positions[e.to];
+    if (!p || !q) continue;
+    const k = 1 - (e.until - realNow) / 1800;
+    ctx.strokeStyle = MSG_COLORS.SyncRequest;
+    ctx.globalAlpha = Math.min(1, 3 * (1 - k));
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    ctx.lineDashOffset = -realNow / 30;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(q.x, q.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+    ctx.globalAlpha = 1;
   }
 
   // Messages travel along slightly curved paths: A->B and B->A bend to opposite
@@ -424,14 +534,20 @@ function draw() {
   }
 
   // Nodes
-  const realNow = performance.now();
-  effects = effects.filter((e) => e.until > realNow);
 
   const n = statuses.length;
   const q = quorum(n);
 
   statuses.forEach((s, i) => {
-    const { x, y } = positions[i];
+    const { y } = positions[i];
+    let { x } = positions[i];
+
+    // Nodes that time out shake briefly.
+    for (const e of effects) {
+      if (e.node !== i || e.kind !== 'shake') continue;
+      const k = 1 - (e.until - realNow) / 450;
+      x += Math.sin(k * Math.PI * 8) * 4 * (1 - k);
+    }
     const target = s.online ? STEP_COLORS[s.step] || muted : muted;
 
     // Ease the ring color and the vote arcs, so that changes read as motion.
@@ -575,13 +691,16 @@ function renderChain() {
   chainKey = key;
 
   const MAX = 14;
+  const before = chainCounts;
+  chainCounts = statuses.map((s) => s.decisions.length);
   $('chainRows').innerHTML = statuses.map((s, i) => {
     const d = s.decisions;
     const from = Math.max(0, d.length - MAX);
     const blocks = d.slice(from).map((v, k) => {
       const height = from + k + 1;
       const proposer = v % 100;
-      return `<span class="block" style="background:${NODE_COLORS[proposer % NODE_COLORS.length]}" title="height ${height}, proposed by v${proposer}">${v}</span>`;
+      const fresh = height > (before[i] ?? 0) ? ' new' : '';
+      return `<span class="block${fresh}" style="background:${NODE_COLORS[proposer % NODE_COLORS.length]}" title="height ${height}, proposed by v${proposer}">${v}</span>`;
     }).join('');
     const more = from > 0 ? `<span class="block more">… ${from} more</span>` : '';
     return `<div class="chainrow"><span class="who" style="color:${NODE_COLORS[i % NODE_COLORS.length]}">v${i}</span>${more}${blocks}</div>`;
