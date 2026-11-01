@@ -14,6 +14,7 @@ const MSG_COLORS = {
   Precommit: '#8e5bd0',
   PolkaCertificate: '#d1457f',
   RoundCertificate: '#c0392b',
+  Status: '#9a948c',
   SyncRequest: '#1fb5b0',
   SyncResponse: '#1fb5b0',
 };
@@ -24,6 +25,7 @@ const LEGEND_LABELS = {
   Precommit: 'Precommit',
   PolkaCertificate: 'Polka cert',
   RoundCertificate: 'Round cert',
+  Status: 'Status',
   SyncRequest: 'Sync req',
   SyncResponse: 'Sync resp',
 };
@@ -50,7 +52,9 @@ let playing = true;
 let simTime = 0;
 let lastFrame = performance.now();
 let chainKey = '';
-const shown = new Set(Object.keys(MSG_COLORS));
+// Statuses are sent all the time, so they are hidden unless asked for.
+const HIDDEN_BY_DEFAULT = ['Status'];
+const shown = new Set(Object.keys(MSG_COLORS).filter((kind) => !HIDDEN_BY_DEFAULT.includes(kind)));
 
 // Votes seen by each node: `${node}|${height}|${round}|${kind}` -> Map(voter -> value).
 // A node sees its own vote when it sends it, and the others' when they arrive.
@@ -128,6 +132,7 @@ function timeouts() {
   return t;
 }
 
+const statusInterval = () => Math.max(100, Math.round(+$('statusInterval').value || 0));
 const syncGrace = () => Math.max(0, Math.round(+$('syncGrace').value || 0));
 const targetBlockTime = () => Math.max(0, Math.round(+$('targetBlockTime').value || 0));
 
@@ -144,6 +149,7 @@ function reset() {
     max_delay_ms: max,
     drop_rate: $('drop').value / 100,
     timeouts: timeouts(),
+    status_interval_ms: statusInterval(),
     sync_grace_ms: syncGrace(),
     target_block_time_ms: targetBlockTime(),
   }));
@@ -185,6 +191,7 @@ $('seed').onchange = reset;
 for (const f of TIMEOUT_FIELDS) {
   $('t_' + f).onchange = () => sim.set_timeouts(JSON.stringify(timeouts()));
 }
+$('statusInterval').onchange = () => sim.set_status_interval_ms(statusInterval());
 $('syncGrace').onchange = () => sim.set_sync_grace_ms(syncGrace());
 $('targetBlockTime').onchange = () => sim.set_target_block_time_ms(targetBlockTime());
 $('speed').oninput = syncOutputs;
@@ -270,6 +277,7 @@ for (const [kind, color] of Object.entries(MSG_COLORS)) {
     saveSettings();
   };
   $('legend').appendChild(chip);
+  setShown(kind, shown.has(kind));
 }
 
 function setShown(kind, on) {
@@ -610,7 +618,7 @@ function draw() {
 
     const color = MSG_COLORS[m.kind];
     const big = m.kind === 'Proposal' || m.kind.startsWith('Sync');
-    const r = big ? 5.5 : 3.5;
+    const r = big ? 5.5 : m.kind === 'Status' ? 2.5 : 3.5;
 
     // A dropped message gets halfway, then fizzles out in a few sparks.
     if (m.dropped && p > 0.5) {
@@ -934,6 +942,7 @@ function saveSettings() {
   const settings = {
     values: Object.fromEntries(settingInputs().map((el) => [el.id, el.value])),
     hidden: Object.keys(MSG_COLORS).filter((kind) => !shown.has(kind)),
+    shown: [...shown],
     closed: settingSections().filter((d) => !d.open).map((d) => d.querySelector('h2').textContent),
   };
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* storage unavailable */ }
@@ -951,8 +960,10 @@ function restoreSettings() {
     const max = el.max === '' ? Infinity : +el.max;
     el.value = String(Math.min(max, Math.max(min, value)));
   }
+  // Message kinds saved neither as shown nor hidden keep their default.
   for (const kind of Object.keys(MSG_COLORS)) {
-    setShown(kind, !settings.hidden?.includes(kind));
+    if (settings.hidden?.includes(kind)) setShown(kind, false);
+    if (settings.shown?.includes(kind)) setShown(kind, true);
   }
   for (const d of settingSections()) {
     d.open = !settings.closed?.includes(d.querySelector('h2').textContent);

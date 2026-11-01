@@ -19,6 +19,7 @@ struct JsConfig {
     max_delay_ms: u64,
     drop_rate: f64,
     timeouts: JsTimeouts,
+    status_interval_ms: u64,
     sync_grace_ms: u64,
     /// Target block time, `0` for none.
     target_block_time_ms: u64,
@@ -34,6 +35,7 @@ impl Default for JsConfig {
             max_delay_ms: c.max_delay_ms,
             drop_rate: c.drop_rate,
             timeouts: JsTimeouts::from(c.timeouts),
+            status_interval_ms: c.status_interval_ms,
             sync_grace_ms: c.sync_grace_ms,
             target_block_time_ms: c.target_block_time_ms.unwrap_or(0),
         }
@@ -119,6 +121,7 @@ impl WasmSim {
                 max_delay_ms: c.max_delay_ms.max(c.min_delay_ms),
                 drop_rate: c.drop_rate.clamp(0.0, 1.0),
                 timeouts: c.timeouts.into(),
+                status_interval_ms: c.status_interval_ms.max(1),
                 sync_grace_ms: c.sync_grace_ms,
                 target_block_time_ms: target(c.target_block_time_ms),
             }),
@@ -163,6 +166,11 @@ impl WasmSim {
         let t: JsTimeouts = serde_json::from_str(timeouts_json)?;
         self.sim.set_timeouts(t.into());
         Ok(())
+    }
+
+    pub fn set_status_interval_ms(&mut self, status_interval_ms: u32) {
+        self.sim
+            .set_status_interval_ms(u64::from(status_interval_ms));
     }
 
     pub fn set_sync_grace_ms(&mut self, sync_grace_ms: u32) {

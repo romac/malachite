@@ -174,6 +174,56 @@ fn node_rejoining_after_others_moved_on_catches_up_via_sync() {
 }
 
 #[test]
+fn node_learns_it_is_behind_from_status_while_the_others_are_stalled() {
+    // Long timeouts, so that no consensus message flows while quorum is lost.
+    let mut config = SimConfig::default();
+    config.timeouts.propose = std::time::Duration::from_secs(600);
+    config.timeouts.rebroadcast = std::time::Duration::from_secs(600);
+    let mut sim = Simulation::new(config);
+
+    sim.set_online(3, false);
+    while sim.statuses()[0].decisions.len() < 3 {
+        assert!(sim.step());
+    }
+
+    // Without node 0, nodes 1 and 2 soon get stuck. Node 3 comes back at height 1.
+    sim.set_online(0, false);
+    sim.set_online(3, true);
+    sim.run_until(sim.now() + 1_000);
+    sim.drain_events();
+    sim.run_until(sim.now() + 10_000);
+
+    // Nodes 1 and 2 send no consensus messages while stuck,
+    // so only their statuses can have told node 3 that they are ahead.
+    let events = sim.drain_events();
+    let first_request = events
+        .iter()
+        .position(|e| {
+            matches!(
+                e,
+                SimEvent::MessageSent {
+                    from: 3,
+                    kind: MsgKind::SyncRequest,
+                    ..
+                }
+            )
+        })
+        .expect("node 3 requests sync");
+    assert!(events[..first_request].iter().all(|e| !matches!(
+        e,
+        SimEvent::MessageSent {
+            from: 1 | 2,
+            kind: MsgKind::Proposal | MsgKind::Prevote | MsgKind::Precommit,
+            ..
+        }
+    )));
+
+    let statuses = sim.statuses();
+    assert!(statuses[1].decisions.len() >= 3);
+    assert_eq!(statuses[3].decisions, statuses[1].decisions);
+}
+
+#[test]
 fn no_sync_without_faults() {
     let mut sim = Simulation::new(SimConfig::default());
     run(&mut sim, 20, 600_000);

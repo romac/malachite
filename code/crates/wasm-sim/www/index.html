@@ -427,7 +427,7 @@
     <details open>
       <summary><h2>Network</h2></summary>
       <div class="fields">
-        <label for="drop" data-tip="Probability that a consensus message is lost on the way. Sync messages are never dropped. Lost proposals and votes lead to timeouts and extra rounds.">Drop rate</label>
+        <label for="drop" data-tip="Probability that a consensus message or status is lost on the way. Sync requests and responses are never dropped. Lost proposals and votes lead to timeouts and extra rounds.">Drop rate</label>
         <input type="range" id="drop" min="0" max="60" value="0">
         <output id="dropOut"></output>
         <label for="minDelay" data-tip="Shortest time a message takes to arrive. Each message gets a random delay between the minimum and the maximum.">Min delay</label>
@@ -465,7 +465,9 @@
         <input type="number" min="1" step="100" id="t_rebroadcast" value="5000"><span></span>
         <label class="lbl" for="t_max_timeout" data-tip="Upper bound for the propose, prevote, precommit and rebroadcast timeouts, however many rounds have passed.">Cap</label>
         <input type="number" min="1" step="1000" id="t_max_timeout" value="60000"><span></span>
-        <label class="lbl" for="syncGrace" data-tip="When a validator sees a message from a higher height, how long it waits before asking that peer for the decided value and its certificate. It usually catches up by itself in that time.">Sync grace</label>
+        <label class="lbl" for="statusInterval" data-tip="How often each validator tells its peers the latest height it decided. A validator that learns this way that a peer is ahead asks it for the heights it is missing.">Status every</label>
+        <input type="number" min="100" step="100" id="statusInterval" value="1000"><span></span>
+        <label class="lbl" for="syncGrace" data-tip="When a validator learns from a peer&#x27;s status that the peer decided its current height, how long it waits before asking that peer for the decided value and its certificate. It usually catches up by itself in that time.">Sync grace</label>
         <input type="number" min="0" step="100" id="syncGrace" value="1000"><span></span>
       </div>
       <p class="note">Applies to timeouts started from now on.</p>

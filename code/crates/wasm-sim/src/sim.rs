@@ -38,8 +38,10 @@ pub struct SimConfig {
     pub drop_rate: f64,
     /// Consensus timeouts.
     pub timeouts: LinearTimeouts,
-    /// How long a node waits, after seeing a message from a higher height,
-    /// before requesting sync if it has not moved on by itself.
+    /// How often each node broadcasts its status (the latest height it decided), in milliseconds.
+    pub status_interval_ms: u64,
+    /// How long a node waits, after learning from a status that a peer decided
+    /// its current height, before requesting sync if it has not moved on by itself.
     pub sync_grace_ms: u64,
     /// Target time between the starts of consecutive heights, in milliseconds.
     /// A node that decides earlier waits until then before moving on to the next
@@ -56,6 +58,7 @@ impl Default for SimConfig {
             max_delay_ms: 200,
             drop_rate: 0.0,
             timeouts: LinearTimeouts::default(),
+            status_interval_ms: 1000,
             sync_grace_ms: 1000,
             target_block_time_ms: None,
         }
@@ -70,6 +73,8 @@ pub enum MsgKind {
     Precommit,
     PolkaCertificate,
     RoundCertificate,
+    /// The latest height the sender decided, sent periodically.
+    Status,
     SyncRequest,
     SyncResponse,
 }
@@ -158,15 +163,6 @@ impl NetMsg {
         }
     }
 
-    fn height(&self) -> Height {
-        match self {
-            NetMsg::Vote(v) => v.height,
-            NetMsg::Proposal(p) => p.height,
-            NetMsg::PolkaCertificate(c) => c.height,
-            NetMsg::RoundCertificate(c) => c.height,
-        }
-    }
-
     /// Kind, height, round and value, for reporting.
     fn describe(&self) -> (MsgKind, u64, i64, Option<u64>) {
         match self {
@@ -215,7 +211,17 @@ enum Event {
         to: u32,
         msg: NetMsg,
     },
-    /// `node` saw a message from `peer` at a height above `height`:
+    /// `node` broadcasts its status, then schedules the next one.
+    SendStatus {
+        node: u32,
+    },
+    /// `from` tells `to` the latest height it decided.
+    Status {
+        from: u32,
+        to: u32,
+        tip: u64,
+    },
+    /// `node` learned that `peer` decided `height`:
     /// if it is still at `height`, it requests sync from `peer`.
     SyncCheck {
         node: u32,
@@ -266,6 +272,8 @@ struct Node {
     decisions: Vec<u64>,
     /// Certificates for decided heights, served to lagging peers.
     certificates: BTreeMap<u64, ExtendedCommitCertificate<SimContext>>,
+    /// Latest decided height of each peer, as last reported by its status.
+    peer_tips: Vec<u64>,
     /// Whether a sync check or request is pending.
     syncing: bool,
     /// Last observed `(height, round, step)`, to report step changes.
@@ -314,6 +322,7 @@ impl Simulation {
                 timers: HashMap::new(),
                 decisions: Vec::new(),
                 certificates: BTreeMap::new(),
+                peer_tips: vec![0; config.num_nodes as usize],
                 syncing: false,
                 last_seen: (0, -1, String::new()),
                 metrics: Metrics::default(),
@@ -332,6 +341,7 @@ impl Simulation {
             events: Vec::new(),
         };
 
+        let n = u64::from(sim.config.num_nodes);
         for node in 0..sim.config.num_nodes {
             sim.schedule(
                 0,
@@ -340,6 +350,9 @@ impl Simulation {
                     height: Height(1),
                 },
             );
+            // Spread the statuses over the interval, rather than sending them all at once.
+            let offset = sim.config.status_interval_ms * (u64::from(node) + 1) / n;
+            sim.schedule(offset, Event::SendStatus { node });
         }
 
         sim
@@ -441,6 +454,11 @@ impl Simulation {
         self.config.timeouts = timeouts;
     }
 
+    /// Change the status interval. Applies from each node's next status on.
+    pub fn set_status_interval_ms(&mut self, status_interval_ms: u64) {
+        self.config.status_interval_ms = status_interval_ms.max(1);
+    }
+
     pub fn set_sync_grace_ms(&mut self, sync_grace_ms: u64) {
         self.config.sync_grace_ms = sync_grace_ms;
     }
@@ -483,31 +501,57 @@ impl Simulation {
                     node,
                     Input::StartHeight(height, vs, false, target, Default::default()),
                 );
+
+                // A node catching up may already know of a peer that decided this height too.
+                let n = &self.nodes[node as usize];
+                let ahead = (0..self.config.num_nodes).max_by_key(|&p| n.peer_tips[p as usize]);
+                if let Some(peer) = ahead.filter(|&p| n.peer_tips[p as usize] >= height.0) {
+                    self.check_sync_later(node, peer);
+                }
             }
 
-            Event::Deliver { from, to, msg } => {
+            Event::Deliver { to, msg, .. } => {
+                if self.nodes[to as usize].online {
+                    self.process(to, msg.into_input());
+                }
+            }
+
+            Event::SendStatus { node } => {
+                if self.nodes[node as usize].online {
+                    let tip = self.nodes[node as usize]
+                        .certificates
+                        .last_key_value()
+                        .map_or(0, |(height, _)| *height);
+                    for to in 0..self.config.num_nodes {
+                        if to != node {
+                            let event = Event::Status {
+                                from: node,
+                                to,
+                                tip,
+                            };
+                            self.send(node, to, MsgKind::Status, tip, None, true, event);
+                        }
+                    }
+                }
+                self.schedule(
+                    self.now + self.config.status_interval_ms,
+                    Event::SendStatus { node },
+                );
+            }
+
+            Event::Status { from, to, tip } => {
                 let n = &mut self.nodes[to as usize];
                 if !n.online {
                     return;
                 }
+                let known = &mut n.peer_tips[from as usize];
+                *known = (*known).max(tip);
 
-                // A message from a higher height means the sender has decided our
-                // current height. We are usually just about to decide it too, so
-                // only ask for the decided value if we are still stuck after a while.
-                let height = n.state.height();
-                if msg.height() > height && !n.syncing {
-                    n.syncing = true;
-                    self.schedule(
-                        self.now + self.config.sync_grace_ms,
-                        Event::SyncCheck {
-                            node: to,
-                            peer: from,
-                            height,
-                        },
-                    );
+                // The peer decided our current height. We are usually just about to
+                // decide it too, so only ask for it if we are still stuck after a while.
+                if tip >= n.state.height().0 {
+                    self.check_sync_later(to, from);
                 }
-
-                self.process(to, msg.into_input());
             }
 
             Event::SyncCheck { node, peer, height } => {
@@ -517,17 +561,19 @@ impl Simulation {
                     return;
                 }
 
-                self.send_sync(
+                let event = Event::SyncRequest {
+                    from: node,
+                    to: peer,
+                    height,
+                };
+                self.send(
                     node,
                     peer,
                     MsgKind::SyncRequest,
                     height.0,
                     None,
-                    Event::SyncRequest {
-                        from: node,
-                        to: peer,
-                        height,
-                    },
+                    false,
+                    event,
                 );
             }
 
@@ -547,13 +593,15 @@ impl Simulation {
                     });
 
                 let value = response.as_ref().map(|r| r.certificate.value_id);
-                self.send_sync(
+                let event = Event::SyncResponse { to: from, response };
+                self.send(
                     to,
                     from,
                     MsgKind::SyncResponse,
                     height.0,
                     value,
-                    Event::SyncResponse { to: from, response },
+                    false,
+                    event,
                 );
             }
 
@@ -683,16 +731,35 @@ impl Simulation {
         }
     }
 
-    /// Send a sync request or response. These go over a reliable channel and are never dropped.
-    fn send_sync(
+    /// Unless a sync check is already pending, have `node` check after the grace
+    /// period whether it is still at its current height, and if so ask `peer` for it.
+    fn check_sync_later(&mut self, node: u32, peer: u32) {
+        let n = &mut self.nodes[node as usize];
+        if n.syncing {
+            return;
+        }
+        n.syncing = true;
+        let height = n.state.height();
+        self.schedule(
+            self.now + self.config.sync_grace_ms,
+            Event::SyncCheck { node, peer, height },
+        );
+    }
+
+    /// Send a sync message, delivered as `event`. Statuses may be dropped like consensus
+    /// messages, while sync requests and responses go over a reliable channel.
+    #[allow(clippy::too_many_arguments)]
+    fn send(
         &mut self,
         from: u32,
         to: u32,
         kind: MsgKind,
         height: u64,
         value: Option<u64>,
+        droppable: bool,
         event: Event,
     ) {
+        let dropped = droppable && self.rng.next_f64() < self.config.drop_rate;
         let delay = self
             .rng
             .range(self.config.min_delay_ms, self.config.max_delay_ms);
@@ -703,14 +770,16 @@ impl Simulation {
             from,
             to,
             deliver_at,
-            dropped: false,
+            dropped,
             kind,
             height,
             round: -1,
             value,
         });
 
-        self.schedule(deliver_at, event);
+        if !dropped {
+            self.schedule(deliver_at, event);
+        }
     }
 
     fn broadcast(&mut self, from: u32, msg: NetMsg) {

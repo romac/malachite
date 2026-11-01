@@ -13,9 +13,12 @@ Simplifications:
 - Signatures are simulated, and all certificates are accepted as valid.
 - Values are proposed in `ProposalOnly` mode; the value proposed by node `i`
   at height `h` is `h * 100 + i`.
-- A node that sees a message from a higher height and is still stuck after
-  `sync_grace_ms` requests the decided value and commit certificate from that
-  peer, a simplified version of ValueSync. Sync messages are never dropped.
+- Sync is a simplified version of ValueSync. Every `status_interval_ms`, each
+  node broadcasts the latest height it decided. A node that learns this way
+  that a peer decided its current height, and is still stuck after
+  `sync_grace_ms`, requests the decided value and commit certificate from that
+  peer, one height at a time. Statuses may be dropped; sync requests and
+  responses never are.
 
 ## Running the visualization
 
