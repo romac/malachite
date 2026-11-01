@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::time::Duration;
 use tracing::info;
-use web_time::Instant;
 
 use malachitebft_core_driver::Driver;
 
@@ -85,8 +84,9 @@ where
     /// Vote-extension policy for the current height.
     pub vote_extension_policy: VoteExtensionPolicy,
 
-    /// Start time of the current height
-    pub height_start_time: Option<Instant>,
+    /// Start time of the current height, as returned by [`Effect::GetTime`][crate::Effect::GetTime].
+    /// Only set when the height has a target time.
+    pub height_start_time: Option<Duration>,
 
     /// Index of the messages in the write-ahead log for this height. Empty once replay ends.
     pub replay_index: ReplayIndex<Ctx>,
@@ -533,7 +533,7 @@ where
         self.last_signed_precommit = None;
         self.target_time = target_time;
         self.vote_extension_policy = vote_extension_policy;
-        self.height_start_time = Some(Instant::now());
+        self.height_start_time = None;
         self.finalization_period = false;
         self.recovered_vote_extensions.clear();
 

@@ -47,15 +47,6 @@ pub struct SimConfig {
     pub target_block_time_ms: Option<u64>,
 }
 
-/// Target time given to the consensus state when a target block time is set.
-///
-/// The consensus state measures the time spent in a height with the wall clock,
-/// which means nothing in a simulation running on virtual time. So it is given a
-/// target it never reaches, which makes it always enter the finalization period
-/// after deciding, and the simulator ends that period at the target on its own
-/// clock instead (see `Simulation::schedule_timeout`).
-const UNREACHABLE_TARGET: Duration = Duration::from_secs(365 * 24 * 3600);
-
 impl Default for SimConfig {
     fn default() -> Self {
         Self {
@@ -279,8 +270,6 @@ struct Node {
     syncing: bool,
     /// Last observed `(height, round, step)`, to report step changes.
     last_seen: (u64, i64, String),
-    /// Virtual time at which the current height started.
-    height_started_at: u64,
     /// Consensus metrics, which track the node's state across calls to `process!`.
     /// `()` unless feature unification enables the `metrics` feature of core-consensus.
     metrics: Metrics,
@@ -327,7 +316,6 @@ impl Simulation {
                 certificates: BTreeMap::new(),
                 syncing: false,
                 last_seen: (0, -1, String::new()),
-                height_started_at: 0,
                 metrics: Metrics::default(),
             })
             .collect();
@@ -457,8 +445,7 @@ impl Simulation {
         self.config.sync_grace_ms = sync_grace_ms;
     }
 
-    /// Change the target block time. Applies from the next height on, and to the
-    /// finalization periods that have not ended yet.
+    /// Change the target block time. Applies from the next height on.
     pub fn set_target_block_time_ms(&mut self, target: Option<u64>) {
         self.config.target_block_time_ms = target;
     }
@@ -474,12 +461,7 @@ impl Simulation {
         self.nodes[node as usize].timers.insert(timeout, generation);
 
         let duration = match timeout.kind {
-            // End the finalization period at the target block time, on the virtual clock.
-            TimeoutKind::FinalizeHeight(_) => {
-                let started = self.nodes[node as usize].height_started_at;
-                let end = started + self.config.target_block_time_ms.unwrap_or(0);
-                Duration::from_millis(end.saturating_sub(self.now))
-            }
+            TimeoutKind::FinalizeHeight(d) => d,
             _ => self.config.timeouts.duration_for(timeout),
         };
         self.schedule(
@@ -495,8 +477,7 @@ impl Simulation {
     fn handle_event(&mut self, event: Event) {
         match event {
             Event::StartHeight { node, height } => {
-                self.nodes[node as usize].height_started_at = self.now;
-                let target = self.config.target_block_time_ms.map(|_| UNREACHABLE_TARGET);
+                let target = self.config.target_block_time_ms.map(Duration::from_millis);
                 let vs = self.validator_set.clone();
                 self.process(
                     node,
@@ -635,7 +616,7 @@ impl Simulation {
             input: input,
             state: &mut n.state,
             metrics: &n.metrics,
-            with: effect => handle_effect(effect, &mut actions)
+            with: effect => handle_effect(effect, self.now, &mut actions)
         );
 
         for action in actions {
@@ -796,9 +777,12 @@ impl Simulation {
 /// simulation (network, timers, scheduling) to `actions`.
 fn handle_effect(
     effect: Effect<SimContext>,
+    now: u64,
     actions: &mut Vec<Action>,
 ) -> Result<Resume<SimContext>, ()> {
     let resume = match effect {
+        // Consensus measures the time spent in a height on the virtual clock.
+        Effect::GetTime(r) => r.resume_with(Duration::from_millis(now)),
         Effect::CancelAllTimeouts(r) => {
             actions.push(Action::CancelAllTimeouts);
             r.resume_with(())

@@ -1229,6 +1229,8 @@ where
                 Ok(r.resume_with(()))
             }
 
+            Effect::GetTime(r) => Ok(r.resume_with(time_since_origin())),
+
             Effect::StartRound(height, round, proposer, role, r) => {
                 // Flush prior-round writes before starting a new round.
                 // Belt-and-suspenders: the publish-path flush is the primary
@@ -2067,6 +2069,15 @@ fn span_round<Ctx: Context>(round: Round, msg: &Msg<Ctx>) -> Round {
         Msg::StartHeight(_, _) | Msg::RestartHeight(_, _) => Round::new(0),
         _ => round,
     }
+}
+
+/// Time elapsed since a fixed origin, on Tokio's clock, to resume [`Effect::GetTime`].
+///
+/// Using Tokio's clock keeps the target time of a height consistent with the timers,
+/// including when time is paused in tests.
+fn time_since_origin() -> Duration {
+    static ORIGIN: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+    ORIGIN.get_or_init(Instant::now).elapsed()
 }
 
 #[cfg(test)]

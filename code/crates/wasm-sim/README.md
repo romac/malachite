@@ -16,9 +16,6 @@ Simplifications:
 - A node that sees a message from a higher height and is still stuck after
   `sync_grace_ms` requests the decided value and commit certificate from that
   peer, a simplified version of ValueSync. Sync messages are never dropped.
-- With a target block time, nodes go through the finalization period of
-  `core-consensus` after deciding, but the simulator ends that period on its
-  virtual clock, since the consensus state measures it with the wall clock.
 
 ## Running the visualization
 

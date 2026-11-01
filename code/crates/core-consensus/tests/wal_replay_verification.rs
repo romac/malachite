@@ -116,6 +116,9 @@ impl Harness {
                 r.resume_with(())
             }
 
+            // Time stands still: a height never reaches its target time.
+            GetTime(r) => r.resume_with(Duration::ZERO),
+
             _ => Resume::Continue,
         })
     }

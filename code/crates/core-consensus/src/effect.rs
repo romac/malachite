@@ -64,6 +64,18 @@ where
     /// Resume with: [`resume::Continue`]
     ScheduleTimeout(Timeout, resume::Continue),
 
+    /// Get the current time, as the time elapsed since an origin chosen by the host.
+    ///
+    /// Consensus only compares values returned by this effect with each other,
+    /// to measure how long a height has been running when it has a target time
+    /// (see [`Input::StartHeight`]). The origin can therefore be anything, as long
+    /// as it stays the same for the lifetime of the consensus state, and the clock
+    /// must not go backwards. Hosts can use any clock they like, for instance
+    /// a virtual clock in tests and simulations.
+    ///
+    /// Resume with: [`resume::Time`]
+    GetTime(resume::Time),
+
     /// Consensus is starting a new round with the given proposer
     ///
     /// Resume with: [`resume::Continue`]
@@ -367,6 +379,10 @@ where
 
     /// Resume execution with the result of the verification of the [`CommitCertificate`]
     CertificateValidity(Result<(), CertificateError<Ctx>>),
+
+    /// Resume execution with the current time.
+    /// See the [`Effect::GetTime`] effect for more information.
+    Time(core::time::Duration),
 }
 
 pub mod resume {
@@ -382,6 +398,17 @@ pub mod resume {
 
         fn resume_with(self, _: ()) -> Resume<Ctx> {
             Resume::Continue
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct Time;
+
+    impl<Ctx: Context> Resumable<Ctx> for Time {
+        type Value = core::time::Duration;
+
+        fn resume_with(self, value: Self::Value) -> Resume<Ctx> {
+            Resume::Time(value)
         }
     }
 

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### `malachitebft-core-consensus`
+
+- Added `Effect::GetTime(resume::Time)` and `Resume::Time(Duration)`. Consensus performs it at the start of a height and when deciding it, for heights that have a target time, and no longer reads the wall clock. Resume with the time elapsed since an origin of your choice, which must stay the same for the lifetime of the consensus state, from a clock that does not go backwards. Exhaustive matches on `Effect` or `Resume` must add the variant. Handlers with a catch-all arm still compile but must handle `GetTime` explicitly: resuming it with `Resume::Continue` fails the height with `Error::UnexpectedResume`.
+- `State::height_start_time` is now an `Option<Duration>`, the time returned by `Effect::GetTime` when the height started, instead of an `Option<Instant>`. It is only set for heights with a target time.
+- Dropped the `web-time` dependency.
+
 ## 0.8.1
 
 *October 6th, 2026*

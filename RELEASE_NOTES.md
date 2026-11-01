@@ -3,7 +3,11 @@
 ## Unreleased
 
 ### `consensus`
+- Measure the time spent at a height with the new `Effect::GetTime`, answered by the host, instead of the wall clock, to honor the target time of a height. Hosts can now use any clock, for instance a virtual one in simulations and tests, which keeps runs with a target time deterministic.
 - Export the `Metrics` type expected by `process!`: `malachitebft_metrics::Metrics` with the `metrics` feature, `()` otherwise.
+
+### `engine`
+- Answer `Effect::GetTime` with Tokio's clock, so the target time of a height follows the same clock as the consensus timers, including when time is paused in tests.
 
 ## 0.8.2
 

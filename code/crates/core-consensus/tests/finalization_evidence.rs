@@ -50,6 +50,8 @@ fn handle_effect(effect: Effect<TestContext>) -> Result<Resume<TestContext>, ()>
         SignProposal(proposal, r) => {
             r.resume_with(SignedProposal::new(proposal, Signature::test()))
         }
+        // Time stands still: a height never reaches its target time.
+        GetTime(r) => r.resume_with(Duration::ZERO),
         _ => Resume::Continue,
     })
 }

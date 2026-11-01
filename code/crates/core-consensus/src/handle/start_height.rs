@@ -30,6 +30,15 @@ where
 
     state.reset_and_start_height(height, validator_set, target_time, vote_extension_policy);
 
+    // Remember when the height started, to honor its target time when deciding.
+    if target_time.is_some() {
+        let now = perform!(co,
+            Effect::GetTime(Default::default()),
+            Resume::Time(now) => now
+        );
+        state.height_start_time = Some(now);
+    }
+
     debug_assert_eq!(state.height(), height);
     debug_assert_eq!(state.round(), Round::Nil);
 

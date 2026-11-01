@@ -21,7 +21,8 @@ where
 {
     /// Start consensus for the given height with an optional validator set update.
     /// The boolean indicates whether this is a restart of consensus for the given height.
-    /// The optional Duration is the target time for this height.
+    /// The optional Duration is the target time for this height, measured from the start
+    /// of the height with [`Effect::GetTime`](crate::Effect::GetTime).
     ///
     /// **Not persisted**: engine-layer envelope; the host rebuilds the parameters on every
     /// restart, so persisting them is unnecessary.

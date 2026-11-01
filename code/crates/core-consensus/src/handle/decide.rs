@@ -93,10 +93,16 @@ where
         return log_and_finalize(co, state, certificate, extensions).await;
     }
 
-    let elapsed = state
+    let started = state
         .height_start_time
-        .expect("height_start_time must be set when target_time is set")
-        .elapsed();
+        .expect("height_start_time must be set when target_time is set");
+
+    let now = perform!(co,
+        Effect::GetTime(Default::default()),
+        Resume::Time(now) => now
+    );
+
+    let elapsed = now.saturating_sub(started);
 
     if elapsed >= target_time {
         debug!(%height, ?elapsed, ?target_time, "Target time exceeded, finalizing immediately");
