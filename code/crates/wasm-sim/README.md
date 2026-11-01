@@ -27,7 +27,9 @@ wasm-pack build --target web --out-dir www/pkg --no-typescript
 python3 -m http.server -d www 8000
 ```
 
-Then open <http://localhost:8000>. Click a node to take it offline or bring it back.
+Then open <http://localhost:8000>. Click a node to take it offline or bring it
+back, or use the scenario buttons to crash the next proposer, lose quorum, or
+degrade the network.
 
 ## Tests
 

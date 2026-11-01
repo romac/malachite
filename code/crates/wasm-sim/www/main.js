@@ -162,9 +162,17 @@ function reset() {
   renderChain();
 }
 
+const ICONS = {
+  play: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.8v10.4a.8.8 0 0 0 1.2.7l7.6-5.2a.8.8 0 0 0 0-1.4L5.2 2.1a.8.8 0 0 0-1.2.7z"/></svg>',
+  pause: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="2.5" width="3" height="11" rx="1"/><rect x="9.5" y="2.5" width="3" height="11" rx="1"/></svg>',
+};
+
 $('play').onclick = () => {
   playing = !playing;
-  $('play').textContent = playing ? 'Pause' : 'Play';
+  const label = playing ? 'Pause' : 'Play';
+  $('play').innerHTML = playing ? ICONS.pause : ICONS.play;
+  $('play').title = label;
+  $('play').setAttribute('aria-label', label);
 };
 $('stepBtn').onclick = () => advance(100);
 $('reset').onclick = reset;
@@ -201,6 +209,13 @@ function highlightChain() {
     b.classList.toggle('hl', +b.dataset.height === hoverHeight);
   }
 }
+
+$('log').addEventListener('mouseover', (e) => {
+  const entry = e.target.closest('.entry');
+  if (!entry) return;
+  hoverNodes = new Set(entry.dataset.nodes ? entry.dataset.nodes.split(',').map(Number) : []);
+});
+$('log').addEventListener('mouseleave', () => { hoverNodes = new Set(); });
 
 $('clearLog').onclick = () => $('log').replaceChildren();
 
@@ -239,13 +254,58 @@ canvas.addEventListener('click', (e) => {
   const { positions, radius } = layout();
   positions.forEach((p, i) => {
     if (Math.hypot(p.x - x, p.y - y) <= radius + 4) {
-      const online = !statuses[i].online;
-      sim.set_online(i, online);
-      log(sim.now(), `v${i} ${online ? 'back online' : 'taken offline'}`, online ? '' : 'fault');
-      statuses = JSON.parse(sim.statuses());
+      setOnline(i, !statuses[i].online);
     }
   });
 });
+
+function setOnline(i, online) {
+  if (statuses[i].online === online) return;
+  sim.set_online(i, online);
+  log(sim.now(), `v${i} ${online ? 'back online' : 'taken offline'}`, online ? '' : 'fault', [i]);
+  statuses = JSON.parse(sim.statuses());
+}
+
+// ----- Scenarios -----
+
+function setInput(id, value) {
+  $(id).value = value;
+  $(id).dispatchEvent(new Event('input'));
+}
+
+const SCENARIOS = {
+  calm() {
+    setInput('drop', 0);
+    setInput('minDelay', 20);
+    setInput('maxDelay', 200);
+  },
+  lossy() {
+    setInput('drop', 25);
+  },
+  slow() {
+    setInput('minDelay', 100);
+    setInput('maxDelay', 1500);
+  },
+  crash() {
+    // Round 0 of height h is proposed by v((h - 1) mod n).
+    const n = statuses.length;
+    const height = Math.max(...statuses.filter((s) => s.online).map((s) => s.height));
+    setOnline(height % n, false);
+  },
+  noquorum() {
+    const n = statuses.length;
+    const online = statuses.filter((s) => s.online).map((s) => s.node);
+    const keep = quorum(n) - 1;
+    for (const i of online.slice(keep)) setOnline(i, false);
+  },
+  heal() {
+    statuses.forEach((_, i) => setOnline(i, true));
+  },
+};
+
+for (const button of document.querySelectorAll('[data-scenario]')) {
+  button.onclick = () => SCENARIOS[button.dataset.scenario]();
+}
 
 canvas.addEventListener('mousemove', (e) => {
   const rect = canvas.getBoundingClientRect();
@@ -259,10 +319,12 @@ canvas.addEventListener('mousemove', (e) => {
 const LOG_LIMIT = 300;
 
 // Newest entries first. `kind` is one of '', 'decided', 'round', 'sync', 'fault'.
-function log(time, text, kind = '') {
+// Hovering an entry highlights the `nodes` it is about.
+function log(time, text, kind = '', nodes = []) {
   const el = $('log');
   const entry = document.createElement('div');
   entry.className = `entry ${kind}`;
+  entry.dataset.nodes = nodes.join(',');
   const t = document.createElement('span');
   t.className = 't';
   t.textContent = `${(time / 1000).toFixed(2)}s`;
@@ -283,14 +345,14 @@ function handle(ev) {
       inflight.push(ev);
       if (ev.kind === 'Prevote' || ev.kind === 'Precommit') recordVote(ev.from, ev);
       if (ev.kind === 'SyncRequest') {
-        log(ev.time, `v${ev.from} is behind, requests height ${ev.height} from v${ev.to}`, 'sync');
+        log(ev.time, `v${ev.from} is behind, requests height ${ev.height} from v${ev.to}`, 'sync', [ev.from, ev.to]);
         effects.push({ node: -1, kind: 'beam', from: ev.from, to: ev.to, until: realNow + 1800 });
       }
       break;
     case 'RoundStarted':
       proposerOf.set(ev.node, ev.proposer);
       if (ev.round > 0 && ev.node === ev.proposer) {
-        log(ev.time, `height ${ev.height} moves to round ${ev.round}, v${ev.proposer} proposes`, 'round');
+        log(ev.time, `height ${ev.height} moves to round ${ev.round}, v${ev.proposer} proposes`, 'round', [ev.proposer]);
       }
       if (ev.round > 0 && once(`round|${ev.height}|${ev.round}`)) {
         banner(`Height ${ev.height} · Round ${ev.round}`, `v${ev.proposer} proposes`);
@@ -307,7 +369,7 @@ function handle(ev) {
       if (!decidedHeights.has(ev.height)) {
         decidedHeights.set(ev.height, ev);
         effects.push({ node: -1, kind: 'burst', until: realNow + 1100 });
-        log(ev.time, `height ${ev.height} decided: value ${ev.value} (round ${ev.round}, proposed by v${ev.value % 100})`, 'decided');
+        log(ev.time, `height ${ev.height} decided: value ${ev.value} (round ${ev.round}, proposed by v${ev.value % 100})`, 'decided', [ev.value % 100]);
       }
       break;
   }
@@ -363,7 +425,7 @@ function layout() {
   const bottom = 52;
   const cy = top + (h - top - bottom) / 2;
   const ring = Math.min(w, h - top - bottom) * 0.38;
-  const radius = Math.max(16, Math.min(38, (2 * Math.PI * ring) / n / 3.2));
+  const radius = Math.max(14, Math.min(38, ring * 0.22, (2 * Math.PI * ring) / n / 3.2));
   const positions = statuses.map((_, i) => {
     const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
     return { x: w / 2 + ring * Math.cos(a), y: cy + ring * Math.sin(a) };
@@ -750,13 +812,26 @@ function renderChain() {
   }).join('');
 }
 
+function setStat(id, text, pulse = false) {
+  const el = $(id);
+  if (el.textContent === text) return;
+  el.textContent = text;
+  if (pulse) {
+    el.classList.remove('pulse');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('pulse');
+  }
+}
+
 function renderStats() {
   const maxHeight = statuses.reduce((m, s) => Math.max(m, s.decisions.length), 0);
   const dropPct = counters.sent ? ((100 * counters.dropped) / counters.sent).toFixed(1) : '0.0';
-  $('stats').innerHTML =
-    `<span>t = <b>${(simTime / 1000).toFixed(2)} s</b></span>` +
-    `<span><b>${maxHeight}</b> heights decided</span>` +
-    `<span><b>${counters.sent}</b> messages, <b>${dropPct}%</b> dropped</span>`;
+  const rate = simTime > 0 ? maxHeight / (simTime / 1000) : 0;
+  setStat('statTime', `${(simTime / 1000).toFixed(2)} s`);
+  setStat('statHeights', String(maxHeight), maxHeight > 0);
+  setStat('statRate', rate.toFixed(1));
+  setStat('statMsgs', String(counters.sent));
+  setStat('statDrop', `${dropPct}%`);
 }
 
 function frame(now) {
