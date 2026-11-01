@@ -896,6 +896,101 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// ----- Panel layout -----
+// The log (right) and chains (bottom) panels can be resized by dragging their
+// inner edge, and collapsed. The layout is remembered in this browser.
+
+const main = document.querySelector('main');
+const PANELS = {
+  log: { prop: '--log-size', axis: 'x', min: 220, max: () => Math.min(720, innerWidth * 0.5), fallback: 320 },
+  chain: { prop: '--chain-size', axis: 'y', min: 90, max: () => innerHeight * 0.6, fallback: 190 },
+};
+const LAYOUT_KEY = 'malachite-sim-layout';
+let panelLayout = {};
+
+function saveLayout() {
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(panelLayout)); } catch { /* storage unavailable */ }
+}
+
+function setSize(name, px) {
+  const p = PANELS[name];
+  const size = Math.round(Math.min(p.max(), Math.max(p.min, px)));
+  panelLayout[`${name}Size`] = size;
+  main.style.setProperty(p.prop, `${size}px`);
+}
+
+function setCollapsed(name, collapsed) {
+  panelLayout[`${name}Collapsed`] = collapsed;
+  main.classList.toggle(`${name}-collapsed`, collapsed);
+  const button = document.querySelector(`[data-fold="${name}"]`);
+  button.setAttribute('aria-expanded', String(!collapsed));
+  button.title = `${collapsed ? 'Expand' : 'Collapse'} the ${name === 'log' ? 'log' : 'chains'}`;
+}
+
+for (const button of document.querySelectorAll('[data-fold]')) {
+  button.onclick = (e) => {
+    e.stopPropagation();
+    const name = button.dataset.fold;
+    setCollapsed(name, !main.classList.contains(`${name}-collapsed`));
+    saveLayout();
+  };
+}
+
+// A collapsed panel expands when clicked anywhere.
+for (const [name, id] of [['log', 'logPanel'], ['chain', 'chain']]) {
+  $(id).addEventListener('click', () => {
+    if (!main.classList.contains(`${name}-collapsed`)) return;
+    setCollapsed(name, false);
+    saveLayout();
+  });
+}
+
+for (const handle of document.querySelectorAll('[data-resize]')) {
+  const name = handle.dataset.resize;
+  const p = PANELS[name];
+  const panel = handle.parentElement;
+  const current = () => (p.axis === 'x' ? panel.offsetWidth : panel.offsetHeight);
+
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    handle.classList.add('dragging');
+    document.body.classList.add('resizing', p.axis === 'x' ? 'col' : 'row');
+    const start = p.axis === 'x' ? e.clientX : e.clientY;
+    const size = current();
+    // The panels sit at the end of their axis, so dragging towards the start grows them.
+    const move = (ev) => setSize(name, size + start - (p.axis === 'x' ? ev.clientX : ev.clientY));
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.classList.remove('dragging');
+      document.body.classList.remove('resizing', 'col', 'row');
+      saveLayout();
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up, { once: true });
+    handle.addEventListener('pointercancel', up, { once: true });
+  });
+
+  handle.addEventListener('dblclick', () => {
+    setSize(name, p.fallback);
+    saveLayout();
+  });
+
+  handle.addEventListener('keydown', (e) => {
+    const grow = p.axis === 'x' ? { ArrowLeft: 1, ArrowRight: -1 } : { ArrowUp: 1, ArrowDown: -1 };
+    if (!(e.key in grow)) return;
+    e.preventDefault();
+    setSize(name, current() + grow[e.key] * (e.shiftKey ? 60 : 20));
+    saveLayout();
+  });
+}
+
+try { panelLayout = JSON.parse(localStorage.getItem(LAYOUT_KEY)) ?? {}; } catch { panelLayout = {}; }
+for (const name of Object.keys(PANELS)) {
+  if (panelLayout[`${name}Size`]) setSize(name, panelLayout[`${name}Size`]);
+  setCollapsed(name, !!panelLayout[`${name}Collapsed`]);
+}
+
 await init();
 syncOutputs();
 reset();

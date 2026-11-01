@@ -59,14 +59,19 @@
     color: var(--fg);
     font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
+  /* The log and chains panels can be resized (--log-size, --chain-size, set from
+     the script) and collapsed (.log-collapsed, .chain-collapsed). */
   main {
+    --collapsed: 38px;
+    --log-w: var(--log-size, 320px);
+    --chain-h: var(--chain-size, 190px);
     display: grid;
-    grid-template-columns: 280px minmax(0, 1fr) 320px;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-columns: 280px minmax(0, 1fr) var(--log-w);
+    grid-template-rows: auto minmax(0, 1fr) var(--chain-h);
     grid-template-areas:
       "top      top   top"
       "settings stage log"
-      "settings chain chain";
+      "settings chain log";
     gap: 10px;
     height: 100vh;
     padding: 10px 14px 14px;
@@ -224,12 +229,52 @@
   #steps .ring { width: 10px; height: 10px; border-radius: 50%; border: 2.5px solid; }
 
   /* Log */
-  #logPanel { grid-area: log; display: flex; flex-direction: column; min-height: 0; }
+  main.log-collapsed { --log-w: var(--collapsed); }
+  main.chain-collapsed { --chain-h: var(--collapsed); }
+  #logPanel { grid-area: log; position: relative; display: flex; flex-direction: column; min-height: 0; }
   #logPanel header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 14px 6px;
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px 6px 8px;
   }
+  #logPanel header h2 { flex: 1; }
   #logPanel header button { padding: 1px 8px; font-size: 12px; }
+
+  /* Collapse toggles */
+  button.fold {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; padding: 0 !important; border: none; background: none; color: var(--muted);
+  }
+  button.fold:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 8%, transparent); }
+  button.fold svg { width: 14px; height: 14px; transition: transform .2s; }
+  #logPanel .fold svg { transform: rotate(0deg); }          /* folds to the right */
+  .log-collapsed #logPanel .fold svg { transform: rotate(180deg); }
+  #chain .fold svg { transform: rotate(90deg); }            /* folds down */
+  .chain-collapsed #chain .fold svg { transform: rotate(-90deg); }
+
+  /* A collapsed log is a vertical strip; click anywhere on it to expand. */
+  .log-collapsed #logPanel { cursor: pointer; }
+  .log-collapsed #logPanel header { flex-direction: column; padding: 8px 0; }
+  .log-collapsed #logPanel h2 { writing-mode: vertical-rl; flex: none; margin-top: 6px; }
+  .log-collapsed #clearLog, .log-collapsed #log { display: none; }
+  .chain-collapsed #chain { cursor: pointer; }
+  .chain-collapsed #chainRows, .chain-collapsed #chain header span { display: none; }
+  .chain-collapsed #chain header { margin-bottom: 0; }
+
+  /* Drag handles, sitting in the gap along the inner edge of each panel */
+  .resizer { position: absolute; z-index: 2; touch-action: none; }
+  .resizer::after {
+    content: ""; position: absolute; border-radius: 2px; background: transparent; transition: background .15s;
+  }
+  .resizer:hover::after, .resizer:focus-visible::after, .resizer.dragging::after { background: var(--accent); }
+  .resizer:focus-visible { outline: none; }
+  #logPanel .resizer { left: -10px; top: 0; bottom: 0; width: 10px; cursor: col-resize; }
+  #logPanel .resizer::after { left: 4px; top: 12px; bottom: 12px; width: 2px; }
+  #chain .resizer { top: -10px; left: 0; right: 0; height: 10px; cursor: row-resize; }
+  #chain .resizer::after { top: 4px; left: 12px; right: 12px; height: 2px; }
+  .log-collapsed #logPanel .resizer, .chain-collapsed #chain .resizer { display: none; }
+  body.resizing { user-select: none; }
+  body.resizing.col { cursor: col-resize; }
+  body.resizing.row { cursor: row-resize; }
   #log {
     flex: 1; min-height: 0; overflow: auto; padding: 0 14px 10px;
     font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -244,9 +289,14 @@
   .entry.fault .m { color: var(--fault); }
 
   /* Chain */
-  #chain { grid-area: chain; padding: 10px 14px; overflow-x: auto; }
-  #chain header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
-  #chain header span { font-size: 12px; color: var(--faint); }
+  #chain {
+    grid-area: chain; position: relative; display: flex; flex-direction: column; min-height: 0;
+    padding: 8px 14px 10px 8px;
+  }
+  #chain header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; white-space: nowrap; }
+  #chain header h2 { margin-right: 6px; }
+  #chain header span { font-size: 12px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; }
+  #chainRows { flex: 1; min-height: 0; overflow: auto; padding: 6px 0 0 6px; }
   .chainrow { display: flex; align-items: center; gap: 10px; margin: 5px 0; white-space: nowrap; }
   .chainrow .who { flex: 0 0 26px; font: 600 13px "Space Grotesk", system-ui, sans-serif; }
   .block {
@@ -277,12 +327,12 @@
 
   @media (max-width: 1150px) {
     main {
-      grid-template-columns: minmax(0, 1fr) 300px;
-      grid-template-rows: auto 60vh auto auto;
+      grid-template-columns: minmax(0, 1fr) var(--log-w);
+      grid-template-rows: auto 60vh var(--chain-h) auto;
       grid-template-areas:
         "top      top"
         "stage    log"
-        "chain    chain"
+        "chain    log"
         "settings settings";
       height: auto;
     }
@@ -291,11 +341,21 @@
   }
   @media (max-width: 720px) {
     main {
+      --log-w: 260px;
+      --chain-h: auto;
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: auto 460px 260px auto auto;
+      grid-template-rows: auto 460px var(--log-w) var(--chain-h) auto;
       grid-template-areas: "top" "stage" "log" "chain" "settings";
     }
-    #stats { margin-left: 0; gap: 14px; }
+    main.log-collapsed { --log-w: var(--collapsed); }
+    main.chain-collapsed { --chain-h: var(--collapsed); }
+    /* Stacked: no resizing, and the log folds up instead of to the side. */
+    .resizer { display: none; }
+    .log-collapsed #logPanel header { flex-direction: row; padding: 8px 14px 6px 8px; }
+    .log-collapsed #logPanel h2 { writing-mode: horizontal-tb; flex: 1; margin-top: 0; }
+    #logPanel .fold svg { transform: rotate(90deg); }
+    .log-collapsed #logPanel .fold svg { transform: rotate(-90deg); }
+    #stats { margin-left: 0; gap: 8px 14px; flex-wrap: wrap; }
     .stat { align-items: flex-start; }
     #footer { display: none; }
   }
@@ -414,7 +474,9 @@
   </section>
 
   <section class="panel" id="logPanel">
+    <div class="resizer" data-resize="log" role="separator" aria-orientation="vertical" aria-label="Resize the log" tabindex="0"></div>
     <header>
+      <button class="fold" data-fold="log" aria-expanded="true" title="Collapse the log"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <h2>Log</h2>
       <button id="clearLog">Clear</button>
     </header>
@@ -422,7 +484,9 @@
   </section>
 
   <section class="panel" id="chain">
+    <div class="resizer" data-resize="chain" role="separator" aria-orientation="horizontal" aria-label="Resize the chains" tabindex="0"></div>
     <header>
+      <button class="fold" data-fold="chain" aria-expanded="true" title="Collapse the chains"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <h2>Chains</h2>
       <span>Each block is a decided value, colored by its proposer. Hover one to find its proposer.</span>
     </header>
