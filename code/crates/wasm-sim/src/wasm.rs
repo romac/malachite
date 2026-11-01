@@ -20,6 +20,8 @@ struct JsConfig {
     drop_rate: f64,
     timeouts: JsTimeouts,
     sync_grace_ms: u64,
+    /// Target block time, `0` for none.
+    target_block_time_ms: u64,
 }
 
 impl Default for JsConfig {
@@ -33,6 +35,7 @@ impl Default for JsConfig {
             drop_rate: c.drop_rate,
             timeouts: JsTimeouts::from(c.timeouts),
             sync_grace_ms: c.sync_grace_ms,
+            target_block_time_ms: c.target_block_time_ms.unwrap_or(0),
         }
     }
 }
@@ -89,6 +92,11 @@ impl From<JsTimeouts> for LinearTimeouts {
     }
 }
 
+/// `0` means no target block time.
+fn target(ms: u64) -> Option<u64> {
+    (ms > 0).then_some(ms)
+}
+
 #[wasm_bindgen]
 pub struct WasmSim {
     sim: Simulation,
@@ -112,6 +120,7 @@ impl WasmSim {
                 drop_rate: c.drop_rate.clamp(0.0, 1.0),
                 timeouts: c.timeouts.into(),
                 sync_grace_ms: c.sync_grace_ms,
+                target_block_time_ms: target(c.target_block_time_ms),
             }),
         })
     }
@@ -158,5 +167,11 @@ impl WasmSim {
 
     pub fn set_sync_grace_ms(&mut self, sync_grace_ms: u32) {
         self.sim.set_sync_grace_ms(u64::from(sync_grace_ms));
+    }
+
+    /// Change the target block time, `0` for none.
+    pub fn set_target_block_time_ms(&mut self, target_ms: u32) {
+        self.sim
+            .set_target_block_time_ms(target(u64::from(target_ms)));
     }
 }

@@ -187,3 +187,117 @@ fn no_sync_without_faults() {
         }
     )));
 }
+
+/// Times at which `node` started each height, from its round 0 `RoundStarted` events.
+fn height_starts(events: &[SimEvent], node: u32) -> Vec<(u64, u64)> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            SimEvent::RoundStarted {
+                time,
+                node: n,
+                height,
+                round: 0,
+                ..
+            } if *n == node => Some((*height, *time)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn target_block_time_spaces_heights_evenly() {
+    let config = SimConfig {
+        target_block_time_ms: Some(1500),
+        ..SimConfig::default()
+    };
+
+    let trace = |config: SimConfig| {
+        let mut sim = Simulation::new(config);
+        run(&mut sim, 10, 600_000);
+        assert_agreement(&sim, 10);
+        sim.drain_events()
+    };
+
+    let events = trace(config.clone());
+    assert_eq!(
+        events,
+        trace(config),
+        "runs with a target are deterministic"
+    );
+
+    // Heights take far less than 1.5 s to decide on this network, so every node
+    // starts a new height exactly every 1.5 s.
+    for node in 0..4 {
+        let starts = height_starts(&events, node);
+        assert!(starts.len() >= 10);
+        for pair in starts.windows(2) {
+            assert_eq!(pair[1].1 - pair[0].1, 1500, "node {node}: {pair:?}");
+        }
+    }
+}
+
+#[test]
+fn slow_height_does_not_wait_for_the_target() {
+    let config = SimConfig {
+        target_block_time_ms: Some(1000),
+        ..SimConfig::default()
+    };
+    let mut sim = Simulation::new(config);
+
+    // Height 4 is proposed by node 3: without it, height 4 needs a second round,
+    // which takes longer than the target, so height 5 starts right after deciding.
+    sim.set_online(3, false);
+    run(&mut sim, 6, 600_000);
+    let events = sim.drain_events();
+    let starts = height_starts(&events, 0);
+    let start = |h: u64| starts.iter().find(|(height, _)| *height == h).unwrap().1;
+    let decided_4 = events
+        .iter()
+        .find_map(|e| match e {
+            SimEvent::Decided {
+                time,
+                node: 0,
+                height: 4,
+                ..
+            } => Some(*time),
+            _ => None,
+        })
+        .unwrap();
+
+    assert_eq!(start(3) - start(2), 1000);
+    assert!(start(5) - start(4) > 1000);
+    assert_eq!(start(5), decided_4);
+}
+
+#[test]
+fn node_offline_during_finalization_period_resumes() {
+    let config = SimConfig {
+        target_block_time_ms: Some(2000),
+        ..SimConfig::default()
+    };
+    let mut sim = Simulation::new(config);
+
+    // Wait until node 3 decides height 1, then crash it while it waits for the target.
+    while !sim.drain_events().iter().any(|e| {
+        matches!(
+            e,
+            SimEvent::Decided {
+                node: 3,
+                height: 1,
+                ..
+            }
+        )
+    }) {
+        assert!(sim.step());
+    }
+    sim.set_online(3, false);
+
+    // The end of its finalization period passes while it is offline.
+    sim.run_until(sim.now() + 3000);
+    sim.set_online(3, true);
+
+    run(&mut sim, 5, 600_000);
+    assert!(sim.statuses()[3].decisions.len() >= 5);
+    assert_agreement(&sim, 5);
+}

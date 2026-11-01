@@ -7,6 +7,7 @@
 //! always produces the same sequence of [`SimEvent`]s.
 
 use std::collections::{BTreeMap, HashMap};
+use std::time::Duration;
 
 use bytes::Bytes;
 use malachitebft_core_consensus::{
@@ -40,7 +41,20 @@ pub struct SimConfig {
     /// How long a node waits, after seeing a message from a higher height,
     /// before requesting sync if it has not moved on by itself.
     pub sync_grace_ms: u64,
+    /// Target time between the starts of consecutive heights, in milliseconds.
+    /// A node that decides earlier waits until then before moving on to the next
+    /// height. `None` moves on as soon as a height is decided.
+    pub target_block_time_ms: Option<u64>,
 }
+
+/// Target time given to the consensus state when a target block time is set.
+///
+/// The consensus state measures the time spent in a height with the wall clock,
+/// which means nothing in a simulation running on virtual time. So it is given a
+/// target it never reaches, which makes it always enter the finalization period
+/// after deciding, and the simulator ends that period at the target on its own
+/// clock instead (see `Simulation::schedule_timeout`).
+const UNREACHABLE_TARGET: Duration = Duration::from_secs(365 * 24 * 3600);
 
 impl Default for SimConfig {
     fn default() -> Self {
@@ -52,6 +66,7 @@ impl Default for SimConfig {
             drop_rate: 0.0,
             timeouts: LinearTimeouts::default(),
             sync_grace_ms: 1000,
+            target_block_time_ms: None,
         }
     }
 }
@@ -264,6 +279,8 @@ struct Node {
     syncing: bool,
     /// Last observed `(height, round, step)`, to report step changes.
     last_seen: (u64, i64, String),
+    /// Virtual time at which the current height started.
+    height_started_at: u64,
 }
 
 /// A deterministic simulation of `num_nodes` validators running consensus.
@@ -307,6 +324,7 @@ impl Simulation {
                 certificates: BTreeMap::new(),
                 syncing: false,
                 last_seen: (0, -1, String::new()),
+                height_started_at: 0,
             })
             .collect();
 
@@ -404,6 +422,16 @@ impl Simulation {
                     self.schedule_timeout(node, timeout);
                 }
             }
+
+            // Likewise for the end of the finalization period, unless it is still pending.
+            let n = &self.nodes[node as usize];
+            let pending = n
+                .timers
+                .keys()
+                .any(|t| matches!(t.kind, TimeoutKind::FinalizeHeight(_)));
+            if n.state.finalization_period && !pending {
+                self.schedule_timeout(node, Timeout::finalize_height(round, Duration::ZERO));
+            }
         }
     }
 
@@ -425,6 +453,12 @@ impl Simulation {
         self.config.sync_grace_ms = sync_grace_ms;
     }
 
+    /// Change the target block time. Applies from the next height on, and to the
+    /// finalization periods that have not ended yet.
+    pub fn set_target_block_time_ms(&mut self, target: Option<u64>) {
+        self.config.target_block_time_ms = target;
+    }
+
     fn schedule(&mut self, time: u64, event: Event) {
         self.seq += 1;
         self.queue.insert((time, self.seq), event);
@@ -436,7 +470,12 @@ impl Simulation {
         self.nodes[node as usize].timers.insert(timeout, generation);
 
         let duration = match timeout.kind {
-            TimeoutKind::FinalizeHeight(d) => d,
+            // End the finalization period at the target block time, on the virtual clock.
+            TimeoutKind::FinalizeHeight(_) => {
+                let started = self.nodes[node as usize].height_started_at;
+                let end = started + self.config.target_block_time_ms.unwrap_or(0);
+                Duration::from_millis(end.saturating_sub(self.now))
+            }
             _ => self.config.timeouts.duration_for(timeout),
         };
         self.schedule(
@@ -452,10 +491,12 @@ impl Simulation {
     fn handle_event(&mut self, event: Event) {
         match event {
             Event::StartHeight { node, height } => {
+                self.nodes[node as usize].height_started_at = self.now;
+                let target = self.config.target_block_time_ms.map(|_| UNREACHABLE_TARGET);
                 let vs = self.validator_set.clone();
                 self.process(
                     node,
-                    Input::StartHeight(height, vs, false, None, Default::default()),
+                    Input::StartHeight(height, vs, false, target, Default::default()),
                 );
             }
 

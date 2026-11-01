@@ -129,6 +129,7 @@
   #statRate { min-width: 4ch; }
   #statMsgs { min-width: 7ch; }
   #statDrop { min-width: 6ch; }
+  #statBlock { min-width: 7ch; }
   #stats b.pulse { animation: pulse .5s ease-out; }
   @keyframes pulse {
     0% { transform: scale(1); color: var(--fg); }
@@ -322,6 +323,7 @@
       <div class="stat"><b id="statTime">0.00 s</b><span>simulated time</span></div>
       <div class="stat"><b id="statHeights">0</b><span>heights</span></div>
       <div class="stat"><b id="statRate">0.0</b><span>heights/s</span></div>
+      <div class="stat"><b id="statBlock">–</b><span>last block time</span></div>
       <div class="stat"><b id="statMsgs">0</b><span>messages</span></div>
       <div class="stat"><b id="statDrop">0.0%</b><span>dropped</span></div>
     </div>
@@ -364,6 +366,15 @@
         <input type="range" id="maxDelay" min="1" max="2000" value="200">
         <output id="maxDelayOut"></output>
       </div>
+    </details>
+
+    <details open>
+      <summary><h2>Block time</h2></summary>
+      <div class="fields">
+        <label for="targetBlockTime" data-tip="Aim for a new height every this many milliseconds. A validator that decides a height sooner stays at that height, still collecting precommits, until this long after the height started, then moves on. A height that takes longer moves on as soon as it is decided. 0 turns it off.">Target (ms)</label>
+        <input type="number" id="targetBlockTime" class="wide" min="0" step="100" value="0">
+      </div>
+      <p class="note">0 for none, to move on as soon as a height is decided.</p>
     </details>
 
     <details open>

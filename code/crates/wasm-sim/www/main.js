@@ -44,6 +44,7 @@ let inflight = [];   // MessageSent events still being animated
 let effects = [];    // Short-lived visual effects: { node, kind, label, until }
 let proposerOf = new Map(); // node -> proposer of its current round
 let decidedHeights = new Map(); // height -> { value, round, time }, first decision seen
+let heightStart = []; // node -> virtual time at which it started its current height
 let counters = { sent: 0, dropped: 0 };
 let playing = true;
 let simTime = 0;
@@ -128,6 +129,7 @@ function timeouts() {
 }
 
 const syncGrace = () => Math.max(0, Math.round(+$('syncGrace').value || 0));
+const targetBlockTime = () => Math.max(0, Math.round(+$('targetBlockTime').value || 0));
 
 function reset() {
   const n = Math.max(1, Math.min(16, +$('nodes').value || 4));
@@ -143,6 +145,7 @@ function reset() {
     drop_rate: $('drop').value / 100,
     timeouts: timeouts(),
     sync_grace_ms: syncGrace(),
+    target_block_time_ms: targetBlockTime(),
   }));
 
   simTime = 0;
@@ -150,6 +153,7 @@ function reset() {
   effects = [];
   proposerOf = new Map();
   decidedHeights = new Map();
+  heightStart = [];
   counters = { sent: 0, dropped: 0 };
   chainKey = '';
   votes = new Map();
@@ -182,6 +186,7 @@ for (const f of TIMEOUT_FIELDS) {
   $('t_' + f).onchange = () => sim.set_timeouts(JSON.stringify(timeouts()));
 }
 $('syncGrace').onchange = () => sim.set_sync_grace_ms(syncGrace());
+$('targetBlockTime').onchange = () => sim.set_target_block_time_ms(targetBlockTime());
 $('speed').oninput = syncOutputs;
 $('drop').oninput = () => { syncOutputs(); sim.set_drop_rate($('drop').value / 100); };
 for (const id of ['minDelay', 'maxDelay']) {
@@ -383,6 +388,7 @@ function handle(ev) {
       break;
     case 'RoundStarted':
       proposerOf.set(ev.node, ev.proposer);
+      if (ev.round === 0) heightStart[ev.node] = ev.time;
       if (ev.round > 0 && ev.node === ev.proposer) {
         log(ev.time, `height ${ev.height} moves to round ${ev.round}, v${ev.proposer} proposes`, 'round', [ev.proposer]);
       }
@@ -391,7 +397,8 @@ function handle(ev) {
       }
       break;
     case 'TimeoutElapsed':
-      if (ev.kind !== 'Rebroadcast') {
+      // The end of a finalization period is not a failure: no label, no shake.
+      if (ev.kind !== 'Rebroadcast' && ev.kind !== 'FinalizeHeight') {
         effects.push({ node: ev.node, kind: 'timeout', label: `timeout ${ev.kind.toLowerCase()}`, until: realNow + 1200 });
         effects.push({ node: ev.node, kind: 'shake', until: realNow + 450 });
       }
@@ -764,7 +771,14 @@ function draw() {
     // Step label below the node
     ctx.font = '12px system-ui, sans-serif';
     ctx.fillStyle = color;
-    ctx.fillText(s.online ? s.step : 'offline', x, y + radius + 26);
+    // A node that decided before the target block time counts down to it.
+    let label = s.online ? s.step : 'offline';
+    const targetMs = targetBlockTime();
+    if (s.online && s.step === 'Commit' && targetMs > 0 && heightStart[i] !== undefined) {
+      const left = heightStart[i] + targetMs - simTime;
+      if (left > 0) label = `waiting ${(left / 1000).toFixed(1)} s`;
+    }
+    ctx.fillText(label, x, y + radius + 26);
 
     // Highlighted from the chain or the log
     if (hoverNodes.has(i)) {
@@ -864,6 +878,11 @@ function renderStats() {
   setStat('statRate', rate.toFixed(1));
   setStat('statMsgs', String(counters.sent));
   setStat('statDrop', `${dropPct}%`);
+
+  // Time between the first decisions of the last two heights.
+  const last = decidedHeights.get(maxHeight);
+  const prev = decidedHeights.get(maxHeight - 1);
+  setStat('statBlock', last && prev ? `${((last.time - prev.time) / 1000).toFixed(2)} s` : '–');
 }
 
 function frame(now) {
