@@ -237,7 +237,10 @@
   }
   #steps { display: flex; flex-wrap: wrap; gap: 4px 12px; }
   #steps span { display: inline-flex; align-items: center; gap: 5px; pointer-events: auto; }
-  #steps .ring { width: 10px; height: 10px; border-radius: 50%; border: 2.5px solid; }
+  #steps .disc {
+    width: 11px; height: 11px; border-radius: 50%;
+    border: 2px solid var(--c); background: color-mix(in srgb, var(--c) 22%, transparent);
+  }
 
   /* Log */
   main.log-collapsed { --log-w: var(--collapsed); }

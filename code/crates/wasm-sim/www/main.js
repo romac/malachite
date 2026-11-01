@@ -309,7 +309,7 @@ function setShown(kind, on) {
 // Legend for the node ring colors.
 for (const step of ['Propose', 'Prevote', 'Precommit', 'Commit']) {
   const item = document.createElement('span');
-  item.innerHTML = `<i class="ring" style="border-color:${STEP_COLORS[step]}"></i>${step}`;
+  item.innerHTML = `<i class="disc" style="--c:${STEP_COLORS[step]}"></i>${step}`;
   item.dataset.tip = STEP_TIPS[step];
   $('steps').appendChild(item);
 }
@@ -808,16 +808,23 @@ function draw() {
       ctx.shadowColor = STEP_COLORS.Propose;
       ctx.shadowBlur = 22;
     }
+    // The step shows as a tint of the disc, inside a thin outline of the same color.
     ctx.fillStyle = panel;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 4;
-    ctx.setLineDash(s.online ? [] : [5, 4]);
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, 2 * Math.PI);
     ctx.fill();
+    ctx.shadowBlur = 0;
+    if (s.online) {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = look.alpha * 0.22;
+      ctx.fill();
+      ctx.globalAlpha = look.alpha;
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash(s.online ? [] : [5, 4]);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.shadowBlur = 0;
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
