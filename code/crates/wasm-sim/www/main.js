@@ -15,7 +15,7 @@ const MSG_COLORS = {
   PolkaCertificate: '#d1457f',
   RoundCertificate: '#c0392b',
   SyncRequest: '#1fb5b0',
-  SyncResponse: '#148a87',
+  SyncResponse: '#1fb5b0',
 };
 
 const LEGEND_LABELS = {
@@ -263,7 +263,8 @@ for (const [kind, color] of Object.entries(MSG_COLORS)) {
   chip.dataset.kind = kind;
   chip.title = `Show or hide ${LEGEND_LABELS[kind].toLowerCase()} messages`;
   chip.setAttribute('aria-pressed', 'true');
-  chip.innerHTML = `<span class="sw" style="background:${color}"></span>${LEGEND_LABELS[kind]}`;
+  const shape = kind.endsWith('Certificate') ? ' square' : { Proposal: ' tri', SyncRequest: ' ring', SyncResponse: ' pill' }[kind] ?? '';
+  chip.innerHTML = `<span class="sw${shape}" style="--c:${color}"></span>${LEGEND_LABELS[kind]}`;
   chip.onclick = () => {
     setShown(kind, !shown.has(kind));
     saveSettings();
@@ -651,19 +652,35 @@ function draw() {
 
     const [x, y] = at(t);
     ctx.beginPath();
-    if (m.kind.endsWith('Certificate')) {
+    const nilVote = m.value === null && (m.kind === 'Prevote' || m.kind === 'Precommit');
+    if (m.kind === 'SyncRequest' || nilVote) {
+      // A sync request asks for a block, and a nil vote is for no value: both are empty rings
+      const thick = m.kind === 'SyncRequest' ? 2 : 1.5;
+      ctx.arc(x, y, r - thick / 2, 0, 2 * Math.PI);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = thick;
+      ctx.stroke();
+      continue;
+    }
+    if (m.kind === 'Proposal') {
+      // An arrowhead pointing the way it travels
+      const [x0, y0] = at(t - 0.01);
+      const [x1, y1] = at(t + 0.01);
+      const ang = Math.atan2(y1 - y0, x1 - x0);
+      const point = (dx, dy) => [x + dx * Math.cos(ang) - dy * Math.sin(ang), y + dx * Math.sin(ang) + dy * Math.cos(ang)];
+      ctx.moveTo(...point(1.4 * r, 0));
+      ctx.lineTo(...point(-r, r));
+      ctx.lineTo(...point(-r, -r));
+      ctx.closePath();
+    } else if (m.kind === 'SyncResponse') {
+      // Carries a block: shaped like the blocks in the chains panel
+      ctx.roundRect(x - 7, y - 4.5, 14, 9, 3);
+    } else if (m.kind.endsWith('Certificate')) {
       ctx.rect(x - r, y - r, 2 * r, 2 * r);
     } else {
       ctx.arc(x, y, r, 0, 2 * Math.PI);
     }
     ctx.fill();
-    if (m.value === null && (m.kind === 'Prevote' || m.kind === 'Precommit')) {
-      // Nil vote: hollow center
-      ctx.fillStyle = panel;
-      ctx.beginPath();
-      ctx.arc(x, y, 1.6, 0, 2 * Math.PI);
-      ctx.fill();
-    }
   }
 
   // Nodes

@@ -207,8 +207,13 @@
     backdrop-filter: blur(4px); cursor: pointer;
   }
   .chip.off { color: var(--faint); }
-  .chip.off .sw { background: transparent !important; box-shadow: inset 0 0 0 1.5px var(--faint); }
-  .sw { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+  .chip.off .sw { background: transparent; box-shadow: inset 0 0 0 1.5px var(--faint); }
+  .sw { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; background: var(--c); }
+  .sw.ring { background: transparent; box-shadow: inset 0 0 0 2px var(--c); }
+  .sw.pill { width: 13px; border-radius: 3px; }
+  .sw.square { width: 8px; height: 8px; border-radius: 1px; }
+  .sw.tri { width: 10px; height: 10px; border-radius: 0; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+  .chip.off .sw.tri { background: var(--faint); }
   #banner {
     position: absolute; left: 50%; top: calc(50% - 11px); transform: translate(-50%, -50%);
     display: flex; flex-direction: column; align-items: center; gap: 2px;
