@@ -51,6 +51,29 @@ let lastFrame = performance.now();
 let chainKey = '';
 const shown = new Set(Object.keys(MSG_COLORS));
 
+// Votes seen by each node: `${node}|${height}|${round}|${kind}` -> Map(voter -> value).
+// A node sees its own vote when it sends it, and the others' when they arrive.
+let votes = new Map();
+let nodeLook = []; // Per-node display state, eased towards the target every frame.
+
+function recordVote(node, m) {
+  const key = `${node}|${m.height}|${m.round}|${m.kind}`;
+  let seen = votes.get(key);
+  if (!seen) votes.set(key, (seen = new Map()));
+  seen.set(m.from, m.value);
+}
+
+function votesSeen(node, height, round, kind) {
+  return votes.get(`${node}|${height}|${round}|${kind}`)?.size ?? 0;
+}
+
+// Smallest number of equal-weight votes that is more than two thirds of `n`.
+const quorum = (n) => Math.floor((2 * n) / 3) + 1;
+
+const hexToRgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const rgb = ([r, g, b]) => `rgb(${r | 0}, ${g | 0}, ${b | 0})`;
+const ease = (from, to, k) => from + (to - from) * k;
+
 // ----- Controls -----
 
 const speed = () => 10 ** (($('speed').value - 60) / 30);
@@ -108,6 +131,8 @@ function reset() {
   decidedHeights = new Map();
   counters = { sent: 0, dropped: 0 };
   chainKey = '';
+  votes = new Map();
+  nodeLook = [];
   $('log').replaceChildren();
   statuses = JSON.parse(sim.statuses());
   renderChain();
@@ -154,6 +179,11 @@ for (const step of ['Propose', 'Prevote', 'Precommit', 'Commit']) {
   const item = document.createElement('span');
   item.innerHTML = `<i class="ring" style="border-color:${STEP_COLORS[step]}"></i>${step}`;
   $('steps').appendChild(item);
+}
+{
+  const item = document.createElement('span');
+  item.textContent = 'Arcs: votes seen, tick = quorum';
+  $('steps').prepend(item);
 }
 
 canvas.addEventListener('click', (e) => {
@@ -205,6 +235,7 @@ function handle(ev) {
       counters.sent++;
       if (ev.dropped) counters.dropped++;
       inflight.push(ev);
+      if (ev.kind === 'Prevote' || ev.kind === 'Precommit') recordVote(ev.from, ev);
       if (ev.kind === 'SyncRequest') log(ev.time, `v${ev.from} is behind, requests height ${ev.height} from v${ev.to}`, 'sync');
       break;
     case 'RoundStarted':
@@ -233,6 +264,24 @@ function advance(dtSim) {
   sim.run_until(Math.floor(simTime));
   for (const ev of JSON.parse(sim.drain_events())) handle(ev);
   statuses = JSON.parse(sim.statuses());
+
+  for (const m of inflight) {
+    if (m.arrived || simTime < m.deliver_at) continue;
+    m.arrived = true;
+    if (!m.dropped && statuses[m.to]?.online) arrive(m);
+  }
+
+  // Forget the votes of heights every node has left behind.
+  if (votes.size > 4000) {
+    const low = Math.min(...statuses.map((s) => s.height));
+    for (const key of votes.keys()) {
+      if (+key.split('|')[1] < low) votes.delete(key);
+    }
+  }
+}
+
+function arrive(m) {
+  if (m.kind === 'Prevote' || m.kind === 'Precommit') recordVote(m.to, m);
 }
 
 // ----- Rendering -----
@@ -243,7 +292,7 @@ function layout() {
   const n = statuses.length || 1;
   // Leave room for the timeout labels at the top and the hints at the bottom.
   const top = 20;
-  const bottom = 30;
+  const bottom = 52;
   const cy = top + (h - top - bottom) / 2;
   const ring = Math.min(w, h - top - bottom) * 0.38;
   const radius = Math.max(16, Math.min(38, (2 * Math.PI * ring) / n / 3.2));
@@ -346,9 +395,21 @@ function draw() {
   const realNow = performance.now();
   effects = effects.filter((e) => e.until > realNow);
 
+  const n = statuses.length;
+  const q = quorum(n);
+
   statuses.forEach((s, i) => {
     const { x, y } = positions[i];
-    const color = s.online ? STEP_COLORS[s.step] || muted : muted;
+    const target = s.online ? STEP_COLORS[s.step] || muted : muted;
+
+    // Ease the ring color and the vote arcs, so that changes read as motion.
+    const look = (nodeLook[i] ??= { rgb: hexToRgb(target), prevotes: 0, precommits: 0, alpha: 1 });
+    look.rgb = look.rgb.map((c, k) => ease(c, hexToRgb(target)[k], 0.18));
+    const round = Math.max(0, s.round);
+    look.prevotes = ease(look.prevotes, votesSeen(i, s.height, round, 'Prevote') / n, 0.25);
+    look.precommits = ease(look.precommits, votesSeen(i, s.height, round, 'Precommit') / n, 0.25);
+    look.alpha = ease(look.alpha, s.online ? 1 : 0.45, 0.12);
+    const color = rgb(look.rgb);
 
     for (const e of effects) {
       if (e.node !== i || e.kind !== 'decided') continue;
@@ -357,11 +418,50 @@ function draw() {
       ctx.globalAlpha = 1 - k;
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(x, y, radius + 4 + k * 18, 0, 2 * Math.PI);
+      ctx.arc(x, y, radius + 14 + k * 18, 0, 2 * Math.PI);
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
 
+    ctx.globalAlpha = look.alpha;
+
+    // Vote arcs: prevotes (inner) and precommits (outer) seen for the current round,
+    // starting at the top and filling clockwise, with a tick at the quorum.
+    if (s.online) {
+      const arcs = [[radius + 7, look.prevotes, STEP_COLORS.Prevote], [radius + 12, look.precommits, STEP_COLORS.Precommit]];
+      for (const [r, frac, c] of arcs) {
+        const a0 = -Math.PI / 2;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = border;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, 2 * Math.PI);
+        ctx.stroke();
+        if (frac > 0.01) {
+          ctx.strokeStyle = c;
+          ctx.globalAlpha = look.alpha * (frac >= q / n - 1e-6 ? 1 : 0.65);
+          ctx.beginPath();
+          ctx.arc(x, y, r, a0, a0 + 2 * Math.PI * Math.min(1, frac));
+          ctx.stroke();
+          ctx.globalAlpha = look.alpha;
+        }
+        const aq = a0 + (2 * Math.PI * q) / n;
+        ctx.strokeStyle = muted;
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = 'butt';
+        ctx.beginPath();
+        ctx.moveTo(x + (r - 3) * Math.cos(aq), y + (r - 3) * Math.sin(aq));
+        ctx.lineTo(x + (r + 3) * Math.cos(aq), y + (r + 3) * Math.sin(aq));
+        ctx.stroke();
+      }
+    }
+
+    // The proposer of the current round glows.
+    const proposing = s.online && proposerOf.get(i) === i;
+    if (proposing) {
+      ctx.shadowColor = STEP_COLORS.Propose;
+      ctx.shadowBlur = 22;
+    }
     ctx.fillStyle = panel;
     ctx.strokeStyle = color;
     ctx.lineWidth = 4;
@@ -371,23 +471,37 @@ function draw() {
     ctx.fill();
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = s.online ? fg : muted;
-    ctx.font = `600 ${Math.round(radius * 0.42)}px system-ui, sans-serif`;
+    ctx.font = `600 ${Math.round(radius * 0.42)}px "Space Grotesk", system-ui, sans-serif`;
     ctx.fillText(`v${i}`, x, y - radius * 0.18);
     ctx.font = `${Math.round(radius * 0.32)}px ui-monospace, Menlo, monospace`;
     ctx.fillStyle = muted;
-    ctx.fillText(`H${s.height} R${Math.max(0, s.round)}`, x, y + radius * 0.3);
+    ctx.fillText(`H${s.height} R${round}`, x, y + radius * 0.3);
 
     // Step label below the node
     ctx.font = '12px system-ui, sans-serif';
     ctx.fillStyle = color;
-    ctx.fillText(s.online ? s.step : 'offline', x, y + radius + 14);
+    ctx.fillText(s.online ? s.step : 'offline', x, y + radius + 26);
+
+    // Offline nodes doze off.
+    if (!s.online) {
+      const t = realNow / 900;
+      ctx.fillStyle = muted;
+      for (let k = 0; k < 3; k++) {
+        const phase = (t + k / 3) % 1;
+        ctx.globalAlpha = look.alpha * Math.sin(Math.PI * phase);
+        ctx.font = `600 ${10 + k * 3}px system-ui, sans-serif`;
+        ctx.fillText('z', x + radius * 0.7 + phase * 14, y - radius * 0.7 - phase * 22);
+      }
+    }
+    ctx.globalAlpha = 1;
 
     // Proposer badge
-    if (s.online && proposerOf.get(i) === i) {
+    if (proposing) {
       ctx.fillStyle = STEP_COLORS.Propose;
       ctx.beginPath();
       ctx.arc(x + radius * 0.78, y - radius * 0.78, 9, 0, 2 * Math.PI);
@@ -404,7 +518,7 @@ function draw() {
       ctx.globalAlpha = 1 - age;
       ctx.fillStyle = '#e8710a';
       ctx.font = '12px system-ui, sans-serif';
-      ctx.fillText(e.label, x, y - radius - 12 - k * 14 - age * 10);
+      ctx.fillText(e.label, x, y - radius - 24 - k * 14 - age * 10);
       ctx.globalAlpha = 1;
     });
   });

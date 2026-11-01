@@ -158,10 +158,13 @@
   .chip.off { color: var(--faint); }
   .chip.off .sw { background: transparent !important; box-shadow: inset 0 0 0 1.5px var(--faint); }
   .sw { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
-  #steps { bottom: 10px; right: 12px; gap: 12px; font-size: 12px; color: var(--muted); pointer-events: none; }
+  #footer {
+    left: 12px; right: 12px; bottom: 10px; justify-content: space-between; gap: 4px 16px;
+    font-size: 12px; color: var(--muted); pointer-events: none;
+  }
+  #steps { display: flex; flex-wrap: wrap; gap: 4px 12px; }
   #steps span { display: inline-flex; align-items: center; gap: 5px; }
   #steps .ring { width: 10px; height: 10px; border-radius: 50%; border: 2.5px solid; }
-  #hint { bottom: 10px; left: 12px; font-size: 12px; color: var(--muted); pointer-events: none; }
 
   /* Log */
   #logPanel { grid-area: log; display: flex; flex-direction: column; min-height: 0; }
@@ -215,7 +218,7 @@
       grid-template-areas: "top" "stage" "log" "chain" "settings";
     }
     #stats { margin-left: 0; }
-    #hint, #steps { display: none; }
+    #footer { display: none; }
   }
 </style>
 </head>
@@ -291,8 +294,10 @@
     <div id="legend" aria-label="Message types shown"></div>
     <div id="canvasWrap">
       <canvas id="net"></canvas>
-      <div class="overlay" id="hint">Click a node to take it offline or bring it back.</div>
-      <div class="overlay" id="steps"></div>
+      <div class="overlay" id="footer">
+        <span id="hint">Click a node to take it offline or bring it back.</span>
+        <span id="steps"></span>
+      </div>
     </div>
   </section>
 
