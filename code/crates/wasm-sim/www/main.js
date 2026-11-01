@@ -282,6 +282,9 @@ function advance(dtSim) {
 
 function arrive(m) {
   if (m.kind === 'Prevote' || m.kind === 'Precommit') recordVote(m.to, m);
+  if (shown.has(m.kind)) {
+    effects.push({ node: m.to, kind: 'ripple', color: MSG_COLORS[m.kind], until: performance.now() + 380 });
+  }
 }
 
 // ----- Rendering -----
@@ -337,7 +340,8 @@ function draw() {
     }
   }
 
-  // Messages
+  // Messages travel along slightly curved paths: A->B and B->A bend to opposite
+  // sides, so both directions stay visible.
   inflight = inflight.filter((m) => simTime < m.deliver_at);
   for (const m of inflight) {
     if (!shown.has(m.kind)) continue;
@@ -347,22 +351,36 @@ function draw() {
     const span = Math.max(1, m.deliver_at - m.time);
     const p = Math.min(1, Math.max(0, (simTime - m.time) / span));
 
-    // Offset perpendicular to the link so that both directions stay visible.
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const len = Math.hypot(dx, dy) || 1;
-    const ox = (-dy / len) * 5;
-    const oy = (dx / len) * 5;
+    const bend = Math.min(40, len * 0.12);
+    const cx = (a.x + b.x) / 2 - (dy / len) * bend;
+    const cy = (a.y + b.y) / 2 + (dx / len) * bend;
+    const edge = (radius + 6) / len;
+    const at = (t) => {
+      const u = edge + (1 - 2 * edge) * Math.min(1, Math.max(0, t));
+      const v = 1 - u;
+      return [v * v * a.x + 2 * v * u * cx + u * u * b.x, v * v * a.y + 2 * v * u * cy + u * u * b.y];
+    };
 
-    // Start at the sender's edge, end at the receiver's edge.
-    const start = radius / len;
-    const t = start + (1 - 2 * start) * (m.dropped ? Math.min(p, 0.5) : p);
-    const x = a.x + dx * t + ox;
-    const y = a.y + dy * t + oy;
+    const color = MSG_COLORS[m.kind];
+    const big = m.kind === 'Proposal' || m.kind.startsWith('Sync');
+    const r = big ? 5.5 : 3.5;
 
+    // A dropped message gets halfway, then fizzles out in a few sparks.
     if (m.dropped && p > 0.5) {
-      const alpha = 1 - (p - 0.5) * 2;
-      ctx.globalAlpha = alpha;
+      const [x, y] = at(0.5);
+      const k = (p - 0.5) * 2;
+      ctx.globalAlpha = 1 - k;
+      ctx.fillStyle = color;
+      for (let j = 0; j < 6; j++) {
+        const ang = (j / 6) * 2 * Math.PI + m.time;
+        const d = 3 + k * 16;
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(ang) * d, y + Math.sin(ang) * d, 1.8 * (1 - k) + 0.4, 0, 2 * Math.PI);
+        ctx.fill();
+      }
       ctx.strokeStyle = '#d93025';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -373,9 +391,23 @@ function draw() {
       continue;
     }
 
-    ctx.fillStyle = MSG_COLORS[m.kind];
+    const t = p;
+
+    // Fading trail
+    ctx.fillStyle = color;
+    for (let j = 6; j >= 1; j--) {
+      const tt = t - j * 0.022;
+      if (tt <= 0) continue;
+      const [tx, ty] = at(tt);
+      ctx.globalAlpha = 0.28 * (1 - j / 7);
+      ctx.beginPath();
+      ctx.arc(tx, ty, r * (1 - j / 9), 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    const [x, y] = at(t);
     ctx.beginPath();
-    const r = m.kind === 'Proposal' || m.kind.startsWith('Sync') ? 5.5 : 3.5;
     if (m.kind.endsWith('Certificate')) {
       ctx.rect(x - r, y - r, 2 * r, 2 * r);
     } else {
@@ -410,6 +442,19 @@ function draw() {
     look.precommits = ease(look.precommits, votesSeen(i, s.height, round, 'Precommit') / n, 0.25);
     look.alpha = ease(look.alpha, s.online ? 1 : 0.45, 0.12);
     const color = rgb(look.rgb);
+
+    // Arrival ripples
+    for (const e of effects) {
+      if (e.node !== i || e.kind !== 'ripple') continue;
+      const k = 1 - (e.until - realNow) / 380;
+      ctx.strokeStyle = e.color;
+      ctx.globalAlpha = 0.5 * (1 - k);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, radius + 2 + k * 10, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
     for (const e of effects) {
       if (e.node !== i || e.kind !== 'decided') continue;
