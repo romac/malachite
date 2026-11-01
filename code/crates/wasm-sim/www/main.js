@@ -57,6 +57,8 @@ let votes = new Map();
 let nodeLook = []; // Per-node display state, eased towards the target every frame.
 let moments = new Set(); // Keys of the one-off moments already shown, eg. `polka|3|0`.
 let chainCounts = []; // Decisions per node at the last chain render.
+let hoverHeight = null; // Height of the chain block under the pointer
+let hoverNodes = new Set(); // Nodes to highlight on the canvas
 
 function recordVote(node, m) {
   const key = `${node}|${m.height}|${m.round}|${m.kind}`;
@@ -176,6 +178,28 @@ $('speed').oninput = syncOutputs;
 $('drop').oninput = () => { syncOutputs(); sim.set_drop_rate($('drop').value / 100); };
 for (const id of ['minDelay', 'maxDelay']) {
   $(id).oninput = () => { syncOutputs(); sim.set_delay_ms(...delays()); };
+}
+
+// Hovering a block highlights that height in every chain, and its proposer on the canvas.
+$('chainRows').addEventListener('mouseover', (e) => {
+  const block = e.target.closest('.block[data-height]');
+  if (!block) return;
+  hoverHeight = +block.dataset.height;
+  hoverNodes = new Set([+block.dataset.proposer]);
+  highlightChain();
+});
+$('chainRows').addEventListener('mouseleave', () => {
+  hoverHeight = null;
+  hoverNodes = new Set();
+  highlightChain();
+});
+
+function highlightChain() {
+  const rows = $('chainRows');
+  rows.classList.toggle('hovering', hoverHeight !== null);
+  for (const b of rows.querySelectorAll('.block[data-height]')) {
+    b.classList.toggle('hl', +b.dataset.height === hoverHeight);
+  }
 }
 
 $('clearLog').onclick = () => $('log').replaceChildren();
@@ -648,6 +672,19 @@ function draw() {
     ctx.fillStyle = color;
     ctx.fillText(s.online ? s.step : 'offline', x, y + radius + 26);
 
+    // Highlighted from the chain or the log
+    if (hoverNodes.has(i)) {
+      ctx.strokeStyle = fg;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 5]);
+      ctx.lineDashOffset = -realNow / 40;
+      ctx.beginPath();
+      ctx.arc(x, y, radius + 19, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
+    }
+
     // Offline nodes doze off.
     if (!s.online) {
       const t = realNow / 900;
@@ -699,8 +736,14 @@ function renderChain() {
     const blocks = d.slice(from).map((v, k) => {
       const height = from + k + 1;
       const proposer = v % 100;
-      const fresh = height > (before[i] ?? 0) ? ' new' : '';
-      return `<span class="block${fresh}" style="background:${NODE_COLORS[proposer % NODE_COLORS.length]}" title="height ${height}, proposed by v${proposer}">${v}</span>`;
+      const round = decidedHeights.get(height)?.round ?? 0;
+      const classes = ['block'];
+      if (height > (before[i] ?? 0)) classes.push('new');
+      if (height === hoverHeight) classes.push('hl');
+      const badge = round > 0 ? `<i class="rnd">R${round}</i>` : '';
+      return `<span class="${classes.join(' ')}" data-height="${height}" data-proposer="${proposer}" ` +
+        `style="background:${NODE_COLORS[proposer % NODE_COLORS.length]}" ` +
+        `title="height ${height}, decided in round ${round}, proposed by v${proposer}">${v}${badge}</span>`;
     }).join('');
     const more = from > 0 ? `<span class="block more">… ${from} more</span>` : '';
     return `<div class="chainrow"><span class="who" style="color:${NODE_COLORS[i % NODE_COLORS.length]}">v${i}</span>${more}${blocks}</div>`;
