@@ -150,6 +150,14 @@
   .tgrid .lbl { color: var(--muted); white-space: nowrap; padding-right: 4px; }
   .tgrid .hd { font-size: 11px; color: var(--faint); }
   .note { color: var(--muted); font-size: 12px; margin: 6px 0 2px; }
+  label[data-tip], span[data-tip] {
+    cursor: help; text-decoration: underline dotted var(--faint); text-underline-offset: 3px;
+  }
+  #tip {
+    position: fixed; z-index: 10; max-width: 280px; padding: 8px 11px; border-radius: 8px;
+    background: var(--fg); color: var(--bg); font-size: 12.5px; line-height: 1.45;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .25); pointer-events: none;
+  }
 
   /* Stage */
   #stage {
@@ -304,21 +312,21 @@
     <details open>
       <summary><h2>Scenarios</h2></summary>
       <div class="scenarios">
-        <button data-scenario="calm">Calm<small>reliable, fast network</small></button>
-        <button data-scenario="lossy">Lossy<small>drop 25% of messages</small></button>
-        <button data-scenario="slow">Slow<small>100–1500 ms delays</small></button>
-        <button data-scenario="crash">Crash proposer<small>of the next height</small></button>
-        <button data-scenario="noquorum">Lose quorum<small>take 1/3+ offline</small></button>
-        <button data-scenario="heal">Heal<small>bring all back online</small></button>
+        <button data-scenario="calm" data-tip="Sets the drop rate to 0% and delays to 20–200 ms. Leaves offline validators as they are.">Calm<small>reliable, fast network</small></button>
+        <button data-scenario="lossy" data-tip="Drops a quarter of consensus messages. Expect timeouts, nil votes and extra rounds.">Lossy<small>drop 25% of messages</small></button>
+        <button data-scenario="slow" data-tip="Messages take 100–1500 ms to arrive, close to or longer than the 1 s prevote and precommit timeouts.">Slow<small>100–1500 ms delays</small></button>
+        <button data-scenario="crash" data-tip="Takes offline the validator that proposes round 0 of the next height. The others time out waiting for its proposal, vote nil, and move to round 1 with a new proposer.">Crash proposer<small>of the next height</small></button>
+        <button data-scenario="noquorum" data-tip="Takes enough validators offline that the rest hold no more than 2/3 of the voting power. No quorum can form, so consensus stops until enough of them come back.">Lose quorum<small>take 1/3+ offline</small></button>
+        <button data-scenario="heal" data-tip="Brings every offline validator back. Those that fell behind catch up through sync.">Heal<small>bring all back online</small></button>
       </div>
     </details>
 
     <details open>
       <summary><h2>Run</h2></summary>
       <div class="fields">
-        <label for="nodes">Validators</label>
+        <label for="nodes" data-tip="Number of validators, all with equal voting power. A quorum is more than 2/3 of them, so fewer than 1/3 can fail without stopping consensus. Changing it restarts the simulation.">Validators</label>
         <input type="number" id="nodes" class="wide" min="1" max="16" value="4">
-        <label for="seed">Seed</label>
+        <label for="seed" data-tip="Seed of the random number generator that picks message delays and drops. The same seed and settings always replay exactly the same run. Changing it restarts the simulation.">Seed</label>
         <input type="number" id="seed" class="wide" min="0" value="0">
       </div>
       <p class="note">Changing these restarts the simulation.</p>
@@ -327,13 +335,13 @@
     <details open>
       <summary><h2>Network</h2></summary>
       <div class="fields">
-        <label for="drop">Drop rate</label>
+        <label for="drop" data-tip="Probability that a consensus message is lost on the way. Sync messages are never dropped. Lost proposals and votes lead to timeouts and extra rounds.">Drop rate</label>
         <input type="range" id="drop" min="0" max="60" value="0">
         <output id="dropOut"></output>
-        <label for="minDelay">Min delay</label>
+        <label for="minDelay" data-tip="Shortest time a message takes to arrive. Each message gets a random delay between the minimum and the maximum.">Min delay</label>
         <input type="range" id="minDelay" min="1" max="2000" value="20">
         <output id="minDelayOut"></output>
-        <label for="maxDelay">Max delay</label>
+        <label for="maxDelay" data-tip="Longest time a message takes to arrive. Each message gets a random delay between the minimum and the maximum.">Max delay</label>
         <input type="range" id="maxDelay" min="1" max="2000" value="200">
         <output id="maxDelayOut"></output>
       </div>
@@ -342,21 +350,21 @@
     <details open>
       <summary><h2>Timeouts</h2></summary>
       <div class="tgrid">
-        <span></span><span class="hd">Base (ms)</span><span class="hd">+ per round</span>
-        <label class="lbl" for="t_propose">Propose</label>
+        <span></span><span class="hd" data-tip="Duration of the timeout in round 0, in milliseconds.">Base (ms)</span><span class="hd" data-tip="Added for each round after the first, so later rounds wait longer: base + round × increase.">+ per round</span>
+        <label class="lbl" for="t_propose" data-tip="How long a validator waits for the round&#x27;s proposal before giving up on it and prevoting nil.">Propose</label>
         <input type="number" min="1" step="100" id="t_propose" value="3000">
         <input type="number" min="0" step="100" id="t_propose_delta" value="500" aria-label="Propose increase per round">
-        <label class="lbl" for="t_prevote">Prevote</label>
+        <label class="lbl" for="t_prevote" data-tip="Once a validator has prevotes from more than 2/3 of the validators that don&#x27;t agree on one value, how long it waits for more before precommitting nil.">Prevote</label>
         <input type="number" min="1" step="100" id="t_prevote" value="1000">
         <input type="number" min="0" step="100" id="t_prevote_delta" value="500" aria-label="Prevote increase per round">
-        <label class="lbl" for="t_precommit">Precommit</label>
+        <label class="lbl" for="t_precommit" data-tip="Once a validator has precommits from more than 2/3 of the validators that don&#x27;t agree on one value, how long it waits for more before moving to the next round.">Precommit</label>
         <input type="number" min="1" step="100" id="t_precommit" value="1000">
         <input type="number" min="0" step="100" id="t_precommit_delta" value="500" aria-label="Precommit increase per round">
-        <label class="lbl" for="t_rebroadcast">Rebroadcast</label>
+        <label class="lbl" for="t_rebroadcast" data-tip="How long a validator stays in a round before resending its latest vote and round certificate, in case peers missed them. Repeats while the round lasts.">Rebroadcast</label>
         <input type="number" min="1" step="100" id="t_rebroadcast" value="5000"><span></span>
-        <label class="lbl" for="t_max_timeout">Cap</label>
+        <label class="lbl" for="t_max_timeout" data-tip="Upper bound for the propose, prevote, precommit and rebroadcast timeouts, however many rounds have passed.">Cap</label>
         <input type="number" min="1" step="1000" id="t_max_timeout" value="60000"><span></span>
-        <label class="lbl" for="syncGrace">Sync grace</label>
+        <label class="lbl" for="syncGrace" data-tip="When a validator sees a message from a higher height, how long it waits before asking that peer for the decided value and its certificate. It usually catches up by itself in that time.">Sync grace</label>
         <input type="number" min="0" step="100" id="syncGrace" value="1000"><span></span>
       </div>
       <p class="note">Applies to timeouts started from now on.</p>
@@ -391,6 +399,7 @@
     <div id="chainRows"></div>
   </section>
 </main>
+<div id="tip" role="tooltip" hidden></div>
 <script type="module" src="main.js"></script>
 </body>
 </html>

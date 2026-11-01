@@ -217,6 +217,38 @@ $('log').addEventListener('mouseover', (e) => {
 });
 $('log').addEventListener('mouseleave', () => { hoverNodes = new Set(); });
 
+// Tooltips for the elements with a `data-tip`, placed beside them and kept on screen.
+function showTip(el) {
+  const tip = $('tip');
+  tip.textContent = el.dataset.tip;
+  tip.hidden = false;
+  const r = el.getBoundingClientRect();
+  const t = tip.getBoundingClientRect();
+  const m = 8;
+  // Beside the settings panel when there is room, so the inputs stay visible.
+  let x = (el.closest('#settings') ?? el).getBoundingClientRect().right + 10;
+  let y = r.top + r.height / 2 - t.height / 2;
+  if (x + t.width > innerWidth - m) {
+    // No room on the right: go below instead.
+    x = Math.min(Math.max(m, r.left), innerWidth - t.width - m);
+    y = r.bottom + 8;
+    if (y + t.height > innerHeight - m) y = r.top - t.height - 8;
+  }
+  tip.style.left = `${x}px`;
+  tip.style.top = `${Math.min(Math.max(m, y), innerHeight - t.height - m)}px`;
+}
+const hideTip = () => { $('tip').hidden = true; };
+document.addEventListener('pointerover', (e) => {
+  const el = e.target.closest('[data-tip]');
+  if (el) showTip(el); else hideTip();
+});
+document.addEventListener('focusin', (e) => {
+  const el = e.target.closest('[data-tip]') ?? document.querySelector(`label[for="${e.target.id}"][data-tip]`);
+  if (el) showTip(el); else hideTip();
+});
+document.addEventListener('focusout', hideTip);
+$('settings').addEventListener('scroll', hideTip);
+
 $('clearLog').onclick = () => $('log').replaceChildren();
 
 // Message filters, as toggle chips over the canvas.
