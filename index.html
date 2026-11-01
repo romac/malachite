@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Malachite Simulator</title>
+<style>
+  /* Space Grotesk, Latin subset (variable weight), under the SIL Open Font License: see fonts/OFL.txt. */
+  @font-face {
+    font-family: "Space Grotesk";
+    font-style: normal;
+    font-weight: 300 700;
+    font-display: swap;
+    src: url("fonts/SpaceGrotesk-latin.woff2") format("woff2");
+  }
+  :root {
+    --bg: #f3f0ea;
+    --surface: #e9e4db;
+    --panel: #fffdf9;
+    --node: #ffffff;
+    --dot: rgba(60, 45, 30, .10);
+    --glow: rgba(31, 157, 106, .10);
+    --fg: #1f1a16;
+    --muted: #6e655c;
+    --faint: #aaa198;
+    --border: #e0d9ce;
+    --accent: #1a8a5e;
+    --decided: #b8612b;
+    --warn: #c9921a;
+    --sync: #1a9c99;
+    --fault: #c0392b;
+    --on-accent: #ffffff;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12100e;
+      --surface: #1a1714;
+      --panel: #221e1a;
+      --node: #1e1a17;
+      --dot: rgba(255, 240, 220, .06);
+      --glow: rgba(60, 200, 140, .12);
+      --fg: #efe9e2;
+      --muted: #a59a8f;
+      --faint: #62594f;
+      --border: #322c26;
+      --accent: #3ccf8e;
+      --decided: #e8894d;
+      --warn: #e6b440;
+      --sync: #3cc9c4;
+      --fault: #ff6b5a;
+      --on-accent: #12100e;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    accent-color: var(--accent);
+    -webkit-font-smoothing: antialiased;
+    color: var(--fg);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  /* The log and chains panels can be resized (--log-size, --chain-size, set from
+     the script) and collapsed (.log-collapsed, .chain-collapsed). */
+  main {
+    --collapsed: 38px;
+    --log-w: var(--log-size, 320px);
+    --chain-h: var(--chain-size, 190px);
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr) var(--log-w);
+    grid-template-rows: auto minmax(0, 1fr) var(--chain-h);
+    grid-template-areas:
+      "top      top   top"
+      "settings stage log"
+      "settings chain log";
+    gap: 10px;
+    height: 100vh;
+    padding: 10px 14px 14px;
+  }
+  .panel {
+    background: var(--surface);
+    border-radius: 14px;
+  }
+  .display { font-family: "Space Grotesk", system-ui, sans-serif; }
+  h2 {
+    font: 600 11px/1.4 "Space Grotesk", system-ui, sans-serif;
+    text-transform: uppercase; letter-spacing: .09em;
+    color: var(--muted); margin: 0;
+  }
+  button, select, input { font: inherit; color: var(--fg); }
+  button {
+    padding: 5px 12px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--panel); cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  button.icon { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 5px 10px; }
+  button.icon svg { width: 16px; height: 16px; fill: currentColor; }
+  #play { width: 40px; }
+  input[type=number] {
+    width: 100%; min-width: 0; padding: 3px 6px;
+    border: 1px solid var(--border); border-radius: 5px; background: var(--bg);
+    font-variant-numeric: tabular-nums;
+  }
+  output { font-variant-numeric: tabular-nums; }
+
+  /* Toolbar */
+  #top {
+    grid-area: top;
+    display: flex; align-items: center; gap: 10px 18px; flex-wrap: wrap;
+  }
+  h1 {
+    font: 700 19px/1.2 "Space Grotesk", system-ui, sans-serif;
+    letter-spacing: -.01em; margin: 0 6px 0 0; white-space: nowrap;
+  }
+  h1 span { color: var(--accent); }
+  .group { display: flex; align-items: center; gap: 6px; }
+  .group label { color: var(--muted); }
+  #speed { width: 120px; }
+  #speedOut { width: 44px; }
+  /* Each number has a fixed width, so the bar keeps its size as the values grow,
+     and labels sit under the numbers to keep it narrow. */
+  #stats {
+    margin-left: auto; display: flex; gap: 18px; flex-wrap: nowrap;
+    color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  .stat { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+  .stat span { font-size: 11px; color: var(--faint); white-space: nowrap; }
+  #stats b {
+    color: var(--fg); font: 600 15px "Space Grotesk", system-ui, sans-serif;
+    display: inline-block; text-align: right; white-space: nowrap; transform-origin: right center;
+  }
+  #statTime { min-width: 9ch; }
+  #statHeights { min-width: 5ch; }
+  #statRate { min-width: 4ch; }
+  #statMsgs { min-width: 7ch; }
+  #statDrop { min-width: 6ch; }
+  #statBlock { min-width: 7ch; }
+  #stats b.pulse { animation: pulse .5s ease-out; }
+  @keyframes pulse {
+    0% { transform: scale(1); color: var(--fg); }
+    30% { transform: scale(1.25); color: var(--decided); }
+    100% { transform: scale(1); color: var(--fg); }
+  }
+
+  /* Settings */
+  #settings { grid-area: settings; overflow: auto; padding: 4px 0; }
+  .scenarios { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0 4px; }
+  .scenarios button { font-size: 12px; padding: 6px 8px; text-align: left; line-height: 1.25; }
+  .scenarios button small { display: block; color: var(--muted); font-size: 11px; }
+  .entry { cursor: default; border-radius: 4px; }
+  .entry:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
+  details { padding: 8px 14px; }
+  details + details { border-top: 1px solid var(--border); }
+  summary {
+    cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px;
+    padding: 2px 0;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before {
+    content: "›"; color: var(--muted); display: inline-block; width: 10px;
+    transition: transform .15s;
+  }
+  details[open] > summary::before { transform: rotate(90deg); }
+  .fields {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 6px 8px; align-items: center; margin: 8px 0 4px;
+  }
+  .fields > label { color: var(--muted); white-space: nowrap; }
+  .fields input[type=range] { width: 100%; min-width: 0; }
+  .fields output { text-align: right; min-width: 52px; }
+  .fields .wide { grid-column: 2 / 4; }
+  .tgrid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px; align-items: center; margin: 8px 0 4px; }
+  .tgrid .lbl { color: var(--muted); white-space: nowrap; padding-right: 4px; }
+  .tgrid .hd { font-size: 11px; color: var(--faint); }
+  .note { color: var(--muted); font-size: 12px; margin: 6px 0 2px; }
+  .restore { padding: 8px 14px 12px; border-top: 1px solid var(--border); }
+  .restore button { width: 100%; font-size: 12px; color: var(--muted); }
+  @media (max-width: 1150px) { .restore { grid-column: 1 / -1; border-top: none; } }
+  label[data-tip], span[data-tip] {
+    cursor: help; text-decoration: underline dotted var(--faint); text-underline-offset: 3px;
+  }
+  #tip {
+    position: fixed; z-index: 10; max-width: 280px; padding: 8px 11px; border-radius: 8px;
+    background: var(--fg); color: var(--bg); font-size: 12.5px; line-height: 1.45;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .25); pointer-events: none;
+  }
+
+  /* Stage */
+  #stage {
+    grid-area: stage; display: flex; flex-direction: column; min-height: 320px; overflow: hidden;
+    border-radius: 14px;
+    background:
+      radial-gradient(ellipse at 50% 52%, var(--glow), transparent 62%),
+      radial-gradient(var(--dot) 1px, transparent 1.4px) 0 0 / 22px 22px;
+  }
+  #legend { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 10px 0; }
+  #canvasWrap { position: relative; flex: 1; min-height: 0; }
+  #net { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .overlay { position: absolute; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 9px 2px 7px; border-radius: 999px; font-size: 12px;
+    border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 80%, transparent);
+    backdrop-filter: blur(4px); cursor: pointer;
+  }
+  .chip.off { color: var(--faint); }
+  .chip.off .sw { background: transparent; box-shadow: inset 0 0 0 1.5px var(--faint); }
+  .sw { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; background: var(--c); }
+  .sw.ring { background: transparent; box-shadow: inset 0 0 0 2px var(--c); }
+  .sw.pill { width: 13px; border-radius: 3px; }
+  .sw.square { width: 8px; height: 8px; border-radius: 1px; }
+  .sw.tri { width: 10px; height: 10px; border-radius: 0; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+  .chip.off .sw.tri { background: var(--faint); }
+  #banner {
+    position: absolute; left: 50%; top: calc(50% - 11px); transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 10px 22px; border-radius: 14px; pointer-events: none;
+    background: color-mix(in srgb, var(--panel) 85%, transparent);
+    --tone: var(--warn);
+    border: 1px solid color-mix(in srgb, var(--tone) 50%, transparent);
+    box-shadow: 0 8px 30px color-mix(in srgb, var(--tone) 25%, transparent);
+    opacity: 0;
+  }
+  #banner[data-tone="decided"] { --tone: var(--decided); }
+  #banner b { font: 700 20px "Space Grotesk", system-ui, sans-serif; color: var(--tone); }
+  #banner span { font-size: 12px; color: var(--muted); }
+  #banner.show { animation: banner 2.2s ease-out forwards; }
+  #banner[data-tone="decided"].show { animation-duration: 1s; }
+  @keyframes banner {
+    0% { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.96); }
+    12%, 70% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, calc(-50% - 6px)); }
+  }
+  #footer {
+    left: 12px; right: 12px; bottom: 10px; justify-content: space-between; gap: 4px 16px;
+    font-size: 12px; color: var(--muted); pointer-events: none;
+  }
+  #steps { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  #steps span { display: inline-flex; align-items: center; gap: 5px; pointer-events: auto; }
+  #steps .disc {
+    width: 11px; height: 11px; border-radius: 50%;
+    border: 2px solid var(--c); background: color-mix(in srgb, var(--c) 22%, transparent);
+  }
+
+  /* Log */
+  main.log-collapsed { --log-w: var(--collapsed); }
+  main.chain-collapsed { --chain-h: var(--collapsed); }
+  #logPanel { grid-area: log; position: relative; display: flex; flex-direction: column; min-height: 0; }
+  #logPanel header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px 6px 8px;
+  }
+  #logPanel header h2 { flex: 1; }
+  #logPanel header button { padding: 1px 8px; font-size: 12px; }
+
+  /* Collapse toggles */
+  button.fold {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; padding: 0 !important; border: none; background: none; color: var(--muted);
+  }
+  button.fold:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 8%, transparent); }
+  button.fold svg { width: 14px; height: 14px; transition: transform .2s; }
+  #logPanel .fold svg { transform: rotate(0deg); }          /* folds to the right */
+  .log-collapsed #logPanel .fold svg { transform: rotate(180deg); }
+  #chain .fold svg { transform: rotate(90deg); }            /* folds down */
+  .chain-collapsed #chain .fold svg { transform: rotate(-90deg); }
+
+  /* A collapsed log is a vertical strip; click anywhere on it to expand. */
+  .log-collapsed #logPanel { cursor: pointer; }
+  .log-collapsed #logPanel header { flex-direction: column; padding: 8px 0; }
+  .log-collapsed #logPanel h2 { writing-mode: vertical-rl; flex: none; margin-top: 6px; }
+  .log-collapsed #clearLog, .log-collapsed #log { display: none; }
+  .chain-collapsed #chain { cursor: pointer; }
+  .chain-collapsed #chainRows, .chain-collapsed #chain header span { display: none; }
+  .chain-collapsed #chain header { margin-bottom: 0; }
+
+  /* Drag handles, sitting in the gap along the inner edge of each panel */
+  .resizer { position: absolute; z-index: 2; touch-action: none; }
+  .resizer::after {
+    content: ""; position: absolute; border-radius: 2px; background: transparent; transition: background .15s;
+  }
+  .resizer:hover::after, .resizer:focus-visible::after, .resizer.dragging::after { background: var(--accent); }
+  .resizer:focus-visible { outline: none; }
+  #logPanel .resizer { left: -10px; top: 0; bottom: 0; width: 10px; cursor: col-resize; }
+  #logPanel .resizer::after { left: 4px; top: 12px; bottom: 12px; width: 2px; }
+  #chain .resizer { top: -10px; left: 0; right: 0; height: 10px; cursor: row-resize; }
+  #chain .resizer::after { top: 4px; left: 12px; right: 12px; height: 2px; }
+  .log-collapsed #logPanel .resizer, .chain-collapsed #chain .resizer { display: none; }
+  body.resizing { user-select: none; }
+  body.resizing.col { cursor: col-resize; }
+  body.resizing.row { cursor: row-resize; }
+  #log {
+    flex: 1; min-height: 0; overflow: auto; padding: 0 14px 10px;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .entry { display: grid; grid-template-columns: 56px 1fr; gap: 8px; padding: 2px 0; }
+  .entry .t { color: var(--faint); text-align: right; }
+  .entry .m { color: var(--muted); overflow-wrap: anywhere; }
+  .entry.decided .m { color: var(--fg); }
+  .entry.decided .t { color: var(--decided); }
+  .entry.round .m { color: var(--warn); }
+  .entry.sync .m { color: var(--sync); }
+  .entry.fault .m { color: var(--fault); }
+
+  /* Chain */
+  #chain {
+    grid-area: chain; position: relative; display: flex; flex-direction: column; min-height: 0;
+    padding: 8px 14px 10px 8px;
+  }
+  #chain header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; white-space: nowrap; }
+  #chain header h2 { margin-right: 6px; }
+  #chain header span { font-size: 12px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; }
+  #chainRows { flex: 1; min-height: 0; overflow: auto; padding: 6px 0 0 6px; }
+  .chainrow { display: flex; align-items: center; gap: 10px; margin: 5px 0; white-space: nowrap; }
+  .chainrow .who { flex: 0 0 26px; font: 600 13px "Space Grotesk", system-ui, sans-serif; }
+  .block {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    min-width: 48px; height: 22px; padding: 0 6px;
+    border-radius: 6px; color: #fff; font: 600 11px ui-monospace, Menlo, monospace;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 1px 2px rgba(0, 0, 0, .25);
+    cursor: default; transition: transform .15s, box-shadow .15s, opacity .15s;
+  }
+  /* The link to the previous block */
+  .block + .block::before {
+    content: ""; position: absolute; left: -11px; top: 50%; width: 11px; height: 2px;
+    background: var(--faint); transform: translateY(-50%);
+  }
+  .block .rnd {
+    position: absolute; top: -7px; right: -6px; padding: 0 4px; border-radius: 6px;
+    background: var(--warn); color: #1f1a16; font: 700 9px/13px system-ui, sans-serif;
+  }
+  #chainRows.hovering .block:not(.more):not(.hl) { opacity: .35; }
+  .block.hl { transform: translateY(-2px); box-shadow: 0 0 0 2px var(--fg), 0 4px 10px rgba(0, 0, 0, .3); }
+  .block.new { animation: slide-in .45s cubic-bezier(.2, .9, .3, 1.3); }
+  @keyframes slide-in {
+    from { transform: translateX(18px) scale(.6); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+  .block.more { background: none; box-shadow: none; color: var(--muted); min-width: auto; font-weight: 400; }
+  .block.more::before { display: none; }
+
+  @media (max-width: 1150px) {
+    main {
+      grid-template-columns: minmax(0, 1fr) var(--log-w);
+      grid-template-rows: auto 60vh var(--chain-h) auto;
+      grid-template-areas:
+        "top      top"
+        "stage    log"
+        "chain    log"
+        "settings settings";
+      height: auto;
+    }
+    #settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+    details + details { border-top: none; }
+  }
+  @media (max-width: 720px) {
+    main {
+      --log-w: 260px;
+      --chain-h: auto;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto 460px var(--log-w) var(--chain-h) auto;
+      grid-template-areas: "top" "stage" "log" "chain" "settings";
+    }
+    main.log-collapsed { --log-w: var(--collapsed); }
+    main.chain-collapsed { --chain-h: var(--collapsed); }
+    /* Stacked: no resizing, and the log folds up instead of to the side. */
+    .resizer { display: none; }
+    .log-collapsed #logPanel header { flex-direction: row; padding: 8px 14px 6px 8px; }
+    .log-collapsed #logPanel h2 { writing-mode: horizontal-tb; flex: 1; margin-top: 0; }
+    #logPanel .fold svg { transform: rotate(90deg); }
+    .log-collapsed #logPanel .fold svg { transform: rotate(-90deg); }
+    #stats { margin-left: 0; gap: 8px 14px; flex-wrap: wrap; }
+    .stat { align-items: flex-start; }
+    #footer { display: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div id="top">
+    <h1>Malachite <span>consensus simulator</span></h1>
+    <div class="group">
+      <button class="primary icon" id="play" title="Pause" aria-label="Pause"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="2.5" width="3" height="11" rx="1"/><rect x="9.5" y="2.5" width="3" height="11" rx="1"/></svg></button>
+      <button class="icon" id="stepBtn" title="Advance 100 ms of simulated time" aria-label="Advance 100 ms">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.8v10.4a.8.8 0 0 0 1.2.7l7.6-5.2a.8.8 0 0 0 0-1.4L4.2 2.1a.8.8 0 0 0-1.2.7z"/><rect x="12" y="2.5" width="2" height="11" rx="1"/></svg>100 ms
+      </button>
+      <button class="icon" id="reset" title="Restart the simulation from height 1" aria-label="Reset">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5a5.5 5.5 0 1 1-5.2 3.7.75.75 0 1 1 1.4.5A4 4 0 1 0 8 4v1.6a.4.4 0 0 1-.65.3L4.7 3.8a.4.4 0 0 1 0-.6L7.35 1.1A.4.4 0 0 1 8 1.4z"/></svg>Reset
+      </button>
+    </div>
+    <div class="group">
+      <label for="speed">Speed</label>
+      <input type="range" id="speed" min="0" max="100" value="42">
+      <output id="speedOut"></output>
+    </div>
+    <div id="stats">
+      <div class="stat"><b id="statTime">0.00 s</b><span>simulated time</span></div>
+      <div class="stat"><b id="statHeights">0</b><span>heights</span></div>
+      <div class="stat"><b id="statRate">0.0</b><span>heights/s</span></div>
+      <div class="stat"><b id="statBlock">–</b><span>last block time</span></div>
+      <div class="stat"><b id="statMsgs">0</b><span>messages</span></div>
+      <div class="stat"><b id="statDrop">0.0%</b><span>dropped</span></div>
+    </div>
+  </div>
+
+  <section class="panel" id="settings">
+    <details open>
+      <summary><h2>Scenarios</h2></summary>
+      <div class="scenarios">
+        <button data-scenario="calm" data-tip="Sets the drop rate to 0% and delays to 20–200 ms. Leaves offline validators as they are.">Calm<small>reliable, fast network</small></button>
+        <button data-scenario="lossy" data-tip="Drops a quarter of consensus messages. Expect timeouts, nil votes and extra rounds.">Lossy<small>drop 25% of messages</small></button>
+        <button data-scenario="slow" data-tip="Messages take 100–1500 ms to arrive, close to or longer than the 1 s prevote and precommit timeouts.">Slow<small>100–1500 ms delays</small></button>
+        <button data-scenario="crash" data-tip="Takes offline the validator that proposes round 0 of the next height. The others time out waiting for its proposal, vote nil, and move to round 1 with a new proposer.">Crash proposer<small>of the next height</small></button>
+        <button data-scenario="noquorum" data-tip="Takes enough validators offline that the rest hold no more than 2/3 of the voting power. No quorum can form, so consensus stops until enough of them come back.">Lose quorum<small>take 1/3+ offline</small></button>
+        <button data-scenario="heal" data-tip="Brings every offline validator back. Those that fell behind catch up through sync.">Heal<small>bring all back online</small></button>
+      </div>
+    </details>
+
+    <details open>
+      <summary><h2>Run</h2></summary>
+      <div class="fields">
+        <label for="nodes" data-tip="Number of validators, all with equal voting power. A quorum is more than 2/3 of them, so fewer than 1/3 can fail without stopping consensus. Changing it restarts the simulation.">Validators</label>
+        <input type="number" id="nodes" class="wide" min="1" max="16" value="4">
+        <label for="seed" data-tip="Seed of the random number generator that picks message delays and drops. The same seed and settings always replay exactly the same run. Changing it restarts the simulation.">Seed</label>
+        <input type="number" id="seed" class="wide" min="0" value="0">
+      </div>
+      <p class="note">Changing these restarts the simulation.</p>
+    </details>
+
+    <details open>
+      <summary><h2>Network</h2></summary>
+      <div class="fields">
+        <label for="drop" data-tip="Probability that a consensus message or status is lost on the way. Sync requests and responses are never dropped. Lost proposals and votes lead to timeouts and extra rounds.">Drop rate</label>
+        <input type="range" id="drop" min="0" max="60" value="0">
+        <output id="dropOut"></output>
+        <label for="minDelay" data-tip="Shortest time a message takes to arrive. Each message gets a random delay between the minimum and the maximum.">Min delay</label>
+        <input type="range" id="minDelay" min="1" max="2000" value="20">
+        <output id="minDelayOut"></output>
+        <label for="maxDelay" data-tip="Longest time a message takes to arrive. Each message gets a random delay between the minimum and the maximum.">Max delay</label>
+        <input type="range" id="maxDelay" min="1" max="2000" value="200">
+        <output id="maxDelayOut"></output>
+      </div>
+    </details>
+
+    <details open>
+      <summary><h2>Block time</h2></summary>
+      <div class="fields">
+        <label for="targetBlockTime" data-tip="Aim for a new height every this many milliseconds. A validator that decides a height sooner stays at that height, still collecting precommits, until this long after the height started, then moves on. A height that takes longer moves on as soon as it is decided. 0 turns it off.">Target (ms)</label>
+        <input type="number" id="targetBlockTime" class="wide" min="0" step="100" value="0">
+      </div>
+      <p class="note">0 for none, to move on as soon as a height is decided.</p>
+    </details>
+
+    <details open>
+      <summary><h2>Timeouts</h2></summary>
+      <div class="tgrid">
+        <span></span><span class="hd" data-tip="Duration of the timeout in round 0, in milliseconds.">Base (ms)</span><span class="hd" data-tip="Added for each round after the first, so later rounds wait longer: base + round × increase.">+ per round</span>
+        <label class="lbl" for="t_propose" data-tip="How long a validator waits for the round&#x27;s proposal before giving up on it and prevoting nil.">Propose</label>
+        <input type="number" min="1" step="100" id="t_propose" value="3000">
+        <input type="number" min="0" step="100" id="t_propose_delta" value="500" aria-label="Propose increase per round">
+        <label class="lbl" for="t_prevote" data-tip="Once a validator has prevotes from more than 2/3 of the validators that don&#x27;t agree on one value, how long it waits for more before precommitting nil.">Prevote</label>
+        <input type="number" min="1" step="100" id="t_prevote" value="1000">
+        <input type="number" min="0" step="100" id="t_prevote_delta" value="500" aria-label="Prevote increase per round">
+        <label class="lbl" for="t_precommit" data-tip="Once a validator has precommits from more than 2/3 of the validators that don&#x27;t agree on one value, how long it waits for more before moving to the next round.">Precommit</label>
+        <input type="number" min="1" step="100" id="t_precommit" value="1000">
+        <input type="number" min="0" step="100" id="t_precommit_delta" value="500" aria-label="Precommit increase per round">
+        <label class="lbl" for="t_rebroadcast" data-tip="How long a validator stays in a round before resending its latest vote and round certificate, in case peers missed them. Repeats while the round lasts.">Rebroadcast</label>
+        <input type="number" min="1" step="100" id="t_rebroadcast" value="5000"><span></span>
+        <label class="lbl" for="t_max_timeout" data-tip="Upper bound for the propose, prevote, precommit and rebroadcast timeouts, however many rounds have passed.">Cap</label>
+        <input type="number" min="1" step="1000" id="t_max_timeout" value="60000"><span></span>
+        <label class="lbl" for="statusInterval" data-tip="How often each validator tells its peers the latest height it decided. A validator that learns this way that a peer is ahead asks it for the heights it is missing.">Status every</label>
+        <input type="number" min="100" step="100" id="statusInterval" value="1000"><span></span>
+        <label class="lbl" for="syncGrace" data-tip="When a validator learns from a peer&#x27;s status that the peer decided its current height, how long it waits before asking that peer for the decided value and its certificate. It usually catches up by itself in that time.">Sync grace</label>
+        <input type="number" min="0" step="100" id="syncGrace" value="1000"><span></span>
+      </div>
+      <p class="note">Applies to timeouts started from now on.</p>
+    </details>
+
+    <div class="restore">
+      <button id="restoreDefaults" title="Forget the saved settings and restart with the defaults">Restore default settings</button>
+    </div>
+  </section>
+
+  <section id="stage">
+    <div id="legend" aria-label="Message types shown"></div>
+    <div id="canvasWrap">
+      <canvas id="net"></canvas>
+      <div id="banner" hidden><b></b><span></span></div>
+      <div class="overlay" id="footer">
+        <span id="hint">Click a node to take it offline or bring it back.</span>
+        <span id="steps"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="logPanel">
+    <div class="resizer" data-resize="log" role="separator" aria-orientation="vertical" aria-label="Resize the log" tabindex="0"></div>
+    <header>
+      <button class="fold" data-fold="log" aria-expanded="true" title="Collapse the log"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <h2>Log</h2>
+      <button id="clearLog">Clear</button>
+    </header>
+    <div id="log"></div>
+  </section>
+
+  <section class="panel" id="chain">
+    <div class="resizer" data-resize="chain" role="separator" aria-orientation="horizontal" aria-label="Resize the chains" tabindex="0"></div>
+    <header>
+      <button class="fold" data-fold="chain" aria-expanded="true" title="Collapse the chains"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <h2>Chains</h2>
+      <span>Each block is a decided value, colored by its proposer. Hover one to find its proposer.</span>
+    </header>
+    <div id="chainRows"></div>
+  </section>
+</main>
+<div id="tip" role="tooltip" hidden></div>
+<script type="module" src="main.js"></script>
+</body>
+</html>

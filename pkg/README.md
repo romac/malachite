@@ -1,0 +1,43 @@
+# wasm-sim
+
+A deterministic, in-process simulation of Malachite consensus nodes, with a
+browser visualization.
+
+The simulator drives the real `core-consensus` state machine for each node and
+plays the roles of the network (configurable delays and drop rate), the timers,
+and the application. It runs on a virtual clock with a seeded PRNG, so a given
+configuration always produces the same run.
+
+Simplifications:
+
+- Signatures are simulated, and all certificates are accepted as valid.
+- Values are proposed in `ProposalOnly` mode; the value proposed by node `i`
+  at height `h` is `h * 100 + i`.
+- Sync is a simplified version of ValueSync. Every `status_interval_ms`, each
+  node broadcasts the latest height it decided. A node that learns this way
+  that a peer decided its current height, and is still stuck after
+  `sync_grace_ms`, requests the decided value and commit certificate from that
+  peer, one height at a time. Statuses may be dropped; sync requests and
+  responses never are.
+
+## Running the visualization
+
+Requires [`wasm-pack`](https://github.com/wasm-bindgen/wasm-pack).
+
+```sh
+cd code/crates/wasm-sim
+wasm-pack build --target web --out-dir www/pkg --no-typescript
+python3 -m http.server -d www 8000
+```
+
+Or, with [`just`](https://github.com/casey/just), run `just serve`.
+
+Then open <http://localhost:8000>. Click a node to take it offline or bring it
+back, or use the scenario buttons to crash the next proposer, lose quorum, or
+degrade the network.
+
+## Tests
+
+```sh
+cargo nextest run -p arc-malachitebft-wasm-sim
+```

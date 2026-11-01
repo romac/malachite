@@ -1,0 +1,19 @@
+{
+  "name": "arc-malachitebft-wasm-sim",
+  "type": "module",
+  "description": "Deterministic in-process simulation of Malachite consensus nodes, compilable to WebAssembly",
+  "version": "0.8.2",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/circlefin/malachite"
+  },
+  "files": [
+    "arc_malachitebft_wasm_sim_bg.wasm",
+    "arc_malachitebft_wasm_sim.js"
+  ],
+  "main": "arc_malachitebft_wasm_sim.js",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
