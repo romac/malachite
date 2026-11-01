@@ -260,16 +260,22 @@ $('clearLog').onclick = () => $('log').replaceChildren();
 for (const [kind, color] of Object.entries(MSG_COLORS)) {
   const chip = document.createElement('button');
   chip.className = 'chip';
+  chip.dataset.kind = kind;
   chip.title = `Show or hide ${LEGEND_LABELS[kind].toLowerCase()} messages`;
   chip.setAttribute('aria-pressed', 'true');
   chip.innerHTML = `<span class="sw" style="background:${color}"></span>${LEGEND_LABELS[kind]}`;
   chip.onclick = () => {
-    const on = !shown.has(kind);
-    if (on) shown.add(kind); else shown.delete(kind);
-    chip.classList.toggle('off', !on);
-    chip.setAttribute('aria-pressed', String(on));
+    setShown(kind, !shown.has(kind));
+    saveSettings();
   };
   $('legend').appendChild(chip);
+}
+
+function setShown(kind, on) {
+  if (on) shown.add(kind); else shown.delete(kind);
+  const chip = document.querySelector(`.chip[data-kind="${kind}"]`);
+  chip.classList.toggle('off', !on);
+  chip.setAttribute('aria-pressed', String(on));
 }
 
 // Legend for the node ring colors.
@@ -896,6 +902,55 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// ----- Settings persistence -----
+// Every setting, the message filters and the open sections of the settings
+// panel are remembered in this browser, and restored before the first run.
+
+const SETTINGS_KEY = 'malachite-sim-settings';
+const settingInputs = () => [$('speed'), ...document.querySelectorAll('#settings input[id]')];
+const settingSections = () => [...document.querySelectorAll('#settings details')];
+
+function saveSettings() {
+  const settings = {
+    values: Object.fromEntries(settingInputs().map((el) => [el.id, el.value])),
+    hidden: Object.keys(MSG_COLORS).filter((kind) => !shown.has(kind)),
+    closed: settingSections().filter((d) => !d.open).map((d) => d.querySelector('h2').textContent),
+  };
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* storage unavailable */ }
+}
+
+function restoreSettings() {
+  let settings;
+  try { settings = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch { /* ignore */ }
+  if (!settings) return;
+
+  for (const el of settingInputs()) {
+    const value = Number(settings.values?.[el.id]);
+    if (settings.values?.[el.id] === undefined || !Number.isFinite(value)) continue;
+    const min = el.min === '' ? -Infinity : +el.min;
+    const max = el.max === '' ? Infinity : +el.max;
+    el.value = String(Math.min(max, Math.max(min, value)));
+  }
+  for (const kind of Object.keys(MSG_COLORS)) {
+    setShown(kind, !settings.hidden?.includes(kind));
+  }
+  for (const d of settingSections()) {
+    d.open = !settings.closed?.includes(d.querySelector('h2').textContent);
+  }
+}
+
+// Inputs changed by the scenario buttons fire non-bubbling events, so listen on each.
+for (const el of settingInputs()) {
+  el.addEventListener('input', saveSettings);
+  el.addEventListener('change', saveSettings);
+}
+for (const d of settingSections()) d.addEventListener('toggle', saveSettings);
+
+$('restoreDefaults').onclick = () => {
+  try { localStorage.removeItem(SETTINGS_KEY); } catch { /* storage unavailable */ }
+  location.reload();
+};
+
 // ----- Panel layout -----
 // The log (right) and chains (bottom) panels can be resized by dragging their
 // inner edge, and collapsed. The layout is remembered in this browser.
@@ -992,6 +1047,7 @@ for (const name of Object.keys(PANELS)) {
 }
 
 await init();
+restoreSettings();
 syncOutputs();
 reset();
 requestAnimationFrame(frame);

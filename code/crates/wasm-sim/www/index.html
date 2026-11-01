@@ -173,6 +173,9 @@
   .tgrid .lbl { color: var(--muted); white-space: nowrap; padding-right: 4px; }
   .tgrid .hd { font-size: 11px; color: var(--faint); }
   .note { color: var(--muted); font-size: 12px; margin: 6px 0 2px; }
+  .restore { padding: 8px 14px 12px; border-top: 1px solid var(--border); }
+  .restore button { width: 100%; font-size: 12px; color: var(--muted); }
+  @media (max-width: 1150px) { .restore { grid-column: 1 / -1; border-top: none; } }
   label[data-tip], span[data-tip] {
     cursor: help; text-decoration: underline dotted var(--faint); text-underline-offset: 3px;
   }
@@ -459,6 +462,10 @@
       </div>
       <p class="note">Applies to timeouts started from now on.</p>
     </details>
+
+    <div class="restore">
+      <button id="restoreDefaults" title="Forget the saved settings and restart with the defaults">Restore default settings</button>
+    </div>
   </section>
 
   <section id="stage">
