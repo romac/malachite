@@ -439,15 +439,17 @@ function handle(ev) {
       effects.push({ node: ev.node, kind: 'decided', until: realNow + 700 });
       if (!decidedHeights.has(ev.height)) {
         decidedHeights.set(ev.height, ev);
-        effects.push({ node: -1, kind: 'burst', until: realNow + 1100 });
+        const by = `proposed by v${ev.value % 100}${ev.round > 0 ? ` in round ${ev.round}` : ''}`;
+        banner(`Height ${ev.height} decided`, `value ${ev.value}, ${by}`, 'decided');
         log(ev.time, `height ${ev.height} decided: value ${ev.value} (round ${ev.round}, proposed by v${ev.value % 100})`, 'decided', [ev.value % 100]);
       }
       break;
   }
 }
 
-function banner(title, subtitle) {
+function banner(title, subtitle, tone = 'round') {
   const el = $('banner');
+  el.dataset.tone = tone;
   el.querySelector('b').textContent = title;
   el.querySelector('span').textContent = subtitle;
   el.hidden = false;
@@ -542,27 +544,6 @@ function draw() {
 
   const realNow = performance.now();
   effects = effects.filter((e) => e.until > realNow);
-
-  // Decision: a green wave rolls out from the center.
-  const center = positions.length > 1
-    ? { x: positions.reduce((t, p) => t + p.x, 0) / positions.length, y: positions.reduce((t, p) => t + p.y, 0) / positions.length }
-    : { x: w / 2, y: h / 2 };
-  const ringRadius = positions.length > 1 ? Math.hypot(positions[0].x - center.x, positions[0].y - center.y) : 60;
-  for (const e of effects) {
-    if (e.kind !== 'burst') continue;
-    const k = 1 - (e.until - realNow) / 1100;
-    for (const lag of [0, 0.18]) {
-      const kk = Math.max(0, k - lag);
-      if (kk <= 0) continue;
-      ctx.strokeStyle = STEP_COLORS.Commit;
-      ctx.globalAlpha = 0.45 * (1 - kk);
-      ctx.lineWidth = 6 * (1 - kk) + 1;
-      ctx.beginPath();
-      ctx.arc(center.x, center.y, kk * (ringRadius + radius + 30), 0, 2 * Math.PI);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  }
 
   // Polka: the links between the prevoters glow.
   for (const e of effects) {
