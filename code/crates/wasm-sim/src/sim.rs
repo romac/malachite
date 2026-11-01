@@ -37,6 +37,9 @@ pub struct SimConfig {
     pub drop_rate: f64,
     /// Consensus timeouts.
     pub timeouts: LinearTimeouts,
+    /// How long a node waits, after seeing a message from a higher height,
+    /// before requesting sync if it has not moved on by itself.
+    pub sync_grace_ms: u64,
 }
 
 impl Default for SimConfig {
@@ -48,6 +51,7 @@ impl Default for SimConfig {
             max_delay_ms: 200,
             drop_rate: 0.0,
             timeouts: LinearTimeouts::default(),
+            sync_grace_ms: 1000,
         }
     }
 }
@@ -205,6 +209,13 @@ enum Event {
         to: u32,
         msg: NetMsg,
     },
+    /// `node` saw a message from `peer` at a height above `height`:
+    /// if it is still at `height`, it requests sync from `peer`.
+    SyncCheck {
+        node: u32,
+        peer: u32,
+        height: Height,
+    },
     /// `from` asks `to` for the decided value and certificate at `height`.
     SyncRequest {
         from: u32,
@@ -249,7 +260,7 @@ struct Node {
     decisions: Vec<u64>,
     /// Certificates for decided heights, served to lagging peers.
     certificates: BTreeMap<u64, ExtendedCommitCertificate<SimContext>>,
-    /// Whether a sync request is in flight.
+    /// Whether a sync check or request is pending.
     syncing: bool,
     /// Last observed `(height, round, step)`, to report step changes.
     last_seen: (u64, i64, String),
@@ -446,25 +457,43 @@ impl Simulation {
                 }
 
                 // A message from a higher height means the sender has decided our
-                // current height: ask it for the decided value, like ValueSync does.
+                // current height. We are usually just about to decide it too, so
+                // only ask for the decided value if we are still stuck after a while.
                 let height = n.state.height();
                 if msg.height() > height && !n.syncing {
                     n.syncing = true;
-                    self.send_sync(
-                        to,
-                        from,
-                        MsgKind::SyncRequest,
-                        height.0,
-                        None,
-                        Event::SyncRequest {
-                            from: to,
-                            to: from,
+                    self.schedule(
+                        self.now + self.config.sync_grace_ms,
+                        Event::SyncCheck {
+                            node: to,
+                            peer: from,
                             height,
                         },
                     );
                 }
 
                 self.process(to, msg.into_input());
+            }
+
+            Event::SyncCheck { node, peer, height } => {
+                let n = &mut self.nodes[node as usize];
+                if !n.online || n.state.height() != height {
+                    n.syncing = false;
+                    return;
+                }
+
+                self.send_sync(
+                    node,
+                    peer,
+                    MsgKind::SyncRequest,
+                    height.0,
+                    None,
+                    Event::SyncRequest {
+                        from: node,
+                        to: peer,
+                        height,
+                    },
+                );
             }
 
             Event::SyncRequest { from, to, height } => {

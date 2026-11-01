@@ -9,6 +9,9 @@ repository.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 malachitebft-core-types = { workspace = true, features = ["serde"] }
 # Metrics are disabled: they read the wall clock, which is unavailable in the browser.
@@ -16,6 +19,10 @@ malachitebft-core-consensus = { package = "arc-malachitebft-core-consensus", pat
 
 bytes = { workspace = true }
 serde = { workspace = true, features = ["derive", "std"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde_json = { workspace = true }
+wasm-bindgen = { workspace = true }
 
 [lints]
 workspace = true

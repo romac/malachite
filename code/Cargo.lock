@@ -758,6 +758,8 @@ dependencies = [
  "arc-malachitebft-core-types",
  "bytes",
  "serde",
+ "serde_json",
+ "wasm-bindgen",
 ]
 
 [[package]]

@@ -172,3 +172,18 @@ fn node_rejoining_after_others_moved_on_catches_up_via_sync() {
         }
     )));
 }
+
+#[test]
+fn no_sync_without_faults() {
+    let mut sim = Simulation::new(SimConfig::default());
+    run(&mut sim, 20, 600_000);
+
+    let events = sim.drain_events();
+    assert!(!events.iter().any(|e| matches!(
+        e,
+        SimEvent::MessageSent {
+            kind: MsgKind::SyncRequest,
+            ..
+        }
+    )));
+}

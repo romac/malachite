@@ -7,3 +7,6 @@ pub mod context;
 pub mod sim;
 
 pub use sim::{MsgKind, NodeStatus, SimConfig, SimEvent, Simulation};
+
+#[cfg(target_arch = "wasm32")]
+mod wasm;
