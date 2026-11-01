@@ -679,7 +679,13 @@ function draw() {
       const k = 1 - (e.until - realNow) / 450;
       x += Math.sin(k * Math.PI * 8) * 4 * (1 - k);
     }
-    const target = s.online ? STEP_COLORS[s.step] || muted : muted;
+    // A node that decided before the target block time waits for it, shown in grey.
+    const targetMs = targetBlockTime();
+    const waitLeft = s.online && s.step === 'Commit' && targetMs > 0 && heightStart[i] !== undefined
+      ? heightStart[i] + targetMs - simTime
+      : 0;
+    const waiting = waitLeft > 0;
+    const target = s.online && !waiting ? STEP_COLORS[s.step] || muted : muted;
 
     // Ease the ring color and the vote arcs, so that changes read as motion.
     const look = (nodeLook[i] ??= { rgb: hexToRgb(target), prevotes: 0, precommits: 0, alpha: 1 });
@@ -777,13 +783,8 @@ function draw() {
     // Step label below the node
     ctx.font = '12px system-ui, sans-serif';
     ctx.fillStyle = color;
-    // A node that decided before the target block time counts down to it.
     let label = s.online ? s.step : 'offline';
-    const targetMs = targetBlockTime();
-    if (s.online && s.step === 'Commit' && targetMs > 0 && heightStart[i] !== undefined) {
-      const left = heightStart[i] + targetMs - simTime;
-      if (left > 0) label = `waiting ${(left / 1000).toFixed(1)} s`;
-    }
+    if (waiting) label = `waiting ${(waitLeft / 1000).toFixed(1)} s`;
     ctx.fillText(label, x, y + radius + 26);
 
     // Highlighted from the chain or the log
