@@ -735,32 +735,20 @@ function draw() {
     const look = (nodeLook[i] ??= { rgb: hexToRgb(target), alpha: 1 });
     look.rgb = look.rgb.map((c, k) => ease(c, hexToRgb(target)[k], 0.18));
     const round = Math.max(0, s.round);
-    look.alpha = ease(look.alpha, s.online ? 1 : 0.45, 0.12);
+    // Offline nodes fade, and so do the others when some are highlighted from the chain or the log.
+    const dimmed = hoverNodes.size > 0 && !hoverNodes.has(i);
+    look.alpha = ease(look.alpha, (s.online ? 1 : 0.45) * (dimmed ? 0.3 : 1), 0.12);
     const color = rgb(look.rgb);
 
-    // Arrival ripples
+    // Arrivals and decisions briefly flash the disc: the strongest current flash wins.
+    let flash = null;
     for (const e of effects) {
-      if (e.node !== i || e.kind !== 'ripple') continue;
-      const k = 1 - (e.until - realNow) / 380;
-      ctx.strokeStyle = e.color;
-      ctx.globalAlpha = 0.5 * (1 - k);
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(x, y, radius + 2 + k * 10, 0, 2 * Math.PI);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-
-    for (const e of effects) {
-      if (e.node !== i || e.kind !== 'decided') continue;
-      const k = 1 - (e.until - realNow) / 700;
-      ctx.strokeStyle = STEP_COLORS.Commit;
-      ctx.globalAlpha = 1 - k;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(x, y, radius + 14 + k * 18, 0, 2 * Math.PI);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+      if (e.node !== i || (e.kind !== 'ripple' && e.kind !== 'decided')) continue;
+      const k = 1 - (e.until - realNow) / (e.kind === 'ripple' ? 380 : 700);
+      const strength = (e.kind === 'ripple' ? 0.3 : 0.6) * (1 - k);
+      if (!flash || strength > flash.strength) {
+        flash = { strength, color: e.kind === 'ripple' ? e.color : STEP_COLORS.Commit };
+      }
     }
 
     ctx.globalAlpha = look.alpha;
@@ -833,6 +821,11 @@ function draw() {
       ctx.fillStyle = color;
       ctx.globalAlpha = look.alpha * 0.22;
       ctx.fill();
+      if (flash) {
+        ctx.fillStyle = flash.color;
+        ctx.globalAlpha = look.alpha * flash.strength;
+        ctx.fill();
+      }
       ctx.globalAlpha = look.alpha;
     }
     ctx.strokeStyle = color;
@@ -856,19 +849,6 @@ function draw() {
     let label = s.online ? s.step : 'offline';
     if (waiting) label = `waiting ${(waitLeft / 1000).toFixed(1)} s`;
     ctx.fillText(label, x, y + radius + 32);
-
-    // Highlighted from the chain or the log
-    if (hoverNodes.has(i)) {
-      ctx.strokeStyle = fg;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 5]);
-      ctx.lineDashOffset = -realNow / 40;
-      ctx.beginPath();
-      ctx.arc(x, y, radius + 19, 0, 2 * Math.PI);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.lineDashOffset = 0;
-    }
 
     // Offline nodes doze off.
     if (!s.online) {
