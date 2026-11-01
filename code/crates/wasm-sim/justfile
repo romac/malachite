@@ -1,0 +1,35 @@
+# Build, serve and deploy the browser visualization.
+
+remote := "origin"
+branch := "gh-pages"
+port := "8000"
+
+# List the recipes
+default:
+    @just --list
+
+# Build the WebAssembly module into www/pkg
+build:
+    wasm-pack build --target web --out-dir www/pkg --no-typescript
+
+# Build, then serve www/ on localhost
+serve: build
+    python3 -m http.server -d www {{port}}
+
+# Build, then force-push www/ to the GitHub Pages branch of the remote
+deploy: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    url=$(git remote get-url {{remote}})
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    cp -R www/. "$tmp"
+    # wasm-pack's pkg/.gitignore ignores everything, which would leave the module out.
+    rm -f "$tmp/pkg/.gitignore"
+    touch "$tmp/.nojekyll"
+    cd "$tmp"
+    git init -q -b {{branch}}
+    git add -A
+    git commit -q -m "Deploy wasm-sim"
+    git push -f "$url" {{branch}}
+    echo "Pushed to {{branch}} on $url"
