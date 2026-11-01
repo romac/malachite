@@ -3,6 +3,10 @@
 
 mod prelude;
 
+/// The metrics recorded by consensus, to pass to [`process!`]: `malachitebft_metrics::Metrics`
+/// with the `metrics` feature, `()` otherwise. Keep the same value across calls.
+pub use prelude::Metrics;
+
 mod input;
 pub use input::Input;
 

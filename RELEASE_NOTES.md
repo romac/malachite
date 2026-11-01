@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### `consensus`
+- Export the `Metrics` type expected by `process!`: `malachitebft_metrics::Metrics` with the `metrics` feature, `()` otherwise.
+
 ## 0.8.2
 
 *October 19th, 2026*

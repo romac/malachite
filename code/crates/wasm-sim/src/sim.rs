@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use malachitebft_core_consensus::{
-    process, Effect, Error, Input, LivenessMsg, LocallyProposedValue, Params, PeerId,
+    process, Effect, Error, Input, LivenessMsg, LocallyProposedValue, Metrics, Params, PeerId,
     ProposedValue, Resumable, Resume, SignedConsensusMsg, State,
 };
 use malachitebft_core_types::{
@@ -281,6 +281,9 @@ struct Node {
     last_seen: (u64, i64, String),
     /// Virtual time at which the current height started.
     height_started_at: u64,
+    /// Consensus metrics, which track the node's state across calls to `process!`.
+    /// `()` unless feature unification enables the `metrics` feature of core-consensus.
+    metrics: Metrics,
 }
 
 /// A deterministic simulation of `num_nodes` validators running consensus.
@@ -325,6 +328,7 @@ impl Simulation {
                 syncing: false,
                 last_seen: (0, -1, String::new()),
                 height_started_at: 0,
+                metrics: Metrics::default(),
             })
             .collect();
 
@@ -625,17 +629,12 @@ impl Simulation {
     /// Feed an input to a node's consensus state, then apply the resulting actions.
     fn process(&mut self, node: u32, input: Input<SimContext>) {
         let mut actions = Vec::new();
-        // `()` when the `metrics` feature of core-consensus is off (eg. in wasm builds),
-        // but a real `Metrics` when feature unification enables it in workspace builds.
-        #[allow(clippy::let_unit_value)]
-        let metrics = Default::default();
-
         let n = &mut self.nodes[node as usize];
         // Consensus may reject an input (eg. a message for a past height): that is not fatal.
         let _: Result<(), Error<SimContext>> = process!(
             input: input,
             state: &mut n.state,
-            metrics: &metrics,
+            metrics: &n.metrics,
             with: effect => handle_effect(effect, &mut actions)
         );
 
