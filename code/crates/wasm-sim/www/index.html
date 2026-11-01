@@ -14,40 +14,42 @@
     src: url("fonts/SpaceGrotesk-latin.woff2") format("woff2");
   }
   :root {
-    --bg: #f4f3ef;
-    --surface: #ecebe6;
-    --panel: #ffffff;
+    --bg: #f3f0ea;
+    --surface: #e9e4db;
+    --panel: #fffdf9;
     --node: #ffffff;
-    --dot: rgba(30, 30, 40, .10);
-    --glow: rgba(47, 111, 223, .10);
-    --fg: #1d1d1f;
-    --muted: #6b6b70;
-    --faint: #a5a5aa;
-    --border: #e2e2de;
-    --accent: #2f6fdf;
-    --decided: #0f9d58;
-    --warn: #e8710a;
-    --sync: #0b8a9b;
-    --fault: #d93025;
+    --dot: rgba(60, 45, 30, .10);
+    --glow: rgba(31, 157, 106, .10);
+    --fg: #1f1a16;
+    --muted: #6e655c;
+    --faint: #aaa198;
+    --border: #e0d9ce;
+    --accent: #1a8a5e;
+    --decided: #b8612b;
+    --warn: #c9921a;
+    --sync: #1a9c99;
+    --fault: #c0392b;
+    --on-accent: #ffffff;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #101013;
-      --surface: #17171b;
-      --panel: #1f1f24;
-      --node: #1b1b20;
-      --dot: rgba(255, 255, 255, .07);
-      --glow: rgba(108, 156, 255, .13);
-      --fg: #ececee;
-      --muted: #9a9aa2;
-      --faint: #5f5f66;
-      --border: #2e2e33;
-      --accent: #6c9cff;
-      --decided: #34c27a;
-      --warn: #f29a4a;
-      --sync: #36c3d6;
-      --fault: #ff6b5e;
+      --bg: #12100e;
+      --surface: #1a1714;
+      --panel: #221e1a;
+      --node: #1e1a17;
+      --dot: rgba(255, 240, 220, .06);
+      --glow: rgba(60, 200, 140, .12);
+      --fg: #efe9e2;
+      --muted: #a59a8f;
+      --faint: #62594f;
+      --border: #322c26;
+      --accent: #3ccf8e;
+      --decided: #e8894d;
+      --warn: #e6b440;
+      --sync: #3cc9c4;
+      --fault: #ff6b5a;
+      --on-accent: #12100e;
       color-scheme: dark;
     }
   }
@@ -55,6 +57,7 @@
   body {
     margin: 0;
     background: var(--bg);
+    accent-color: var(--accent);
     -webkit-font-smoothing: antialiased;
     color: var(--fg);
     font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -92,7 +95,7 @@
     border: 1px solid var(--border); background: var(--panel); cursor: pointer;
   }
   button:hover { border-color: var(--muted); }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   button.icon { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 5px 10px; }
   button.icon svg { width: 16px; height: 16px; fill: currentColor; }
   #play { width: 40px; }
@@ -316,7 +319,7 @@
   }
   .block .rnd {
     position: absolute; top: -7px; right: -6px; padding: 0 4px; border-radius: 6px;
-    background: var(--warn); color: #fff; font: 700 9px/13px system-ui, sans-serif;
+    background: var(--warn); color: #1f1a16; font: 700 9px/13px system-ui, sans-serif;
   }
   #chainRows.hovering .block:not(.more):not(.hl) { opacity: .35; }
   .block.hl { transform: translateY(-2px); box-shadow: 0 0 0 2px var(--fg), 0 4px 10px rgba(0, 0, 0, .3); }

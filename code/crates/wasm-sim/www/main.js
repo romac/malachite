@@ -1,21 +1,21 @@
 import init, { WasmSim } from './pkg/arc_malachitebft_wasm_sim.js';
 
 const STEP_COLORS = {
-  Unstarted: '#9aa0a6',
-  Propose: '#4c8bf5',
-  Prevote: '#e3a008',
-  Precommit: '#a142f4',
-  Commit: '#0f9d58',
+  Unstarted: '#9a948c',
+  Propose: '#2f5fd0',
+  Prevote: '#d4a017',
+  Precommit: '#8e5bd0',
+  Commit: '#c8692f',
 };
 
 const MSG_COLORS = {
-  Proposal: '#4c8bf5',
-  Prevote: '#e3a008',
-  Precommit: '#a142f4',
-  PolkaCertificate: '#e8710a',
-  RoundCertificate: '#d93025',
-  SyncRequest: '#12b5cb',
-  SyncResponse: '#0b8a9b',
+  Proposal: '#2f5fd0',
+  Prevote: '#d4a017',
+  Precommit: '#8e5bd0',
+  PolkaCertificate: '#d1457f',
+  RoundCertificate: '#c0392b',
+  SyncRequest: '#1fb5b0',
+  SyncResponse: '#148a87',
 };
 
 const LEGEND_LABELS = {
@@ -30,8 +30,8 @@ const LEGEND_LABELS = {
 
 // Identity colors, used to show who proposed each decided value.
 const NODE_COLORS = [
-  '#4c8bf5', '#0f9d58', '#e8710a', '#a142f4', '#d93025', '#12b5cb', '#c5221f', '#7cb342',
-  '#f06292', '#5c6bc0', '#8d6e63', '#26a69a', '#ab47bc', '#ffa000', '#546e7a', '#9e9d24',
+  '#2f5fd0', '#1f9d6a', '#c8692f', '#1fb5b0', '#d9a21b', '#b33a3a', '#6f8fe0', '#5cbf8a',
+  '#e0895a', '#147a7a', '#8a6cc9', '#9cbf3a', '#7a4a2a', '#3a8fd0', '#c94f7c', '#5a6e7a',
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -496,6 +496,8 @@ function draw() {
   const muted = css.getPropertyValue('--muted').trim();
   const panel = css.getPropertyValue('--node').trim();
   const border = css.getPropertyValue('--border').trim();
+  const fault = css.getPropertyValue('--fault').trim();
+  const warn = css.getPropertyValue('--warn').trim();
 
   const { positions, radius, w, h } = layout();
   ctx.clearRect(0, 0, w, h);
@@ -622,7 +624,7 @@ function draw() {
         ctx.arc(x + Math.cos(ang) * d, y + Math.sin(ang) * d, 1.8 * (1 - k) + 0.4, 0, 2 * Math.PI);
         ctx.fill();
       }
-      ctx.strokeStyle = '#d93025';
+      ctx.strokeStyle = fault;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(x - 4, y - 4); ctx.lineTo(x + 4, y + 4);
@@ -829,7 +831,7 @@ function draw() {
     timeouts.forEach((e, k) => {
       const age = 1 - (e.until - realNow) / 1200;
       ctx.globalAlpha = 1 - age;
-      ctx.fillStyle = '#e8710a';
+      ctx.fillStyle = warn;
       ctx.font = '12px system-ui, sans-serif';
       ctx.fillText(e.label, x, y - radius - 24 - k * 14 - age * 10);
       ctx.globalAlpha = 1;
