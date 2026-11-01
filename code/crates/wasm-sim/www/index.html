@@ -6,22 +6,32 @@
 <title>Malachite Simulator</title>
 <style>
   :root {
-    --bg: #f7f7f5;
+    --bg: #f4f4f1;
     --panel: #ffffff;
     --fg: #1d1d1f;
     --muted: #6b6b70;
+    --faint: #a5a5aa;
     --border: #e2e2de;
     --accent: #2f6fdf;
+    --decided: #0f9d58;
+    --warn: #e8710a;
+    --sync: #0b8a9b;
+    --fault: #d93025;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141416;
-      --panel: #1d1d20;
+      --bg: #121214;
+      --panel: #1c1c1f;
       --fg: #ececee;
       --muted: #9a9aa2;
+      --faint: #5f5f66;
       --border: #2e2e33;
       --accent: #6c9cff;
+      --decided: #34c27a;
+      --warn: #f29a4a;
+      --sync: #36c3d6;
+      --fault: #ff6b5e;
       color-scheme: dark;
     }
   }
@@ -34,167 +44,241 @@
   }
   main {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-columns: 280px minmax(0, 1fr) 320px;
     grid-template-rows: auto minmax(0, 1fr) auto;
-    gap: 12px;
+    grid-template-areas:
+      "top      top   top"
+      "settings stage log"
+      "settings chain chain";
+    gap: 10px;
     height: 100vh;
-    padding: 12px 16px;
+    padding: 10px 14px 14px;
   }
-  header {
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: baseline;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-  h1 { font-size: 17px; margin: 0; font-weight: 600; }
-  .stats { color: var(--muted); font-variant-numeric: tabular-nums; }
   .panel {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 10px;
   }
-  #stage { position: relative; min-height: 320px; }
-  #net { position: absolute; inset: 0; width: 100%; height: 100%; cursor: default; }
-  #hint {
-    position: absolute; left: 12px; bottom: 8px;
-    color: var(--muted); font-size: 12px; pointer-events: none;
-  }
-  aside {
-    grid-row: 2 / 4;
-    grid-column: 2;
-    padding: 14px;
-    overflow: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  aside h2 {
+  h2 {
     font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-    color: var(--muted); margin: 0 0 6px; font-weight: 600;
+    color: var(--muted); margin: 0; font-weight: 600;
   }
-  .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
-  .row label { flex: 0 0 92px; color: var(--muted); }
-  .row input[type=range] { flex: 1; min-width: 0; }
-  .row output { flex: 0 0 52px; text-align: right; font-variant-numeric: tabular-nums; }
-  .row input[type=number] { width: 72px; }
-  .tgrid { display: grid; grid-template-columns: 92px 1fr 1fr; gap: 4px 8px; align-items: center; }
-  .tgrid > span { color: var(--muted); }
-  .tgrid > .hd { font-size: 11px; }
-  .tgrid input { width: 100%; min-width: 0; }
-  .note { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+  button, select, input { font: inherit; color: var(--fg); }
   button {
-    font: inherit; padding: 5px 12px; border-radius: 6px;
-    border: 1px solid var(--border); background: var(--bg); color: var(--fg); cursor: pointer;
+    padding: 5px 12px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--panel); cursor: pointer;
   }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
-  .legend label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-  .sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 76px; }
+  input[type=number] {
+    width: 100%; min-width: 0; padding: 3px 6px;
+    border: 1px solid var(--border); border-radius: 5px; background: var(--bg);
+    font-variant-numeric: tabular-nums;
+  }
+  output { font-variant-numeric: tabular-nums; }
+
+  /* Toolbar */
+  #top {
+    grid-area: top;
+    display: flex; align-items: center; gap: 10px 18px; flex-wrap: wrap;
+  }
+  h1 { font-size: 16px; margin: 0; font-weight: 650; white-space: nowrap; }
+  .group { display: flex; align-items: center; gap: 6px; }
+  .group label { color: var(--muted); }
+  #speed { width: 120px; }
+  #speedOut { width: 44px; }
+  #stats {
+    margin-left: auto; display: flex; gap: 16px; flex-wrap: wrap;
+    color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  #stats b { color: var(--fg); font-weight: 600; }
+
+  /* Settings */
+  #settings { grid-area: settings; overflow: auto; padding: 4px 0; }
+  details { padding: 8px 14px; }
+  details + details { border-top: 1px solid var(--border); }
+  summary {
+    cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px;
+    padding: 2px 0;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before {
+    content: "›"; color: var(--muted); display: inline-block; width: 10px;
+    transition: transform .15s;
+  }
+  details[open] > summary::before { transform: rotate(90deg); }
+  .fields {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 6px 8px; align-items: center; margin: 8px 0 4px;
+  }
+  .fields > label { color: var(--muted); white-space: nowrap; }
+  .fields input[type=range] { width: 100%; min-width: 0; }
+  .fields output { text-align: right; min-width: 52px; }
+  .fields .wide { grid-column: 2 / 4; }
+  .tgrid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px; align-items: center; margin: 8px 0 4px; }
+  .tgrid .lbl { color: var(--muted); white-space: nowrap; padding-right: 4px; }
+  .tgrid .hd { font-size: 11px; color: var(--faint); }
+  .note { color: var(--muted); font-size: 12px; margin: 6px 0 2px; }
+
+  /* Stage */
+  #stage { grid-area: stage; display: flex; flex-direction: column; min-height: 320px; overflow: hidden; }
+  #legend { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 10px 0; }
+  #canvasWrap { position: relative; flex: 1; min-height: 0; }
+  #net { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .overlay { position: absolute; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 9px 2px 7px; border-radius: 999px; font-size: 12px;
+    border: 1px solid var(--border); background: var(--panel); cursor: pointer;
+  }
+  .chip.off { color: var(--faint); }
+  .chip.off .sw { background: transparent !important; box-shadow: inset 0 0 0 1.5px var(--faint); }
+  .sw { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+  #steps { bottom: 10px; right: 12px; gap: 12px; font-size: 12px; color: var(--muted); pointer-events: none; }
+  #steps span { display: inline-flex; align-items: center; gap: 5px; }
+  #steps .ring { width: 10px; height: 10px; border-radius: 50%; border: 2.5px solid; }
+  #hint { bottom: 10px; left: 12px; font-size: 12px; color: var(--muted); pointer-events: none; }
+
+  /* Log */
+  #logPanel { grid-area: log; display: flex; flex-direction: column; min-height: 0; }
+  #logPanel header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px 6px;
+  }
+  #logPanel header button { padding: 1px 8px; font-size: 12px; }
   #log {
+    flex: 1; min-height: 0; overflow: auto; padding: 0 14px 10px;
     font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-    color: var(--muted);
-    white-space: pre-wrap;
-    max-height: 240px;
-    overflow: auto;
-    margin: 0;
   }
-  #chain { padding: 10px 14px; overflow-x: auto; }
-  #chain h2 {
-    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-    color: var(--muted); margin: 0 0 6px; font-weight: 600;
-  }
+  .entry { display: grid; grid-template-columns: 56px 1fr; gap: 8px; padding: 2px 0; }
+  .entry .t { color: var(--faint); text-align: right; }
+  .entry .m { color: var(--muted); overflow-wrap: anywhere; }
+  .entry.decided .m { color: var(--fg); }
+  .entry.decided .t { color: var(--decided); }
+  .entry.round .m { color: var(--warn); }
+  .entry.sync .m { color: var(--sync); }
+  .entry.fault .m { color: var(--fault); }
+
+  /* Chain */
+  #chain { grid-area: chain; padding: 10px 14px; overflow-x: auto; }
+  #chain h2 { margin-bottom: 6px; }
   .chainrow { display: flex; align-items: center; gap: 4px; margin: 3px 0; white-space: nowrap; }
-  .chainrow .who { flex: 0 0 36px; color: var(--muted); font-weight: 600; }
+  .chainrow .who { flex: 0 0 32px; font-weight: 600; }
   .block {
     display: inline-block; min-width: 42px; padding: 1px 4px; text-align: center;
     border-radius: 4px; color: #fff; font: 11px ui-monospace, Menlo, monospace;
   }
   .block.more { background: none; color: var(--muted); min-width: auto; }
-  @media (max-width: 760px) {
-    main { grid-template-columns: 1fr; grid-template-rows: auto 380px auto auto; height: auto; }
-    aside { grid-row: auto; grid-column: 1; }
+
+  @media (max-width: 1150px) {
+    main {
+      grid-template-columns: minmax(0, 1fr) 300px;
+      grid-template-rows: auto 60vh auto auto;
+      grid-template-areas:
+        "top      top"
+        "stage    log"
+        "chain    chain"
+        "settings settings";
+      height: auto;
+    }
+    #settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+    details + details { border-top: none; }
+  }
+  @media (max-width: 720px) {
+    main {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto 460px 260px auto auto;
+      grid-template-areas: "top" "stage" "log" "chain" "settings";
+    }
+    #stats { margin-left: 0; }
+    #hint, #steps { display: none; }
   }
 </style>
 </head>
 <body>
 <main>
-  <header>
+  <div id="top">
     <h1>Malachite consensus simulator</h1>
-    <span class="stats" id="stats">loading…</span>
-  </header>
-
-  <section class="panel" id="stage">
-    <canvas id="net"></canvas>
-    <div id="hint">Click a node to take it offline or bring it back.</div>
-  </section>
-
-  <aside class="panel">
-    <div>
-      <h2>Playback</h2>
-      <div class="row">
-        <button class="primary" id="play">Pause</button>
-        <button id="stepBtn" title="Advance 100 ms of simulated time">+100 ms</button>
-        <button id="reset">Reset</button>
-      </div>
-      <div class="row">
-        <label for="speed">Speed</label>
-        <input type="range" id="speed" min="0" max="100" value="42">
-        <output id="speedOut"></output>
-      </div>
+    <div class="group">
+      <button class="primary" id="play">Pause</button>
+      <button id="stepBtn" title="Advance 100 ms of simulated time">+100 ms</button>
+      <button id="reset" title="Restart the simulation from height 1">Reset</button>
     </div>
+    <div class="group">
+      <label for="speed">Speed</label>
+      <input type="range" id="speed" min="0" max="100" value="42">
+      <output id="speedOut"></output>
+    </div>
+    <div id="stats"></div>
+  </div>
 
-    <div>
-      <h2>Network</h2>
-      <div class="row">
+  <section class="panel" id="settings">
+    <details open>
+      <summary><h2>Run</h2></summary>
+      <div class="fields">
+        <label for="nodes">Validators</label>
+        <input type="number" id="nodes" class="wide" min="1" max="16" value="4">
+        <label for="seed">Seed</label>
+        <input type="number" id="seed" class="wide" min="0" value="0">
+      </div>
+      <p class="note">Changing these restarts the simulation.</p>
+    </details>
+
+    <details open>
+      <summary><h2>Network</h2></summary>
+      <div class="fields">
         <label for="drop">Drop rate</label>
         <input type="range" id="drop" min="0" max="60" value="0">
         <output id="dropOut"></output>
-      </div>
-      <div class="row">
         <label for="minDelay">Min delay</label>
         <input type="range" id="minDelay" min="1" max="2000" value="20">
         <output id="minDelayOut"></output>
-      </div>
-      <div class="row">
         <label for="maxDelay">Max delay</label>
         <input type="range" id="maxDelay" min="1" max="2000" value="200">
         <output id="maxDelayOut"></output>
       </div>
-      <div class="row">
-        <label for="nodes">Validators</label>
-        <input type="number" id="nodes" min="1" max="16" value="4">
-      </div>
-      <div class="row">
-        <label for="seed">Seed</label>
-        <input type="number" id="seed" min="0" value="0">
-      </div>
-    </div>
+    </details>
 
-    <div>
-      <h2>Consensus</h2>
-      <div class="tgrid" id="timeouts">
-        <span class="hd">Timeout (ms)</span><span class="hd">Base</span><span class="hd">+ per round</span>
-        <span>Propose</span><input type="number" min="1" step="100" id="t_propose" value="3000"><input type="number" min="0" step="100" id="t_propose_delta" value="500">
-        <span>Prevote</span><input type="number" min="1" step="100" id="t_prevote" value="1000"><input type="number" min="0" step="100" id="t_prevote_delta" value="500">
-        <span>Precommit</span><input type="number" min="1" step="100" id="t_precommit" value="1000"><input type="number" min="0" step="100" id="t_precommit_delta" value="500">
-        <span>Rebroadcast</span><input type="number" min="1" step="100" id="t_rebroadcast" value="5000"><span></span>
-        <span>Cap</span><input type="number" min="1" step="1000" id="t_max_timeout" value="60000"><span></span>
-        <span>Sync grace</span><input type="number" min="0" step="100" id="syncGrace" value="1000"><span></span>
+    <details open>
+      <summary><h2>Timeouts</h2></summary>
+      <div class="tgrid">
+        <span></span><span class="hd">Base (ms)</span><span class="hd">+ per round</span>
+        <label class="lbl" for="t_propose">Propose</label>
+        <input type="number" min="1" step="100" id="t_propose" value="3000">
+        <input type="number" min="0" step="100" id="t_propose_delta" value="500" aria-label="Propose increase per round">
+        <label class="lbl" for="t_prevote">Prevote</label>
+        <input type="number" min="1" step="100" id="t_prevote" value="1000">
+        <input type="number" min="0" step="100" id="t_prevote_delta" value="500" aria-label="Prevote increase per round">
+        <label class="lbl" for="t_precommit">Precommit</label>
+        <input type="number" min="1" step="100" id="t_precommit" value="1000">
+        <input type="number" min="0" step="100" id="t_precommit_delta" value="500" aria-label="Precommit increase per round">
+        <label class="lbl" for="t_rebroadcast">Rebroadcast</label>
+        <input type="number" min="1" step="100" id="t_rebroadcast" value="5000"><span></span>
+        <label class="lbl" for="t_max_timeout">Cap</label>
+        <input type="number" min="1" step="1000" id="t_max_timeout" value="60000"><span></span>
+        <label class="lbl" for="syncGrace">Sync grace</label>
+        <input type="number" min="0" step="100" id="syncGrace" value="1000"><span></span>
       </div>
-      <p class="note">Timeouts apply to timeouts started from now on.</p>
-    </div>
+      <p class="note">Applies to timeouts started from now on.</p>
+    </details>
+  </section>
 
-    <div>
-      <h2>Messages shown</h2>
-      <div class="legend" id="legend"></div>
+  <section class="panel" id="stage">
+    <div id="legend" aria-label="Message types shown"></div>
+    <div id="canvasWrap">
+      <canvas id="net"></canvas>
+      <div class="overlay" id="hint">Click a node to take it offline or bring it back.</div>
+      <div class="overlay" id="steps"></div>
     </div>
+  </section>
 
-    <div>
+  <section class="panel" id="logPanel">
+    <header>
       <h2>Log</h2>
-      <pre id="log"></pre>
-    </div>
-  </aside>
+      <button id="clearLog">Clear</button>
+    </header>
+    <div id="log"></div>
+  </section>
 
   <section class="panel" id="chain">
     <h2>Decided values per node (colored by proposer)</h2>

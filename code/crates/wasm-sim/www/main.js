@@ -108,7 +108,7 @@ function reset() {
   decidedHeights = new Map();
   counters = { sent: 0, dropped: 0 };
   chainKey = '';
-  $('log').textContent = '';
+  $('log').replaceChildren();
   statuses = JSON.parse(sim.statuses());
   renderChain();
 }
@@ -131,13 +131,29 @@ for (const id of ['minDelay', 'maxDelay']) {
   $(id).oninput = () => { syncOutputs(); sim.set_delay_ms(...delays()); };
 }
 
+$('clearLog').onclick = () => $('log').replaceChildren();
+
+// Message filters, as toggle chips over the canvas.
 for (const [kind, color] of Object.entries(MSG_COLORS)) {
-  const label = document.createElement('label');
-  label.innerHTML = `<input type="checkbox" checked><span class="sw" style="background:${color}"></span>${LEGEND_LABELS[kind]}`;
-  label.querySelector('input').onchange = (e) => {
-    if (e.target.checked) shown.add(kind); else shown.delete(kind);
+  const chip = document.createElement('button');
+  chip.className = 'chip';
+  chip.title = `Show or hide ${LEGEND_LABELS[kind].toLowerCase()} messages`;
+  chip.setAttribute('aria-pressed', 'true');
+  chip.innerHTML = `<span class="sw" style="background:${color}"></span>${LEGEND_LABELS[kind]}`;
+  chip.onclick = () => {
+    const on = !shown.has(kind);
+    if (on) shown.add(kind); else shown.delete(kind);
+    chip.classList.toggle('off', !on);
+    chip.setAttribute('aria-pressed', String(on));
   };
-  $('legend').appendChild(label);
+  $('legend').appendChild(chip);
+}
+
+// Legend for the node ring colors.
+for (const step of ['Propose', 'Prevote', 'Precommit', 'Commit']) {
+  const item = document.createElement('span');
+  item.innerHTML = `<i class="ring" style="border-color:${STEP_COLORS[step]}"></i>${step}`;
+  $('steps').appendChild(item);
 }
 
 canvas.addEventListener('click', (e) => {
@@ -149,7 +165,7 @@ canvas.addEventListener('click', (e) => {
     if (Math.hypot(p.x - x, p.y - y) <= radius + 4) {
       const online = !statuses[i].online;
       sim.set_online(i, online);
-      log(sim.now(), `v${i} ${online ? 'back online' : 'taken offline'}`);
+      log(sim.now(), `v${i} ${online ? 'back online' : 'taken offline'}`, online ? '' : 'fault');
       statuses = JSON.parse(sim.statuses());
     }
   });
@@ -164,10 +180,22 @@ canvas.addEventListener('mousemove', (e) => {
 
 // ----- Simulation -----
 
-function log(time, text) {
+const LOG_LIMIT = 300;
+
+// Newest entries first. `kind` is one of '', 'decided', 'round', 'sync', 'fault'.
+function log(time, text, kind = '') {
   const el = $('log');
-  el.textContent = `${(time / 1000).toFixed(2).padStart(7)}s  ${text}\n` + el.textContent;
-  if (el.textContent.length > 20000) el.textContent = el.textContent.slice(0, 15000);
+  const entry = document.createElement('div');
+  entry.className = `entry ${kind}`;
+  const t = document.createElement('span');
+  t.className = 't';
+  t.textContent = `${(time / 1000).toFixed(2)}s`;
+  const m = document.createElement('span');
+  m.className = 'm';
+  m.textContent = text;
+  entry.append(t, m);
+  el.prepend(entry);
+  while (el.childElementCount > LOG_LIMIT) el.lastElementChild.remove();
 }
 
 function handle(ev) {
@@ -177,12 +205,12 @@ function handle(ev) {
       counters.sent++;
       if (ev.dropped) counters.dropped++;
       inflight.push(ev);
-      if (ev.kind === 'SyncRequest') log(ev.time, `v${ev.from} is behind, requests height ${ev.height} from v${ev.to}`);
+      if (ev.kind === 'SyncRequest') log(ev.time, `v${ev.from} is behind, requests height ${ev.height} from v${ev.to}`, 'sync');
       break;
     case 'RoundStarted':
       proposerOf.set(ev.node, ev.proposer);
       if (ev.round > 0 && ev.node === ev.proposer) {
-        log(ev.time, `height ${ev.height} moves to round ${ev.round}, v${ev.proposer} proposes`);
+        log(ev.time, `height ${ev.height} moves to round ${ev.round}, v${ev.proposer} proposes`, 'round');
       }
       break;
     case 'TimeoutElapsed':
@@ -194,7 +222,7 @@ function handle(ev) {
       effects.push({ node: ev.node, kind: 'decided', until: realNow + 700 });
       if (!decidedHeights.has(ev.height)) {
         decidedHeights.set(ev.height, ev);
-        log(ev.time, `height ${ev.height} decided: value ${ev.value} (round ${ev.round}, proposed by v${ev.value % 100})`);
+        log(ev.time, `height ${ev.height} decided: value ${ev.value} (round ${ev.round}, proposed by v${ev.value % 100})`, 'decided');
       }
       break;
   }
@@ -213,11 +241,15 @@ function layout() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   const n = statuses.length || 1;
-  const ring = Math.min(w, h) * 0.36;
+  // Leave room for the timeout labels at the top and the hints at the bottom.
+  const top = 20;
+  const bottom = 30;
+  const cy = top + (h - top - bottom) / 2;
+  const ring = Math.min(w, h - top - bottom) * 0.38;
   const radius = Math.max(16, Math.min(38, (2 * Math.PI * ring) / n / 3.2));
   const positions = statuses.map((_, i) => {
     const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
-    return { x: w / 2 + ring * Math.cos(a), y: h / 2 + ring * Math.sin(a) };
+    return { x: w / 2 + ring * Math.cos(a), y: cy + ring * Math.sin(a) };
   });
   return { positions, radius, w, h };
 }
@@ -400,9 +432,10 @@ function renderChain() {
 function renderStats() {
   const maxHeight = statuses.reduce((m, s) => Math.max(m, s.decisions.length), 0);
   const dropPct = counters.sent ? ((100 * counters.dropped) / counters.sent).toFixed(1) : '0.0';
-  $('stats').textContent =
-    `t = ${(simTime / 1000).toFixed(2)} s · ${maxHeight} heights decided · ` +
-    `${counters.sent} messages sent, ${dropPct}% dropped`;
+  $('stats').innerHTML =
+    `<span>t = <b>${(simTime / 1000).toFixed(2)} s</b></span>` +
+    `<span><b>${maxHeight}</b> heights decided</span>` +
+    `<span><b>${counters.sent}</b> messages, <b>${dropPct}%</b> dropped</span>`;
 }
 
 function frame(now) {
