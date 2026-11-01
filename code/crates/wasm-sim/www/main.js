@@ -108,10 +108,6 @@ function once(key, mark = true) {
   return true;
 }
 
-function votesSeen(node, height, round, kind) {
-  return votes.get(`${node}|${height}|${round}|${kind}`)?.size ?? 0;
-}
-
 // Smallest number of equal-weight votes that is more than two thirds of `n`.
 const quorum = (n) => Math.floor((2 * n) / 3) + 1;
 
@@ -315,8 +311,8 @@ for (const step of ['Propose', 'Prevote', 'Precommit', 'Commit']) {
 }
 {
   const item = document.createElement('span');
-  item.textContent = 'Arcs: votes seen, tick = quorum';
-  item.dataset.tip = 'Around each validator, the inner arc fills with the prevotes it has seen in the current round, and the outer arc with the precommits. The tick marks a quorum: more than 2/3 of the validators.';
+  item.textContent = 'Dots: votes seen';
+  item.dataset.tip = 'Under each validator, one dot per validator, from v0 on the left: the top row shows the prevotes it has seen in the current round, the bottom row the precommits. Filled for a vote for a value, hollow for nil, faint until the vote arrives. A row brightens once it holds a quorum: votes from more than 2/3 of the validators.';
   $('steps').prepend(item);
 }
 
@@ -497,7 +493,7 @@ function layout() {
   const n = statuses.length || 1;
   // Leave room for the timeout labels at the top and the hints at the bottom.
   const top = 20;
-  const bottom = 52;
+  const bottom = 58;
   const cy = top + (h - top - bottom) / 2;
   const ring = Math.min(w, h - top - bottom) * 0.38;
   const radius = Math.max(14, Math.min(38, ring * 0.22, (2 * Math.PI * ring) / n / 3.2));
@@ -735,12 +731,10 @@ function draw() {
     const waiting = waitLeft > 0;
     const target = s.online && !waiting ? STEP_COLORS[s.step] || muted : muted;
 
-    // Ease the ring color and the vote arcs, so that changes read as motion.
-    const look = (nodeLook[i] ??= { rgb: hexToRgb(target), prevotes: 0, precommits: 0, alpha: 1 });
+    // Ease the color, so that step changes read as motion.
+    const look = (nodeLook[i] ??= { rgb: hexToRgb(target), alpha: 1 });
     look.rgb = look.rgb.map((c, k) => ease(c, hexToRgb(target)[k], 0.18));
     const round = Math.max(0, s.round);
-    look.prevotes = ease(look.prevotes, votesSeen(i, s.height, round, 'Prevote') / n, 0.25);
-    look.precommits = ease(look.precommits, votesSeen(i, s.height, round, 'Precommit') / n, 0.25);
     look.alpha = ease(look.alpha, s.online ? 1 : 0.45, 0.12);
     const color = rgb(look.rgb);
 
@@ -771,34 +765,39 @@ function draw() {
 
     ctx.globalAlpha = look.alpha;
 
-    // Vote arcs: prevotes (inner) and precommits (outer) seen for the current round,
-    // starting at the top and filling clockwise, with a tick at the quorum.
+    // Vote pips: one per validator, left to right, for the prevotes (top row) and
+    // precommits (bottom row) seen in the current round. Filled for a value, hollow
+    // for nil, faint until the vote arrives. A row brightens once it is a quorum.
     if (s.online) {
-      const arcs = [[radius + 7, look.prevotes, STEP_COLORS.Prevote], [radius + 12, look.precommits, STEP_COLORS.Precommit]];
-      for (const [r, frac, c] of arcs) {
-        const a0 = -Math.PI / 2;
-        ctx.lineCap = 'round';
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = border;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, 2 * Math.PI);
-        ctx.stroke();
-        if (frac > 0.01) {
-          ctx.strokeStyle = c;
-          ctx.globalAlpha = look.alpha * (frac >= q / n - 1e-6 ? 1 : 0.65);
+      const gap = Math.min(9, (2 * radius + 16) / n);
+      const r = Math.max(1, Math.min(3, gap * 0.34));
+      const x0 = x - (gap * (n - 1)) / 2;
+      const rows = [['Prevote', y + radius + 9], ['Precommit', y + radius + 18]];
+      for (const [kind, py] of rows) {
+        const seen = votes.get(`${i}|${s.height}|${round}|${kind}`) ?? new Map();
+        const full = seen.size >= q;
+        for (let v = 0; v < n; v++) {
+          const px = x0 + v * gap;
           ctx.beginPath();
-          ctx.arc(x, y, r, a0, a0 + 2 * Math.PI * Math.min(1, frac));
-          ctx.stroke();
+          ctx.arc(px, py, r, 0, 2 * Math.PI);
+          if (!seen.has(v)) {
+            ctx.fillStyle = border;
+            ctx.fill();
+            continue;
+          }
+          ctx.globalAlpha = look.alpha * (full ? 1 : 0.6);
+          if (seen.get(v) === null) {
+            ctx.strokeStyle = STEP_COLORS[kind];
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(px, py, r - 0.6, 0, 2 * Math.PI);
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = STEP_COLORS[kind];
+            ctx.fill();
+          }
           ctx.globalAlpha = look.alpha;
         }
-        const aq = a0 + (2 * Math.PI * q) / n;
-        ctx.strokeStyle = muted;
-        ctx.lineWidth = 1.5;
-        ctx.lineCap = 'butt';
-        ctx.beginPath();
-        ctx.moveTo(x + (r - 3) * Math.cos(aq), y + (r - 3) * Math.sin(aq));
-        ctx.lineTo(x + (r + 3) * Math.cos(aq), y + (r + 3) * Math.sin(aq));
-        ctx.stroke();
       }
     }
 
@@ -840,7 +839,7 @@ function draw() {
     ctx.fillStyle = color;
     let label = s.online ? s.step : 'offline';
     if (waiting) label = `waiting ${(waitLeft / 1000).toFixed(1)} s`;
-    ctx.fillText(label, x, y + radius + 26);
+    ctx.fillText(label, x, y + radius + 32);
 
     // Highlighted from the chain or the log
     if (hoverNodes.has(i)) {
