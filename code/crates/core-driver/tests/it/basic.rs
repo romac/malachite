@@ -1467,6 +1467,7 @@ fn run_steps_failing(
 
 #[test]
 fn driver_checks_the_vote_returned_by_the_builder() {
+    use crate::utils::{new_round_input, prevote_nil_output, timeout_propose_input};
     use malachitebft_test::middleware::Middleware;
 
     #[derive(Debug)]
