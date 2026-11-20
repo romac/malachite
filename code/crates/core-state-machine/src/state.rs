@@ -9,7 +9,7 @@ use crate::transition::Transition;
 #[cfg(feature = "debug")]
 use crate::traces::*;
 
-use malachitebft_core_types::{Context, Height, Round, TimeoutKind};
+use malachitebft_core_types::{Height, Proposal, Round, TimeoutKind};
 
 /// A value and its associated round
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -96,12 +96,12 @@ pub enum Step {
 
 /// The state of the consensus state machine
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct State<Ctx>
+pub struct State<P>
 where
-    Ctx: Context,
+    P: Proposal,
 {
     /// The height of the consensus
-    pub height: Ctx::Height,
+    pub height: P::Height,
 
     /// The round we are at within a height
     pub round: Round,
@@ -110,15 +110,15 @@ where
     pub step: Step,
 
     /// The value we are locked on, ie. we have received a polka for before we precommitted
-    pub locked: Option<RoundValue<Ctx::Value>>,
+    pub locked: Option<RoundValue<P::Value>>,
 
     /// The value for which we saw a polka
-    pub valid: Option<RoundValue<Ctx::Value>>,
+    pub valid: Option<RoundValue<P::Value>>,
 
     /// The value we have decided on, None if no decision has been made yet.
     /// The decision round is the round of the proposal that we decided on.
     /// It may be different, lower or higher, than the state machine round.
-    pub decision: Option<RoundValue<Ctx::Value>>,
+    pub decision: Option<RoundValue<P::Value>>,
 
     /// Timeouts already scheduled for the current round.
     /// Intended to avoid scheduling the same timeout multiple times.
@@ -128,15 +128,15 @@ where
     /// Buffer with traces of tendermint algorithm lines,
     #[cfg(feature = "debug")]
     #[derive_where(skip)]
-    pub traces: alloc::vec::Vec<Trace<Ctx>>,
+    pub traces: alloc::vec::Vec<Trace<P::Height>>,
 }
 
-impl<Ctx> State<Ctx>
+impl<P> State<P>
 where
-    Ctx: Context,
+    P: Proposal,
 {
     /// Create a new `State` instance at the given height and round.
-    pub fn new(height: Ctx::Height, round: Round) -> Self {
+    pub fn new(height: P::Height, round: Round) -> Self {
         Self {
             height,
             round,
@@ -176,7 +176,7 @@ where
     }
 
     /// Set the locked value.
-    pub fn set_locked(self, value: Ctx::Value) -> Self {
+    pub fn set_locked(self, value: P::Value) -> Self {
         Self {
             locked: Some(RoundValue::new(value, self.round)),
             ..self
@@ -184,7 +184,7 @@ where
     }
 
     /// Set the valid value.
-    pub fn set_valid(self, value: Ctx::Value) -> Self {
+    pub fn set_valid(self, value: P::Value) -> Self {
         Self {
             valid: Some(RoundValue::new(value, self.round)),
             ..self
@@ -192,7 +192,7 @@ where
     }
 
     /// Set the value we have decided on.
-    pub fn set_decision(self, proposal_round: Round, value: Ctx::Value) -> Self {
+    pub fn set_decision(self, proposal_round: Round, value: P::Value) -> Self {
         Self {
             decision: Some(RoundValue::new(value, proposal_round)),
             ..self
@@ -200,8 +200,8 @@ where
     }
 
     /// Apply the given input to the current state, triggering a transition.
-    pub fn apply(self, ctx: &Ctx, data: &Info<Ctx>, input: Input<Ctx>) -> Transition<Ctx> {
-        crate::state_machine::apply(ctx, self, data, input)
+    pub fn apply(self, data: &Info, input: Input<P>) -> Transition<P> {
+        crate::state_machine::apply(self, data, input)
     }
 
     /// Return the traces logged during execution.
@@ -212,16 +212,16 @@ where
 
     /// Return the traces logged during execution.
     #[cfg(feature = "debug")]
-    pub fn get_traces(&self) -> &[Trace<Ctx>] {
+    pub fn get_traces(&self) -> &[Trace<P::Height>] {
         &self.traces
     }
 }
 
-impl<Ctx> Default for State<Ctx>
+impl<P> Default for State<P>
 where
-    Ctx: Context,
+    P: Proposal,
 {
     fn default() -> Self {
-        Self::new(Ctx::Height::ZERO, Round::Nil)
+        Self::new(P::Height::ZERO, Round::Nil)
     }
 }

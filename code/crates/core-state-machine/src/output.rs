@@ -2,67 +2,97 @@
 
 use derive_where::derive_where;
 
-use malachitebft_core_types::{Context, NilOrVal, Round, Timeout, TimeoutKind, ValueId};
+use malachitebft_core_types::{NilOrVal, Proposal, Round, Timeout, TimeoutKind, Value, VoteType};
+
+/// Fields of a vote requested by the round transition.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CastVote<H, I> {
+    /// Height at which to vote.
+    pub height: H,
+    /// Round at which to vote.
+    pub round: Round,
+    /// Prevote or precommit.
+    pub kind: VoteType,
+    /// Value identifier, or nil.
+    pub value: NilOrVal<I>,
+}
+
+/// Fields of a proposal requested by the round transition.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProposeValue<H, V> {
+    /// Height of the proposal.
+    pub height: H,
+    /// Round of the proposal.
+    pub round: Round,
+    /// Value to propose.
+    pub value: V,
+    /// Round of the proof of lock, or nil for a fresh proposal.
+    pub pol_round: Round,
+}
 
 /// Output of the round state machine.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub enum Output<Ctx>
+pub enum Output<P>
 where
-    Ctx: Context,
+    P: Proposal,
 {
     /// Move to the new round.
     NewRound(Round),
 
     /// Broadcast the proposal.
-    Proposal(Ctx::Proposal),
+    Proposal(ProposeValue<P::Height, P::Value>),
 
     /// Broadcast the vote.
-    Vote(Ctx::Vote),
+    Vote(CastVote<P::Height, <P::Value as Value>::Id>),
 
     /// Schedule the timeout.
     ScheduleTimeout(Timeout),
 
     /// Ask for a value at the given height, round and to schedule a timeout.
     /// The timeout tells the proposal builder how long it has to build a value.
-    GetValueAndScheduleTimeout(Ctx::Height, Round, Timeout),
+    GetValueAndScheduleTimeout(P::Height, Round, Timeout),
 
     /// Decide the value.
-    Decision(Round, Ctx::Proposal),
+    Decision(Round, P),
 }
 
-impl<Ctx: Context> Output<Ctx> {
+impl<P: Proposal> Output<P> {
     /// Build a `Proposal` output.
-    pub fn proposal(
-        ctx: &Ctx,
-        height: Ctx::Height,
-        round: Round,
-        value: Ctx::Value,
-        pol_round: Round,
-        address: Ctx::Address,
-    ) -> Self {
-        Output::Proposal(ctx.new_proposal(height, round, value, pol_round, address))
+    pub fn proposal(height: P::Height, round: Round, value: P::Value, pol_round: Round) -> Self {
+        Output::Proposal(ProposeValue {
+            height,
+            round,
+            value,
+            pol_round,
+        })
     }
 
     /// Build a `Vote` output for a prevote.
     pub fn prevote(
-        ctx: &Ctx,
-        height: Ctx::Height,
+        height: P::Height,
         round: Round,
-        value_id: NilOrVal<ValueId<Ctx>>,
-        address: Ctx::Address,
+        value_id: NilOrVal<<P::Value as Value>::Id>,
     ) -> Self {
-        Output::Vote(ctx.new_prevote(height, round, value_id, address))
+        Output::Vote(CastVote {
+            height,
+            round,
+            value: value_id,
+            kind: VoteType::Prevote,
+        })
     }
 
     /// Build a `Vote` output for a precommit.
     pub fn precommit(
-        ctx: &Ctx,
-        height: Ctx::Height,
+        height: P::Height,
         round: Round,
-        value_id: NilOrVal<ValueId<Ctx>>,
-        address: Ctx::Address,
+        value_id: NilOrVal<<P::Value as Value>::Id>,
     ) -> Self {
-        Output::Vote(ctx.new_precommit(height, round, value_id, address))
+        Output::Vote(CastVote {
+            height,
+            round,
+            value: value_id,
+            kind: VoteType::Precommit,
+        })
     }
 
     /// Build a `ScheduleTimeout` output.
@@ -72,7 +102,7 @@ impl<Ctx: Context> Output<Ctx> {
 
     /// Build a `GetValue` output.
     pub fn get_value_and_schedule_timeout(
-        height: Ctx::Height,
+        height: P::Height,
         round: Round,
         step: TimeoutKind,
     ) -> Self {
@@ -80,7 +110,7 @@ impl<Ctx: Context> Output<Ctx> {
     }
 
     /// Build a `Decision` output.
-    pub fn decision(round: Round, proposal: Ctx::Proposal) -> Self {
+    pub fn decision(round: Round, proposal: P) -> Self {
         Output::Decision(round, proposal)
     }
 }

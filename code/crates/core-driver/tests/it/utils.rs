@@ -201,7 +201,7 @@ pub fn timeout_precommit_input(round: Round) -> Input<TestContext> {
     Input::TimeoutElapsed(Timeout::precommit(round))
 }
 
-pub fn propose_state(round: Round) -> State<TestContext> {
+pub fn propose_state(round: Round) -> State<Proposal> {
     State {
         height: Height::new(1),
         round,
@@ -214,7 +214,7 @@ pub fn propose_state_with_proposal_and_valid(
     state_round: Round,
     valid_round: Round,
     proposal: Proposal,
-) -> State<TestContext> {
+) -> State<Proposal> {
     State {
         height: Height::new(1),
         round: state_round,
@@ -230,7 +230,7 @@ pub fn propose_state_with_proposal_and_valid(
 pub fn propose_state_with_proposal_and_locked_and_valid(
     round: Round,
     proposal: Proposal,
-) -> State<TestContext> {
+) -> State<Proposal> {
     State {
         height: Height::new(1),
         round,
@@ -247,7 +247,7 @@ pub fn propose_state_with_proposal_and_locked_and_valid(
     }
 }
 
-pub fn prevote_state(round: Round) -> State<TestContext> {
+pub fn prevote_state(round: Round) -> State<Proposal> {
     State {
         height: Height::new(1),
         round,
@@ -260,7 +260,7 @@ pub fn prevote_state_with_proposal_and_valid(
     state_round: Round,
     valid_round: Round,
     proposal: Proposal,
-) -> State<TestContext> {
+) -> State<Proposal> {
     State {
         height: Height::new(1),
         round: state_round,
@@ -276,7 +276,7 @@ pub fn prevote_state_with_proposal_and_valid(
 pub fn prevote_state_with_proposal_and_locked_and_valid(
     round: Round,
     proposal: Proposal,
-) -> State<TestContext> {
+) -> State<Proposal> {
     State {
         height: Height::new(1),
         round,
@@ -296,7 +296,7 @@ pub fn prevote_state_with_proposal_and_locked_and_valid(
 pub fn prevote_state_with_matching_proposal_and_locked_and_valid(
     round: Round,
     proposal: Proposal,
-) -> State<TestContext> {
+) -> State<Proposal> {
     State {
         height: Height::new(1),
         round,
@@ -316,7 +316,7 @@ pub fn prevote_state_with_matching_proposal_and_locked_and_valid(
 pub fn precommit_state_with_proposal_and_locked_and_valid(
     round: Round,
     proposal: Proposal,
-) -> State<TestContext> {
+) -> State<Proposal> {
     State {
         height: Height::new(1),
         round,
@@ -333,7 +333,7 @@ pub fn precommit_state_with_proposal_and_locked_and_valid(
     }
 }
 
-pub fn precommit_state(round: Round) -> State<TestContext> {
+pub fn precommit_state(round: Round) -> State<Proposal> {
     State {
         height: Height::new(1),
         round,
@@ -346,7 +346,7 @@ pub fn precommit_state_with_proposal_and_valid(
     state_round: Round,
     valid_round: Round,
     proposal: Proposal,
-) -> State<TestContext> {
+) -> State<Proposal> {
     State {
         height: Height::new(1),
         round: state_round,
@@ -359,11 +359,11 @@ pub fn precommit_state_with_proposal_and_valid(
     }
 }
 
-pub fn new_round(round: Round) -> State<TestContext> {
+pub fn new_round(round: Round) -> State<Proposal> {
     State::new(Height::new(1), round)
 }
 
-pub fn new_round_with_proposal_and_valid(round: Round, proposal: Proposal) -> State<TestContext> {
+pub fn new_round_with_proposal_and_valid(round: Round, proposal: Proposal) -> State<Proposal> {
     State {
         height: Height::new(1),
         round,
@@ -379,7 +379,7 @@ pub fn new_round_with_proposal_and_valid(round: Round, proposal: Proposal) -> St
 pub fn new_round_with_proposal_and_locked_and_valid(
     round: Round,
     proposal: Proposal,
-) -> State<TestContext> {
+) -> State<Proposal> {
     State {
         height: Height::new(1),
         round,
@@ -400,7 +400,7 @@ pub fn decided_state(
     consensus_round: Round,
     proposal_round: Round,
     value: Value,
-) -> State<TestContext> {
+) -> State<Proposal> {
     State {
         height: Height::new(1),
         round: consensus_round,
@@ -416,7 +416,7 @@ pub fn decided_state(
 pub fn decided_state_with_proposal_and_locked_and_valid(
     round: Round,
     proposal: Proposal,
-) -> State<TestContext> {
+) -> State<Proposal> {
     State {
         height: Height::new(1),
         round,

@@ -2,22 +2,22 @@ use derive_where::derive_where;
 use displaydoc::Display;
 use time::OffsetDateTime;
 
-use malachitebft_core_types::{Context, Round};
+use malachitebft_core_types::{Height, Round};
 
 use super::Line;
 
 #[derive_where(Clone, Debug, Eq, PartialEq)]
 #[derive(Display)]
 #[displaydoc("[{time}] height: {height}, round: {round}, line: {line}")]
-pub struct Trace<Ctx: Context> {
+pub struct Trace<H: Height> {
     pub time: OffsetDateTime,
-    pub height: Ctx::Height,
+    pub height: H,
     pub round: Round,
     pub line: Line,
 }
 
-impl<Ctx: Context> Trace<Ctx> {
-    pub fn new(height: Ctx::Height, round: Round, line: Line) -> Self {
+impl<H: Height> Trace<H> {
+    pub fn new(height: H, round: Round, line: Line) -> Self {
         Self {
             time: OffsetDateTime::now_utc(),
             height,

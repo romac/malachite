@@ -32,8 +32,8 @@ use alloc::vec::Vec;
 use malachitebft_core_state_machine::input::Input as RoundInput;
 use malachitebft_core_state_machine::state::Step;
 use malachitebft_core_types::{
-    Context, ExtendedCommitCertificate, NilOrVal, PolkaCertificate, Proposal, Round, SignedMessage,
-    SignedProposal, Validity, Value, ValueId, Vote, VoteType,
+    ConsensusTypes, ExtendedCommitCertificate, MessageBuilder, NilOrVal, PolkaCertificate,
+    Proposal, Round, SignedMessage, SignedProposal, Validity, Value, ValueId, Vote, VoteType,
 };
 use malachitebft_core_votekeeper::keeper::Output as VKOutput;
 use malachitebft_core_votekeeper::keeper::VoteKeeper;
@@ -42,9 +42,10 @@ use malachitebft_core_votekeeper::Threshold;
 use crate::proposal_keeper::StoreProposalResult;
 use crate::Driver;
 
-impl<Ctx> Driver<Ctx>
+impl<Ctx, B> Driver<Ctx, B>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
+    B: MessageBuilder<Ctx>,
 {
     /// Process a received proposal relative to the current state of the round, considering
     /// its validity and performing various checks to determine the appropriate round input action.
@@ -85,7 +86,7 @@ where
         &mut self,
         proposal: Ctx::Proposal,
         validity: Validity,
-    ) -> Option<RoundInput<Ctx>> {
+    ) -> Option<RoundInput<Ctx::Proposal>> {
         // Should only receive proposals for our height.
         assert_eq!(self.height(), proposal.height());
 
@@ -191,7 +192,7 @@ where
         &mut self,
         signed_proposal: SignedProposal<Ctx>,
         validity: Validity,
-    ) -> Option<RoundInput<Ctx>> {
+    ) -> Option<RoundInput<Ctx::Proposal>> {
         // Should only receive proposals for our height.
         assert_eq!(self.height(), signed_proposal.height());
 
@@ -221,7 +222,7 @@ where
     fn apply_commit_certificate_votes(&mut self, certificate: &ExtendedCommitCertificate<Ctx>) {
         let this_round = self.round_state.round;
         for commit_signature in &certificate.commit_signatures {
-            let vote = self.ctx.new_precommit(
+            let vote = self.builder.new_precommit(
                 certificate.height,
                 certificate.round,
                 NilOrVal::Val(certificate.value_id.clone()),
@@ -247,7 +248,7 @@ where
     fn apply_polka_certificate_votes(&mut self, certificate: &PolkaCertificate<Ctx>) {
         let this_round = self.round_state.round;
         for polka_signature in &certificate.polka_signatures {
-            let vote = self.ctx.new_prevote(
+            let vote = self.builder.new_prevote(
                 certificate.height,
                 certificate.round,
                 NilOrVal::Val(certificate.value_id.clone()),
@@ -261,7 +262,7 @@ where
     pub(crate) fn store_and_multiplex_commit_certificate(
         &mut self,
         certificate: ExtendedCommitCertificate<Ctx>,
-    ) -> RoundInput<Ctx> {
+    ) -> RoundInput<Ctx::Proposal> {
         // Should only receive proposals for our height.
         assert_eq!(self.height(), certificate.height);
 
@@ -303,7 +304,7 @@ where
     pub(crate) fn store_and_multiplex_polka_certificate(
         &mut self,
         certificate: PolkaCertificate<Ctx>,
-    ) -> Option<(Round, RoundInput<Ctx>)> {
+    ) -> Option<(Round, RoundInput<Ctx::Proposal>)> {
         // Should only receive proposals for our height.
         assert_eq!(self.height(), certificate.height);
 
@@ -370,7 +371,7 @@ where
         &mut self,
         new_threshold: VKOutput<ValueId<Ctx>>,
         threshold_round: Round,
-    ) -> (Round, RoundInput<Ctx>) {
+    ) -> (Round, RoundInput<Ctx::Proposal>) {
         match new_threshold {
             VKOutput::PolkaAny => (threshold_round, RoundInput::PolkaAny),
             VKOutput::PolkaNil => (threshold_round, RoundInput::PolkaNil),
@@ -436,7 +437,10 @@ where
     }
 
     /// After a step change, check for inputs to be sent to the round state machine.
-    pub(crate) fn multiplex_step_change(&mut self, round: Round) -> Vec<(Round, RoundInput<Ctx>)> {
+    pub(crate) fn multiplex_step_change(
+        &mut self,
+        round: Round,
+    ) -> Vec<(Round, RoundInput<Ctx::Proposal>)> {
         let mut result = Vec::new();
 
         let proposals = self.proposals_and_validities_for_round(round).to_vec();
@@ -504,7 +508,7 @@ fn find_non_value_threshold<Ctx>(
     round: Round,
 ) -> Vec<VKOutput<ValueId<Ctx>>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     let mut outputs = Vec::new();
     if has_polka_nil(votekeeper, round) {
@@ -525,7 +529,7 @@ fn has_polka_value<Ctx>(
     proposal: &Ctx::Proposal,
 ) -> bool
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     votekeeper.is_threshold_met(
         &round,
@@ -537,7 +541,7 @@ where
 /// Check if we have a polka for nil
 fn has_polka_nil<Ctx>(votekeeper: &VoteKeeper<Ctx>, round: Round) -> bool
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     votekeeper.is_threshold_met(&round, VoteType::Prevote, Threshold::Nil)
 }
@@ -545,7 +549,7 @@ where
 /// Check if we have a polka for any
 fn has_polka_any<Ctx>(votekeeper: &VoteKeeper<Ctx>, round: Round) -> bool
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     votekeeper.is_threshold_met(&round, VoteType::Prevote, Threshold::Any)
 }
@@ -553,7 +557,7 @@ where
 /// Check if we have a quorum of precommits for any
 fn has_precommit_any<Ctx>(votekeeper: &VoteKeeper<Ctx>, round: Round) -> bool
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     votekeeper.is_threshold_met(&round, VoteType::Precommit, Threshold::Any)
 }

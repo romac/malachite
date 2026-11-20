@@ -51,7 +51,7 @@ struct TestStep {
     input: Input<TestContext>,
     expected_outputs: Vec<Output<TestContext>>,
     expected_round: Round,
-    new_state: State<TestContext>,
+    new_state: State<Proposal>,
 }
 
 // Arrive at L49 with commits from current rounds, no locked value, no valid value

@@ -48,7 +48,7 @@ pub struct ProposalKeeperState<Ctx: Context> {
 #[derive_where(Debug, Clone)]
 pub struct StateDump<Ctx: Context> {
     /// The state of the core state machine
-    pub consensus: State<Ctx>,
+    pub consensus: State<Ctx::Proposal>,
 
     /// The address of the node
     pub address: Ctx::Address,

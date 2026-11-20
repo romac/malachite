@@ -8,10 +8,10 @@ use malachitebft_core_state_machine::output::Output as RoundOutput;
 use malachitebft_core_state_machine::state::{RoundValue, State as RoundState, Step};
 use malachitebft_core_state_machine::state_machine::Info;
 use malachitebft_core_types::{
-    Context, EnterRoundCertificate, ExtendedCommitCertificate, NilOrVal, PolkaCertificate,
-    PolkaSignature, Proposal, Round, RoundCertificate, RoundCertificateType, RoundSignature,
-    SignedProposal, SignedVote, Threshold, Timeout, TimeoutKind, Validator, ValidatorSet, Validity,
-    Value, ValueId, Vote, VoteType,
+    ConsensusTypes, EnterRoundCertificate, ExtendedCommitCertificate, MessageBuilder, NilOrVal,
+    PolkaCertificate, PolkaSignature, Proposal, Round, RoundCertificate, RoundCertificateType,
+    RoundSignature, SignedProposal, SignedVote, Threshold, Timeout, TimeoutKind, Validator,
+    ValidatorSet, Validity, Value, ValueId, Vote, VoteType,
 };
 use malachitebft_core_votekeeper::keeper::Output as VKOutput;
 use malachitebft_core_votekeeper::keeper::VoteKeeper;
@@ -23,13 +23,12 @@ use crate::Error;
 use crate::ThresholdParams;
 
 /// Driver for the state machine of the Malachite consensus engine at a given height.
-pub struct Driver<Ctx>
+pub struct Driver<Ctx, B = Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
-    /// The context of the consensus engine,
-    /// for defining the concrete data types and signature scheme.
-    pub(crate) ctx: Ctx,
+    /// Builds application messages from the round state machine outputs.
+    pub(crate) builder: B,
 
     /// The address of the node.
     address: Ctx::Address,
@@ -58,11 +57,11 @@ where
     pub(crate) polka_certificates: Vec<PolkaCertificate<Ctx>>,
 
     /// The state of the round state machine.
-    pub(crate) round_state: RoundState<Ctx>,
+    pub(crate) round_state: RoundState<Ctx::Proposal>,
 
     /// The pending inputs to be processed next, if any.
     /// The first element of the tuple is the round at which that input has been emitted.
-    pending_inputs: Vec<(Round, RoundInput<Ctx>)>,
+    pending_inputs: Vec<(Round, RoundInput<Ctx::Proposal>)>,
 
     last_prevote: Option<Ctx::Vote>,
     last_precommit: Option<Ctx::Vote>,
@@ -71,16 +70,17 @@ where
     pub round_certificate: Option<EnterRoundCertificate<Ctx>>,
 }
 
-impl<Ctx> Driver<Ctx>
+impl<Ctx, B> Driver<Ctx, B>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
+    B: MessageBuilder<Ctx>,
 {
     /// Create a new `Driver` instance for the given height.
     ///
     /// Called when consensus is started and initialized with the first height.
     /// Re-initialization for subsequent heights is done using `move_to_height()`.
     pub fn new(
-        ctx: Ctx,
+        builder: B,
         height: Ctx::Height,
         validator_set: Ctx::ValidatorSet,
         address: Ctx::Address,
@@ -91,7 +91,7 @@ where
         let round_state = RoundState::new(height, Round::Nil);
 
         Self {
-            ctx,
+            builder,
             address,
             threshold_params,
             validator_set,
@@ -205,7 +205,7 @@ where
     }
 
     /// Return the state for the current round.
-    pub fn round_state(&self) -> &RoundState<Ctx> {
+    pub fn round_state(&self) -> &RoundState<Ctx::Proposal> {
         &self.round_state
     }
 
@@ -302,7 +302,7 @@ where
     }
 
     /// Return all pending inputs, as pairs (round, round input).
-    pub fn pending_inputs(&self) -> &[(Round, RoundInput<Ctx>)] {
+    pub fn pending_inputs(&self) -> &[(Round, RoundInput<Ctx::Proposal>)] {
         self.pending_inputs.as_ref()
     }
 
@@ -394,13 +394,39 @@ where
     }
 
     /// Convert the output of the round state machine to the output type of the driver.
-    fn lift_output(&mut self, round_output: RoundOutput<Ctx>, outputs: &mut Vec<Output<Ctx>>) {
+    fn lift_output(
+        &mut self,
+        round_output: RoundOutput<Ctx::Proposal>,
+        outputs: &mut Vec<Output<Ctx>>,
+    ) {
         match round_output {
             RoundOutput::NewRound(round) => outputs.push(Output::NewRound(self.height(), round)),
 
-            RoundOutput::Proposal(proposal) => outputs.push(Output::Propose(proposal)),
+            RoundOutput::Proposal(proposal) => {
+                let proposal = self.builder.new_proposal(
+                    proposal.height,
+                    proposal.round,
+                    proposal.value,
+                    proposal.pol_round,
+                    self.address.clone(),
+                );
+                outputs.push(Output::Propose(proposal));
+            }
 
-            RoundOutput::Vote(vote) => self.lift_vote_output(vote, outputs),
+            RoundOutput::Vote(vote) => {
+                let address = self.address.clone();
+                let vote = match vote.kind {
+                    VoteType::Prevote => {
+                        self.builder
+                            .new_prevote(vote.height, vote.round, vote.value, address)
+                    }
+                    VoteType::Precommit => {
+                        self.builder
+                            .new_precommit(vote.height, vote.round, vote.value, address)
+                    }
+                };
+                self.lift_vote_output(vote, outputs);
+            }
 
             RoundOutput::ScheduleTimeout(timeout) => outputs.push(Output::ScheduleTimeout(timeout)),
 
@@ -450,7 +476,10 @@ where
     }
 
     /// Apply the given input to the state machine, returning the output, if any.
-    fn apply(&mut self, input: Input<Ctx>) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+    fn apply(
+        &mut self,
+        input: Input<Ctx>,
+    ) -> Result<Option<RoundOutput<Ctx::Proposal>>, Error<Ctx>> {
         match input {
             Input::CommitCertificate(certificate) => self.apply_commit_certificate(certificate),
             Input::PolkaCertificate(certificate) => self.apply_polka_certificate(certificate),
@@ -468,7 +497,7 @@ where
     fn apply_commit_certificate(
         &mut self,
         certificate: ExtendedCommitCertificate<Ctx>,
-    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+    ) -> Result<Option<RoundOutput<Ctx::Proposal>>, Error<Ctx>> {
         if self.height() != certificate.height {
             return Err(Error::InvalidCertificateHeight {
                 certificate_height: certificate.height,
@@ -493,7 +522,7 @@ where
     fn apply_polka_certificate(
         &mut self,
         certificate: PolkaCertificate<Ctx>,
-    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+    ) -> Result<Option<RoundOutput<Ctx::Proposal>>, Error<Ctx>> {
         if self.height() != certificate.height {
             return Err(Error::InvalidCertificateHeight {
                 certificate_height: certificate.height,
@@ -518,7 +547,7 @@ where
         height: Ctx::Height,
         round: Round,
         proposer: Ctx::Address,
-    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+    ) -> Result<Option<RoundOutput<Ctx::Proposal>>, Error<Ctx>> {
         if self.height() == height {
             // If it's a new round for same height, just reset the round, keep the valid and locked values
             self.round_state.round = round;
@@ -536,7 +565,7 @@ where
         &mut self,
         round: Round,
         value: Ctx::Value,
-    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+    ) -> Result<Option<RoundOutput<Ctx::Proposal>>, Error<Ctx>> {
         self.apply_input(round, RoundInput::ProposeValue(value))
     }
 
@@ -544,7 +573,7 @@ where
         &mut self,
         proposal: SignedProposal<Ctx>,
         validity: Validity,
-    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+    ) -> Result<Option<RoundOutput<Ctx::Proposal>>, Error<Ctx>> {
         if self.height() != proposal.height() {
             return Err(Error::InvalidProposalHeight {
                 proposal_height: proposal.height(),
@@ -563,7 +592,7 @@ where
     fn apply_vote(
         &mut self,
         vote: SignedVote<Ctx>,
-    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+    ) -> Result<Option<RoundOutput<Ctx::Proposal>>, Error<Ctx>> {
         if self.height() != vote.height() {
             return Err(Error::InvalidVoteHeight {
                 vote_height: vote.height(),
@@ -781,7 +810,10 @@ where
         }
     }
 
-    fn apply_timeout(&mut self, timeout: Timeout) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+    fn apply_timeout(
+        &mut self,
+        timeout: Timeout,
+    ) -> Result<Option<RoundOutput<Ctx::Proposal>>, Error<Ctx>> {
         let input = match timeout.kind {
             TimeoutKind::Propose => RoundInput::TimeoutPropose,
             TimeoutKind::Prevote => RoundInput::TimeoutPrevote,
@@ -820,7 +852,7 @@ where
     fn apply_decide_on_sync(
         &mut self,
         proposal: Ctx::Proposal,
-    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+    ) -> Result<Option<RoundOutput<Ctx::Proposal>>, Error<Ctx>> {
         let round = proposal.round();
         let value_id = proposal.value().id();
 
@@ -849,17 +881,16 @@ where
     fn apply_input(
         &mut self,
         input_round: Round,
-        input: RoundInput<Ctx>,
-    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+        input: RoundInput<Ctx::Proposal>,
+    ) -> Result<Option<RoundOutput<Ctx::Proposal>>, Error<Ctx>> {
         // All fallible work MUST happen before `with_round_state` — that
         // helper's closure cannot `?` out, so nothing between the take and
         // the replace can leave `round_state` at its default.
-        let proposer_address = self.get_proposer()?.address().clone();
+        let info = Info::new(input_round, self.get_proposer()?.address() == &self.address);
 
-        let (previous_step, output) = self.with_round_state(|ctx, address, round_state| {
+        let (previous_step, output) = self.with_round_state(|round_state| {
             let previous_step = round_state.step;
-            let info = Info::new(input_round, address, &proposer_address);
-            let transition = round_state.apply(ctx, &info, input);
+            let transition = round_state.apply(&info, input);
             (transition.next_state, (previous_step, transition.output))
         });
 
@@ -882,24 +913,24 @@ where
     /// return is safe.
     fn with_round_state<T>(
         &mut self,
-        f: impl FnOnce(&Ctx, &Ctx::Address, RoundState<Ctx>) -> (RoundState<Ctx>, T),
+        f: impl FnOnce(RoundState<Ctx::Proposal>) -> (RoundState<Ctx::Proposal>, T),
     ) -> T {
         let taken = core::mem::take(&mut self.round_state);
-        let (new_state, result) = f(&self.ctx, &self.address, taken);
+        let (new_state, result) = f(taken);
         self.round_state = new_state;
         result
     }
 
     /// Return the traces logged during execution.
     #[cfg(feature = "debug")]
-    pub fn get_traces(&self) -> &[malachitebft_core_state_machine::traces::Trace<Ctx>] {
+    pub fn get_traces(&self) -> &[malachitebft_core_state_machine::traces::Trace<Ctx::Height>] {
         self.round_state.get_traces()
     }
 }
 
-impl<Ctx> fmt::Debug for Driver<Ctx>
+impl<Ctx, B> fmt::Debug for Driver<Ctx, B>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

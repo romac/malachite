@@ -2,13 +2,13 @@
 
 use derive_where::derive_where;
 
-use malachitebft_core_types::{Context, Round};
+use malachitebft_core_types::{Proposal, Round};
 
 /// Input to the round state machine.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub enum Input<Ctx>
+pub enum Input<P>
 where
-    Ctx: Context,
+    P: Proposal,
 {
     /// No input
     NoInput,
@@ -19,11 +19,11 @@ where
 
     /// Propose a value.
     /// L14
-    ProposeValue(Ctx::Value),
+    ProposeValue(P::Value),
 
     /// Receive a proposal.
     /// L22 + L23 (valid)
-    Proposal(Ctx::Proposal),
+    Proposal(P),
 
     /// Receive an invalid proposal.
     /// L26 + L32 (invalid)
@@ -31,11 +31,11 @@ where
 
     /// Received a proposal and a polka value from a previous round.
     /// L28 + L29 (valid)
-    ProposalAndPolkaPrevious(Ctx::Proposal),
+    ProposalAndPolkaPrevious(P),
 
     /// Received a proposal and a polka value from a previous round.
     /// L28 + L29 (invalid)
-    InvalidProposalAndPolkaPrevious(Ctx::Proposal),
+    InvalidProposalAndPolkaPrevious(P),
 
     /// Receive +2/3 prevotes for anything.
     /// L34
@@ -47,7 +47,7 @@ where
 
     /// Receive +2/3 prevotes for a value in current round.
     /// L36
-    ProposalAndPolkaCurrent(Ctx::Proposal),
+    ProposalAndPolkaCurrent(P),
 
     /// Receive +2/3 precommits for anything.
     /// L47
@@ -55,7 +55,7 @@ where
 
     /// Receive +2/3 precommits for a value.
     /// L49
-    ProposalAndPrecommitValue(Ctx::Proposal),
+    ProposalAndPrecommitValue(P),
 
     /// Receive +1/3 messages from a higher round. OneCorrectProcessInHigherRound.
     /// L55

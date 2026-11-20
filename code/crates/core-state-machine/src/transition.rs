@@ -1,30 +1,30 @@
 //! A transition taken by the state machine after processing an input.
 
-use malachitebft_core_types::Context;
+use malachitebft_core_types::Proposal;
 
 use crate::output::Output;
 use crate::state::State;
 
 /// A transition taken by the state machine after processing an input.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Transition<Ctx>
+pub struct Transition<P>
 where
-    Ctx: Context,
+    P: Proposal,
 {
     /// The next state to transition to.
-    pub next_state: State<Ctx>,
+    pub next_state: State<P>,
     /// The output to emit.
-    pub output: Option<Output<Ctx>>,
+    pub output: Option<Output<P>>,
     /// Whether the transition is valid or not.
     pub valid: bool,
 }
 
-impl<Ctx> Transition<Ctx>
+impl<P> Transition<P>
 where
-    Ctx: Context,
+    P: Proposal,
 {
     /// Build a new valid transition to the given next state.
-    pub fn to(next_state: State<Ctx>) -> Self {
+    pub fn to(next_state: State<P>) -> Self {
         Self {
             next_state,
             output: None,
@@ -33,7 +33,7 @@ where
     }
 
     /// Build a new invalid transition to the given next state.
-    pub fn invalid(next_state: State<Ctx>) -> Self {
+    pub fn invalid(next_state: State<P>) -> Self {
         Self {
             next_state,
             output: None,
@@ -42,7 +42,7 @@ where
     }
 
     /// Set the output of the transition.
-    pub fn with_output(mut self, output: Output<Ctx>) -> Self {
+    pub fn with_output(mut self, output: Output<P>) -> Self {
         self.output = Some(output);
         self
     }

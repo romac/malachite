@@ -36,8 +36,8 @@ impl ConsensusRunner {
 }
 
 impl ItfRunner for ConsensusRunner {
-    type ActualState = RoundState<TestContext>;
-    type Result = Option<Output<TestContext>>;
+    type ActualState = RoundState<malachitebft_test::Proposal>;
+    type Result = Option<Output<malachitebft_test::Proposal>>;
     type ExpectedState = State;
     type Error = ();
 
@@ -72,7 +72,6 @@ impl ItfRunner for ConsensusRunner {
         println!("🔸 step: model input={:?}", expected.input);
         println!("🔸 step: model state={:?}", expected.state);
 
-        let address = self.address_map.get(&expected.state.process).unwrap();
         let some_other_node = self.address_map.get(OTHER_PROCESS).unwrap();
 
         let (data, input) = match &expected.input {
@@ -81,26 +80,23 @@ impl ItfRunner for ConsensusRunner {
             ModelInput::NewRound(round) => {
                 let round = Round::from(*round);
 
-                (
-                    Info::new(round, address, some_other_node),
-                    Input::NewRound(round),
-                )
+                (Info::new(round, false), Input::NewRound(round))
             }
 
             ModelInput::NewRoundProposer(round) => {
                 let round = Round::from(*round);
-                (Info::new_proposer(round, address), Input::NewRound(round))
+                (Info::new(round, true), Input::NewRound(round))
             }
 
             ModelInput::ProposeValue(non_nil_value) => {
                 let value = value_from_string(non_nil_value).unwrap();
-                let data = Info::new_proposer(actual.round, address);
+                let data = Info::new(actual.round, true);
                 (data, Input::ProposeValue(value))
             }
 
             ModelInput::Proposal(round, value) => {
                 let input_round = Round::from(*round);
-                let data = Info::new(input_round, address, some_other_node);
+                let data = Info::new(input_round, false);
                 let proposal = self.ctx.new_proposal(
                     actual.height,
                     input_round,
@@ -112,7 +108,7 @@ impl ItfRunner for ConsensusRunner {
             }
 
             ModelInput::ProposalAndPolkaPreviousAndValid(value, valid_round) => {
-                let data = Info::new(actual.round, address, some_other_node);
+                let data = Info::new(actual.round, false);
                 let proposal = self.ctx.new_proposal(
                     actual.height,
                     actual.round,
@@ -124,7 +120,7 @@ impl ItfRunner for ConsensusRunner {
             }
 
             ModelInput::ProposalAndPolkaAndValid(value) => {
-                let data = Info::new(actual.round, address, some_other_node);
+                let data = Info::new(actual.round, false);
                 let proposal = self.ctx.new_proposal(
                     actual.height,
                     actual.round,
@@ -136,7 +132,7 @@ impl ItfRunner for ConsensusRunner {
             }
 
             ModelInput::ProposalAndPolkaAndInvalid(value) => {
-                let data = Info::new(actual.round, address, some_other_node);
+                let data = Info::new(actual.round, false);
                 let proposal = self.ctx.new_proposal(
                     actual.height,
                     actual.round,
@@ -149,7 +145,7 @@ impl ItfRunner for ConsensusRunner {
 
             ModelInput::ProposalAndCommitAndValid(round, value) => {
                 let input_round = Round::from(*round);
-                let data = Info::new(input_round, address, some_other_node);
+                let data = Info::new(input_round, false);
                 let proposal = self.ctx.new_proposal(
                     actual.height,
                     input_round,
@@ -160,52 +156,35 @@ impl ItfRunner for ConsensusRunner {
                 (data, Input::ProposalAndPrecommitValue(proposal))
             }
 
-            ModelInput::ProposalInvalid => (
-                Info::new(actual.round, address, some_other_node),
-                Input::InvalidProposal,
-            ),
+            ModelInput::ProposalInvalid => (Info::new(actual.round, false), Input::InvalidProposal),
 
-            ModelInput::PolkaNil => (
-                Info::new(actual.round, address, some_other_node),
-                Input::PolkaNil,
-            ),
+            ModelInput::PolkaNil => (Info::new(actual.round, false), Input::PolkaNil),
 
-            ModelInput::PolkaAny => (
-                Info::new(actual.round, address, some_other_node),
-                Input::PolkaAny,
-            ),
+            ModelInput::PolkaAny => (Info::new(actual.round, false), Input::PolkaAny),
 
-            ModelInput::PrecommitAny => (
-                Info::new(actual.round, address, some_other_node),
-                Input::PrecommitAny,
-            ),
+            ModelInput::PrecommitAny => (Info::new(actual.round, false), Input::PrecommitAny),
 
             ModelInput::RoundSkip(round) => {
                 let input_round = Round::from(*round);
-                (
-                    Info::new(input_round, address, some_other_node),
-                    Input::SkipRound(input_round),
-                )
+                (Info::new(input_round, false), Input::SkipRound(input_round))
             }
 
-            ModelInput::TimeoutPropose(_height, round) => (
-                Info::new(Round::from(*round), address, some_other_node),
-                Input::TimeoutPropose,
-            ),
+            ModelInput::TimeoutPropose(_height, round) => {
+                (Info::new(Round::from(*round), false), Input::TimeoutPropose)
+            }
 
-            ModelInput::TimeoutPrevote(_height, round) => (
-                Info::new(Round::from(*round), address, some_other_node),
-                Input::TimeoutPrevote,
-            ),
+            ModelInput::TimeoutPrevote(_height, round) => {
+                (Info::new(Round::from(*round), false), Input::TimeoutPrevote)
+            }
 
             ModelInput::TimeoutPrecommit(_height, round) => (
-                Info::new(Round::from(*round), address, some_other_node),
+                Info::new(Round::from(*round), false),
                 Input::TimeoutPrecommit,
             ),
         };
 
         let round_state = core::mem::take(actual);
-        let transition = round_state.apply(&self.ctx, &data, input);
+        let transition = round_state.apply(&data, input);
 
         println!("🔹 transition: next state={:?}", transition.next_state);
         println!("🔹 transition: output={:?}", transition.output);
@@ -238,7 +217,6 @@ impl ItfRunner for ConsensusRunner {
                 }
 
                 (Output::Proposal(proposal), ModelOutput::Proposal(expected_proposal)) => {
-                    // TODO: check expected_proposal.src_address
                     assert_eq!(proposal.height.as_u64() as i64, expected_proposal.height);
                     assert_eq!(proposal.round.as_i64(), expected_proposal.round);
                     assert_eq!(proposal.pol_round.as_i64(), expected_proposal.valid_round);
@@ -250,13 +228,8 @@ impl ItfRunner for ConsensusRunner {
                 }
 
                 (Output::Vote(vote), ModelOutput::Vote(expected_vote)) => {
-                    let expected_src_address = self
-                        .address_map
-                        .get(expected_vote.src_address.as_str())
-                        .unwrap();
-
-                    assert_eq!(vote.validator_address, *expected_src_address);
-                    assert_eq!(vote.typ, expected_vote.vote_type.to_common());
+                    assert_eq!(expected.state.process, expected_vote.src_address);
+                    assert_eq!(vote.kind, expected_vote.vote_type.to_common());
                     assert_eq!(vote.height.as_u64() as i64, expected_vote.height);
                     assert_eq!(vote.round.as_i64(), expected_vote.round);
 

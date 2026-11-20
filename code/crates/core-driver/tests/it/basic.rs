@@ -19,7 +19,7 @@ pub struct TestStep {
     input: Option<Input<TestContext>>,
     expected_outputs: Vec<Output<TestContext>>,
     expected_round: Round,
-    new_state: State<TestContext>,
+    new_state: State<Proposal>,
 }
 
 fn new_signed_proposal(
