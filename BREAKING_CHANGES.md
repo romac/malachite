@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Consensus application types
+
+Split an existing `impl Context for App` into three implementations on the same application type. The engine accepts the resulting `App` through a blanket `Context` implementation.
+
+| Implementation | Members to move |
+| --- | --- |
+| `ConsensusTypes for App` | The eleven associated types. The bounds connect the vote, proposal and validator representations to the same height, value, address and signing scheme. |
+| `MessageBuilder<App> for App` | `new_proposal`, `new_prevote` and `new_precommit`. |
+| `ProposerSelector<App> for App` | `select_proposer`. The returned validator borrows from the input set. |
+
+- Implement `Vote`, `Proposal`, `Validator` and `ValidatorSet` directly on the domain types and declare their associated types there. Remove the context parameter from `ProposalPart` and `Timeouts`. The [test application](code/crates/test/src/context.rs) provides a working example.
+- Replace `SignedMessage<App, M>` with `SignedMessage<M, Signature<App>>`. Use `SignedMessage::new(message, signature)` for type inference. The application aliases `SignedVote<App>`, `SignedProposal<App>` and `SignedExtension<App>` remain available as field and return types.
+- Direct users of the round machine now call `State::<P>::apply` with `Info::new(input_round, is_proposer)` and an `Input<P>`, where `P: Proposal`. Its outbound vote and proposal variants carry the fields chosen by the transition. The driver constructs the concrete messages.
+- A separate builder can be passed to `Driver<App, B>` when `B: MessageBuilder<App>`. Direct users of the keepers use `VoteKeeper<Vote, ValidatorSet>` and `ProposalKeeper<Proposal, Signature>`. A standalone tally takes an address and value ID type and accepts `add(&address, &value, weight)`.
+
 ## 0.8.1
 
 *October 6th, 2026*
