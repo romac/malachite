@@ -16,7 +16,7 @@ where
     type Height: Height;
 
     /// The type of proposal part
-    type ProposalPart: ProposalPart<Self>;
+    type ProposalPart: ProposalPart;
 
     /// The interface provided by the proposal type.
     type Proposal: Proposal<Self>;
@@ -28,7 +28,7 @@ where
     type ValidatorSet: ValidatorSet<Self>;
 
     /// The interface provided by the timeouts type.
-    type Timeouts: Timeouts<Self>;
+    type Timeouts: Timeouts;
 
     /// The `Value` type denotes the value `v` carried by the `Proposal`
     /// consensus message that is gossiped to other nodes by the proposer.

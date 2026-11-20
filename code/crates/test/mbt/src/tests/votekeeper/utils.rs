@@ -5,7 +5,7 @@ use rand::{CryptoRng, RngCore};
 use malachitebft_core_types::NilOrVal;
 use malachitebft_core_votekeeper as core;
 use malachitebft_test::{
-    Address, PrivateKey, PublicKey, TestContext, Validator, ValidatorSet, ValueId,
+    Address, PrivateKey, PublicKey, Validator, ValidatorSet, ValueId,
 };
 
 use crate::types::Value;
@@ -49,7 +49,7 @@ pub fn value_from_model(value: &Value) -> NilOrVal<ValueId> {
 
 pub fn check_votes(
     expected: &crate::votekeeper::VoteCount,
-    actual: &core::count::VoteCount<TestContext>,
+    actual: &core::count::VoteCount<Address, ValueId>,
     address_map: &HashMap<String, Address>,
 ) {
     // expected has `total_weight` which is not present in actual

@@ -6,7 +6,7 @@ use malachitebft_core_types::Round;
 use malachitebft_proto::{self as proto, Error as ProtoError, Protobuf};
 
 use crate::codec::proto::{decode_signature, encode_signature};
-use crate::{Address, Height, TestContext};
+use crate::{Address, Height};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProposalData {
@@ -96,7 +96,7 @@ impl ProposalFin {
     }
 }
 
-impl malachitebft_core_types::ProposalPart<TestContext> for ProposalPart {
+impl malachitebft_core_types::ProposalPart for ProposalPart {
     fn is_first(&self) -> bool {
         matches!(self, Self::Init(_))
     }

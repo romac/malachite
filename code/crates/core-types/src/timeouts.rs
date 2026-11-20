@@ -1,7 +1,7 @@
 use core::fmt::Debug;
 use core::time::Duration;
 
-use crate::{Context, Timeout, TimeoutKind};
+use crate::{Timeout, TimeoutKind};
 
 /// Timeouts control how long the consensus engine waits for various steps
 /// in the consensus protocol.
@@ -9,10 +9,9 @@ use crate::{Context, Timeout, TimeoutKind};
 /// The standard implementation is [`LinearTimeouts`], which should be used
 /// unless you have specific requirements for custom timeout behavior. See
 /// [`LinearTimeouts::default`] for the default values.
-pub trait Timeouts<Ctx>
+pub trait Timeouts
 where
     Self: Clone + Debug + Eq + Send + Sync + Copy + Default,
-    Ctx: Context,
 {
     /// Get the duration for a given timeout.
     ///
@@ -66,7 +65,7 @@ pub struct LinearTimeouts {
     pub max_timeout: Duration,
 }
 
-impl<Ctx: Context> Timeouts<Ctx> for LinearTimeouts {
+impl Timeouts for LinearTimeouts {
     fn duration_for(&self, timeout: Timeout) -> Duration {
         self.duration_for(timeout)
     }

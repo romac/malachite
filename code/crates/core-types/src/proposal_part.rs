@@ -1,12 +1,9 @@
 use core::fmt::Debug;
 
-use crate::Context;
-
 /// Defines the requirements for a proposal part type.
-pub trait ProposalPart<Ctx>
+pub trait ProposalPart
 where
     Self: Clone + Debug + Eq + Send + Sync + 'static,
-    Ctx: Context,
 {
     /// Is this the first proposal part?
     fn is_first(&self) -> bool;
