@@ -37,38 +37,38 @@ mod vote_extension;
 pub mod utils;
 
 /// Type alias to make it easier to refer the `ValueId` type.
-pub type ValueId<Ctx> = <<Ctx as Context>::Value as Value>::Id;
+pub type ValueId<Ctx> = <<Ctx as ConsensusTypes>::Value as Value>::Id;
 
 /// Type alias to make it easier to refer the `PublicKey` type.
-pub type PublicKey<Ctx> = <<Ctx as Context>::SigningScheme as SigningScheme>::PublicKey;
+pub type PublicKey<Ctx> = <<Ctx as ConsensusTypes>::SigningScheme as SigningScheme>::PublicKey;
 
 /// Type alias to make it easier to refer the `PrivateKey` type.
-pub type PrivateKey<Ctx> = <<Ctx as Context>::SigningScheme as SigningScheme>::PrivateKey;
+pub type PrivateKey<Ctx> = <<Ctx as ConsensusTypes>::SigningScheme as SigningScheme>::PrivateKey;
 
 /// Type alias to make it easier to refer the `Signature` type.
-pub type Signature<Ctx> = <<Ctx as Context>::SigningScheme as SigningScheme>::Signature;
+pub type Signature<Ctx> = <<Ctx as ConsensusTypes>::SigningScheme as SigningScheme>::Signature;
 
 /// A signed vote.
-pub type SignedVote<Ctx> = SignedMessage<Ctx, <Ctx as Context>::Vote>;
+pub type SignedVote<Ctx> = SignedMessage<<Ctx as ConsensusTypes>::Vote, Signature<Ctx>>;
 
 /// A double signed vote (e.g., conflicting votes).
 pub type DoubleVote<Ctx> = (SignedVote<Ctx>, SignedVote<Ctx>);
 
 /// A signed proposal
-pub type SignedProposal<Ctx> = SignedMessage<Ctx, <Ctx as Context>::Proposal>;
+pub type SignedProposal<Ctx> = SignedMessage<<Ctx as ConsensusTypes>::Proposal, Signature<Ctx>>;
 
 /// Double signed proposal (e.g., conflicting proposals).
 pub type DoubleProposal<Ctx> = (SignedProposal<Ctx>, SignedProposal<Ctx>);
 
 /// A signed vote extension
-pub type SignedExtension<Ctx> = SignedMessage<Ctx, <Ctx as Context>::Extension>;
+pub type SignedExtension<Ctx> = SignedMessage<<Ctx as ConsensusTypes>::Extension, Signature<Ctx>>;
 
 pub use certificate::{
     CertificateError, CommitCertificate, CommitSignature, EnterRoundCertificate,
     ExtendedCommitCertificate, ExtendedCommitSignature, PolkaCertificate, PolkaSignature,
     RoundCertificate, RoundCertificateType, RoundSignature, ValueResponse,
 };
-pub use context::Context;
+pub use context::{ConsensusTypes, Context, MessageBuilder, ProposerSelector};
 pub use error::BoxError;
 pub use height::Height;
 pub use height_params::HeightParams;

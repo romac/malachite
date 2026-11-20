@@ -4,9 +4,7 @@ use rand::{CryptoRng, RngCore};
 
 use malachitebft_core_types::NilOrVal;
 use malachitebft_core_votekeeper as core;
-use malachitebft_test::{
-    Address, PrivateKey, PublicKey, Validator, ValidatorSet, ValueId,
-};
+use malachitebft_test::{Address, PrivateKey, PublicKey, Validator, ValidatorSet, ValueId};
 
 use crate::types::Value;
 

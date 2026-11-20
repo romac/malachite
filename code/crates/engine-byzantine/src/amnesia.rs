@@ -20,12 +20,12 @@ use std::sync::Mutex;
 use rand::rngs::StdRng;
 use tracing::{debug, warn};
 
-use malachitebft_core_types::{Context, Round, ValueId};
+use malachitebft_core_types::{ConsensusTypes, Context, Round, ValueId};
 
 use crate::config::{make_rng, Trigger};
 
 /// The cached "last proposed value" slot: `(height, round, value_id)`.
-type CachedProposal<Ctx> = (<Ctx as Context>::Height, Round, ValueId<Ctx>);
+type CachedProposal<Ctx> = (<Ctx as ConsensusTypes>::Height, Round, ValueId<Ctx>);
 
 /// Context-generic Byzantine amnesia state machine.
 ///

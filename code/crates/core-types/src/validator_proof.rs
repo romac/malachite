@@ -3,7 +3,7 @@
 use alloc::vec::Vec;
 use derive_where::derive_where;
 
-use crate::{Context, PublicKey, Signature, SigningScheme};
+use crate::{ConsensusTypes, PublicKey, Signature, SigningScheme};
 
 /// Separator bytes for Proof-of-Validator signatures.
 /// The 3-byte ASCII string "PoV" (0x50 0x6F 0x56).
@@ -19,7 +19,7 @@ const POV_SEPARATOR: &[u8] = b"PoV";
 /// signature verification without needing to look up the public key from the
 /// validator set.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct ValidatorProof<Ctx: Context> {
+pub struct ValidatorProof<Ctx: ConsensusTypes> {
     /// The validator's consensus public key (raw bytes)
     pub public_key: Vec<u8>,
     /// The libp2p peer ID bytes
@@ -28,7 +28,7 @@ pub struct ValidatorProof<Ctx: Context> {
     pub signature: Signature<Ctx>,
 }
 
-impl<Ctx: Context> ValidatorProof<Ctx> {
+impl<Ctx: ConsensusTypes> ValidatorProof<Ctx> {
     /// Creates a new `ValidatorProof`.
     pub fn new(public_key: Vec<u8>, peer_id: Vec<u8>, signature: Signature<Ctx>) -> Self {
         Self {

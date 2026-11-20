@@ -4,10 +4,11 @@ use alloc::vec::Vec;
 
 use async_trait::async_trait;
 use malachitebft_core_types::{
-    CertificateError, CommitCertificate, CommitSignature, Context, ExtendedCommitCertificate,
-    ExtendedCommitSignature, NilOrVal, PolkaCertificate, PolkaSignature, Round, RoundCertificate,
-    RoundCertificateType, RoundSignature, Signature, SignedExtension, ThresholdParams, Validator,
-    ValidatorSet, ValueId, VoteExtensionPolicy, VoteExtensionScope, VoteType, VotingPower,
+    CertificateError, CommitCertificate, CommitSignature, ConsensusTypes,
+    ExtendedCommitCertificate, ExtendedCommitSignature, MessageBuilder, NilOrVal, PolkaCertificate,
+    PolkaSignature, Round, RoundCertificate, RoundCertificateType, RoundSignature, Signature,
+    SignedExtension, ThresholdParams, Validator, ValidatorSet, ValueId, VoteExtensionPolicy,
+    VoteExtensionScope, VoteType, VotingPower,
 };
 
 use crate::Verifier;
@@ -20,7 +21,7 @@ use crate::Verifier;
 #[async_trait]
 pub trait VerifierExt<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes + MessageBuilder<Ctx>,
 {
     /// Verify a commit signature in a commit certificate against the public key of its validator.
     ///
@@ -135,7 +136,7 @@ where
 
 trait CommitSignatureEntry<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     fn address(&self) -> &Ctx::Address;
 
@@ -146,7 +147,7 @@ where
 
 impl<Ctx> CommitSignatureEntry<Ctx> for CommitSignature<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     fn address(&self) -> &Ctx::Address {
         &self.address
@@ -163,7 +164,7 @@ where
 
 impl<Ctx> CommitSignatureEntry<Ctx> for ExtendedCommitSignature<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     fn address(&self) -> &Ctx::Address {
         &self.address
@@ -180,7 +181,7 @@ where
 
 struct CommitSignatureVerification<'a, Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     ctx: &'a Ctx,
     height: Ctx::Height,
@@ -191,7 +192,7 @@ where
 
 struct CommitVerification<'a, Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     signature: CommitSignatureVerification<'a, Ctx>,
     validator_set: &'a Ctx::ValidatorSet,
@@ -205,7 +206,7 @@ async fn verify_commit_signature_entry<Ctx, P, S>(
     validator: &Ctx::Validator,
 ) -> Result<VotingPower, CertificateError<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes + MessageBuilder<Ctx>,
     P: Verifier<Ctx>,
     S: CommitSignatureEntry<Ctx> + Sync,
 {
@@ -275,7 +276,7 @@ async fn verify_commit_signature_entries<Ctx, P, S>(
     signatures: &[S],
 ) -> Result<(), CertificateError<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes + MessageBuilder<Ctx>,
     P: Verifier<Ctx>,
     S: CommitSignatureEntry<Ctx> + Sync,
 {
@@ -328,7 +329,7 @@ where
 #[async_trait]
 impl<Ctx, P> VerifierExt<Ctx> for P
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes + MessageBuilder<Ctx>,
     P: Verifier<Ctx>,
 {
     async fn verify_commit_signature(

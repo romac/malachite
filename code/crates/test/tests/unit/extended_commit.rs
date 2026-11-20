@@ -4,8 +4,8 @@ use futures::executor::block_on;
 use arc_malachitebft_test::utils::validators::make_validators_seeded;
 use arc_malachitebft_test::{Address, Ed25519Signer, Height, TestContext, ValidatorSet, ValueId};
 use malachitebft_core_types::{
-    CertificateError, Context, ExtendedCommitCertificate, ExtendedCommitSignature, NilOrVal, Round,
-    SignedVote, ThresholdParams, Vote, VoteExtensionPolicy, VoteExtensionScope,
+    CertificateError, ExtendedCommitCertificate, ExtendedCommitSignature, MessageBuilder, NilOrVal,
+    Round, SignedVote, ThresholdParams, Vote, VoteExtensionPolicy, VoteExtensionScope,
 };
 use malachitebft_signing::{Signer, VerifierExt};
 
@@ -501,7 +501,7 @@ fn projection_to_commit_certificate_drops_extensions_but_keeps_signatures() {
         signed_precommit_with_extension(&ctx, &s2, a2, Some(Bytes::from_static(b"ext-2"))),
     ];
 
-    let cert = ExtendedCommitCertificate::from_votes(
+    let cert = ExtendedCommitCertificate::<TestContext>::from_votes(
         Height::new(HEIGHT),
         Round::new(0),
         ValueId::new(VALUE_ID),
@@ -535,7 +535,7 @@ fn vote_extensions_view_carries_only_signed_extensions() {
         signed_precommit_with_extension(&ctx, &s2, a2, Some(Bytes::from_static(b"ext-2"))),
     ];
 
-    let cert = ExtendedCommitCertificate::from_votes(
+    let cert = ExtendedCommitCertificate::<TestContext>::from_votes(
         Height::new(HEIGHT),
         Round::new(0),
         ValueId::new(VALUE_ID),
@@ -663,7 +663,7 @@ fn constructors_canonicalize_signature_order_by_address() {
         signed_precommit_with_extension(&ctx, &s1, a1, Some(Bytes::from_static(b"ext-1"))),
     ];
 
-    let from_votes = ExtendedCommitCertificate::from_votes(
+    let from_votes = ExtendedCommitCertificate::<TestContext>::from_votes(
         Height::new(HEIGHT),
         Round::new(0),
         ValueId::new(VALUE_ID),

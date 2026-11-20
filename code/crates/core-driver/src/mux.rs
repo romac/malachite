@@ -32,8 +32,8 @@ use alloc::vec::Vec;
 use malachitebft_core_state_machine::input::Input as RoundInput;
 use malachitebft_core_state_machine::state::Step;
 use malachitebft_core_types::{
-    Context, ExtendedCommitCertificate, NilOrVal, PolkaCertificate, Proposal, Round,
-    SignedProposal, SignedVote, Validity, Value, ValueId, Vote, VoteType,
+    Context, ExtendedCommitCertificate, NilOrVal, PolkaCertificate, Proposal, Round, SignedMessage,
+    SignedProposal, Validity, Value, ValueId, Vote, VoteType,
 };
 use malachitebft_core_votekeeper::keeper::Output as VKOutput;
 use malachitebft_core_votekeeper::keeper::VoteKeeper;
@@ -232,7 +232,7 @@ where
             } else {
                 vote
             };
-            let signed_vote = SignedVote::new(vote, commit_signature.signature.clone());
+            let signed_vote = SignedMessage::new(vote, commit_signature.signature.clone());
             let _ = self.vote_keeper.apply_vote(signed_vote, this_round);
         }
     }
@@ -253,7 +253,7 @@ where
                 NilOrVal::Val(certificate.value_id.clone()),
                 polka_signature.address.clone(),
             );
-            let signed_vote = SignedVote::new(vote, polka_signature.signature.clone());
+            let signed_vote = SignedMessage::new(vote, polka_signature.signature.clone());
             let _ = self.vote_keeper.apply_vote(signed_vote, this_round);
         }
     }

@@ -6,7 +6,7 @@ use derive_where::derive_where;
 use tracing::{debug, error, info, warn};
 
 use malachitebft_core_types::utils::height::{DisplayRange, HeightRangeExt};
-use malachitebft_core_types::{Context, Height};
+use malachitebft_core_types::{ConsensusTypes, Height};
 
 use crate::co::Co;
 use crate::scoring::SyncResult;
@@ -17,7 +17,7 @@ use crate::{
 };
 
 #[derive_where(Debug)]
-pub enum Input<Ctx: Context> {
+pub enum Input<Ctx: ConsensusTypes> {
     /// Periodical event triggering the broadcast of a status update
     SendStatusUpdate,
 
@@ -89,7 +89,7 @@ pub async fn handle<Ctx>(
     input: Input<Ctx>,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     match input {
         Input::SendStatusUpdate => on_send_status_update(co, state, metrics).await,
@@ -156,7 +156,7 @@ async fn on_value_response<Ctx>(
     response: ValueResponse<Ctx>,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     let Some(entry) = state.pending_requests.get(&request_id) else {
         warn!(%request_id, %peer_id, "Received response for unknown request ID");
@@ -213,7 +213,7 @@ where
 /// ie. heights are contiguous starting from `start_height`.
 fn validate_value_response_heights<Ctx>(response: &ValueResponse<Ctx>) -> bool
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     response.values.iter().enumerate().all(|(i, value)| {
         let expected = response.start_height.increment_by(i as u64);
@@ -227,7 +227,7 @@ pub async fn on_send_status_update<Ctx>(
     _metrics: &Metrics,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     // A tip of zero cannot cover any request range, so peers that stored it
     // would drop this node in `filter_peers_by_range`. Wait until consensus
@@ -267,7 +267,7 @@ async fn maybe_request_values<Ctx>(
     metrics: &Metrics,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     if state.started
         && state
@@ -288,7 +288,7 @@ pub async fn on_status<Ctx>(
     status: Status<Ctx>,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     let peer_id = status.peer_id;
     let peer_height = status.tip_height;
@@ -327,7 +327,7 @@ pub async fn on_started_height<Ctx>(
     start_type: HeightStartType,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     debug!(%height, is_restart = %start_type.is_restart(), "Consensus started new height");
 
@@ -375,7 +375,7 @@ pub async fn on_decided<Ctx>(
     height: Ctx::Height,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     debug!(%height, "Consensus decided on new value");
 
@@ -413,7 +413,7 @@ pub async fn on_value_request<Ctx>(
     request: ValueRequest<Ctx>,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     debug!("Received request for values");
 
@@ -522,7 +522,7 @@ where
 
 fn release_inbound_peer_slot<Ctx>(state: &mut State<Ctx>, request_id: &InboundRequestId)
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     let Some(peer_id) = state.inbound_request_peer.remove(request_id) else {
         return;
@@ -545,7 +545,7 @@ fn validate_request_range<Ctx>(
     history_min_height: Ctx::Height,
 ) -> bool
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     if range.is_empty() {
         debug!("Received request for empty range of values");
@@ -573,7 +573,7 @@ fn clamp_request_range<Ctx>(
     batch_size: usize,
 ) -> RangeInclusive<Ctx::Height>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     debug_assert!(!range.is_empty(), "Cannot clamp an empty range");
     debug_assert!(
@@ -604,7 +604,7 @@ pub async fn on_valid_value_response<Ctx>(
     response: ValueResponse<Ctx>,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     let start = response.start_height;
     let values_count = response.values.len();
@@ -716,7 +716,7 @@ pub async fn on_invalid_value_response<Ctx>(
     peer_id: PeerId,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     debug!(%request_id, %peer_id, "Received invalid response");
 
@@ -738,7 +738,7 @@ pub async fn on_got_decided_values<Ctx>(
     mut values: Vec<RawDecidedValue<Ctx>>,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     release_inbound_peer_slot(state, &request_id);
 
@@ -829,7 +829,7 @@ pub async fn on_sync_request_timed_out<Ctx>(
     request: Request<Ctx>,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     match request {
         Request::ValueRequest(value_request) => {
@@ -866,7 +866,7 @@ pub async fn on_sync_request_failed<Ctx>(
     reason: OutboundFailureReason,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     match request {
         Request::ValueRequest(value_request) => {
@@ -891,7 +891,7 @@ async fn on_peer_disconnected<Ctx>(
     peer_id: PeerId,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     // Inbound in-flight tracking is not cleared here: outstanding admission
     // permits are released one request at a time via
@@ -941,7 +941,7 @@ async fn on_peer_fault<Ctx>(
     request_id: OutboundRequestId,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     error!(%peer_id, %height, "Synced value fault is attributable to peer, penalizing");
 
@@ -974,7 +974,7 @@ async fn on_local_transient_error<Ctx>(
     height: Ctx::Height,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     warn!(
         %height,
@@ -997,7 +997,7 @@ async fn request_values<Ctx>(
     metrics: &Metrics,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     let max_parallel_requests = state.max_parallel_requests();
 
@@ -1067,11 +1067,11 @@ async fn send_and_track_request_to_peer<Ctx>(
     state: &mut State<Ctx>,
     metrics: &Metrics,
     peer: PeerId,
-    range: RangeInclusive<<Ctx as Context>::Height>,
+    range: RangeInclusive<<Ctx as ConsensusTypes>::Height>,
     excluded_peers: BTreeSet<PeerId>,
 ) -> Result<bool, Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     // Capture the range start before `range` is moved into `send_request_to_peer`,
     // so we can roll sync_height back if the send is skipped.
@@ -1137,7 +1137,7 @@ async fn send_request_to_peer<Ctx>(
     peer: PeerId,
 ) -> Result<Option<(OutboundRequestId, RangeInclusive<Ctx::Height>)>, Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     if range.is_empty() {
         debug!(%peer, "Range is empty, skipping request");
@@ -1192,7 +1192,7 @@ async fn re_request_values_from_any_peer_except<Ctx>(
     except_peer_id: Option<PeerId>,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     info!(%request_id, except_peer_id = ?except_peer_id, "Re-requesting values from peer");
 
@@ -1267,7 +1267,7 @@ async fn cancel_value_requests<Ctx>(
     request_ids: impl IntoIterator<Item = OutboundRequestId>,
 ) -> Result<(), Error<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     for request_id in request_ids {
         metrics.value_request_abandoned(&request_id);
@@ -1291,7 +1291,7 @@ where
 /// candidate outside every pending range, so a skip there means an unsafe
 /// value was passed in. The tip-floor bump (candidate ≤ tip_height) is the
 /// routine post-decide/rollback path and is not logged.
-fn set_sync_height<Ctx: Context>(state: &mut State<Ctx>, candidate: Ctx::Height) {
+fn set_sync_height<Ctx: ConsensusTypes>(state: &mut State<Ctx>, candidate: Ctx::Height) {
     let floor = max(state.tip_height.increment(), candidate);
     let new_sync_height = find_next_uncovered_height::<Ctx>(floor, &state.pending_requests);
 
@@ -1326,7 +1326,7 @@ fn find_next_uncovered_range_from<Ctx>(
     pending_requests: &BTreeMap<OutboundRequestId, PendingRequestEntry<Ctx::Height>>,
 ) -> RangeInclusive<Ctx::Height>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     // If initial_height is inside a pending request, recover by advancing past it.
     // This should not happen if all sync_height writes go through set_sync_height.
@@ -1370,7 +1370,7 @@ fn find_next_uncovered_height<Ctx>(
     pending_requests: &BTreeMap<OutboundRequestId, PendingRequestEntry<Ctx::Height>>,
 ) -> Ctx::Height
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     let mut next_height = starting_height;
     while let Some(entry) = pending_requests

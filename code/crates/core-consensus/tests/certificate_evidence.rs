@@ -12,7 +12,8 @@ use arc_malachitebft_core_consensus::{
     process, ConsensusMsg, Effect, Error, Input, Params, Resumable, Resume, State, ValuePayload,
 };
 use malachitebft_core_types::{
-    NilOrVal, PolkaCertificate, Round, RoundCertificate, RoundCertificateType, SignedVote, Timeout,
+    NilOrVal, PolkaCertificate, Round, RoundCertificate, RoundCertificateType, SignedMessage,
+    SignedVote, Timeout,
 };
 // Brings the `Vote` trait accessors into scope without colliding with the concrete `Vote` type
 // re-exported from `malachitebft_test`.
@@ -48,7 +49,7 @@ fn handle_effect(
         VerifyPolkaCertificate(_, _, _, r) => r.resume_with(Ok(())),
         VerifyRoundCertificate(_, _, _, r) => r.resume_with(Ok(())),
         VerifyCommitCertificate(_, _, _, r) => r.resume_with(Ok(())),
-        SignVote(vote, r) => r.resume_with(SignedVote::new(vote, Signature::test())),
+        SignVote(vote, r) => r.resume_with(SignedMessage::new(vote, Signature::test())),
         WalAppend(_, entry, r) => {
             cap.wal.push(entry);
             r.resume_with(())
@@ -92,14 +93,14 @@ fn make_state(validators: &[Validator], my_addr: Address) -> State<TestContext> 
 }
 
 fn prevote(addr: Address, round: u32, value_id: NilOrVal<ValueId>) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_prevote(Height::new(1), Round::new(round), value_id, addr),
         Signature::test(),
     )
 }
 
 fn precommit(addr: Address, round: u32, value_id: NilOrVal<ValueId>) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_precommit(Height::new(1), Round::new(round), value_id, addr),
         Signature::test(),
     )

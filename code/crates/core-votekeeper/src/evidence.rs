@@ -5,7 +5,7 @@ use alloc::{vec, vec::Vec};
 
 use derive_where::derive_where;
 
-use malachitebft_core_types::{Context, DoubleVote, SignedVote, Vote};
+use malachitebft_core_types::{ConsensusTypes, DoubleVote, SignedVote, Vote};
 
 /// Maximum number of distinct equivocation pairs retained per validator.
 ///
@@ -17,14 +17,14 @@ pub const MAX_EVIDENCE_PER_VALIDATOR: usize = 3;
 #[derive_where(Clone, Debug, Default)]
 pub struct EvidenceMap<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     map: BTreeMap<Ctx::Address, Vec<DoubleVote<Ctx>>>,
 }
 
 impl<Ctx> EvidenceMap<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Create a new `EvidenceMap` instance.
     pub fn new() -> Self {
@@ -94,7 +94,7 @@ where
 
 impl<'a, Ctx> IntoIterator for &'a EvidenceMap<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     type Item = (&'a Ctx::Address, &'a Vec<DoubleVote<Ctx>>);
     type IntoIter = alloc::collections::btree_map::Iter<'a, Ctx::Address, Vec<DoubleVote<Ctx>>>;
@@ -106,7 +106,7 @@ where
 
 impl<Ctx> IntoIterator for EvidenceMap<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     type Item = (Ctx::Address, Vec<DoubleVote<Ctx>>);
     type IntoIter = alloc::collections::btree_map::IntoIter<Ctx::Address, Vec<DoubleVote<Ctx>>>;

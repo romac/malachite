@@ -14,7 +14,7 @@ use arc_malachitebft_core_consensus::{
     ValuePayload,
 };
 use malachitebft_core_types::{
-    NilOrVal, PolkaCertificate, Round, SignedProposal, SignedVote, Timeout, VoteType,
+    NilOrVal, PolkaCertificate, Round, SignedMessage, SignedProposal, SignedVote, Timeout, VoteType,
 };
 use malachitebft_metrics::Metrics;
 use malachitebft_test::utils::validators::make_validators;
@@ -46,11 +46,9 @@ fn handle_effect(
         VerifyCommitCertificate(_, _, _, r) => r.resume_with(Ok(())),
         SignVote(vote, r) => {
             cap.signed_votes.push(vote.clone());
-            r.resume_with(SignedVote::new(vote, Signature::test()))
+            r.resume_with(SignedMessage::new(vote, Signature::test()))
         }
-        SignProposal(proposal, r) => {
-            r.resume_with(SignedProposal::new(proposal, Signature::test()))
-        }
+        SignProposal(proposal, r) => r.resume_with(SignedMessage::new(proposal, Signature::test())),
         ExtendVote(_, _, _, _, r) => r.resume_with(None),
         VerifyVoteExtension(_, _, _, _, _, _, r) => r.resume_with(Ok(())),
         ScheduleTimeout(timeout, r) => {
@@ -98,7 +96,7 @@ fn start_height(validators: &[Validator]) -> Input<TestContext> {
 }
 
 fn proposal(proposer: Address, round: u32, value: u64, pol_round: Round) -> Input<TestContext> {
-    Input::Proposal(SignedProposal::new(
+    Input::Proposal(SignedMessage::new(
         Proposal::new(
             Height::new(1),
             Round::new(round),
@@ -116,7 +114,7 @@ fn vote_value(value: Option<u64>) -> NilOrVal<ValueId> {
 }
 
 fn prevote_at(addr: Address, round: u32, value: Option<u64>) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_prevote(Height::new(1), Round::new(round), vote_value(value), addr),
         Signature::test(),
     )

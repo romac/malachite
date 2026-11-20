@@ -20,7 +20,7 @@ use arc_malachitebft_core_consensus::{
     State, ValuePayload, MAX_FUTURE_ROUND_LOOKAHEAD,
 };
 use malachitebft_core_types::{
-    NilOrVal, PolkaCertificate, Round, RoundCertificate, RoundCertificateType, SignedProposal,
+    NilOrVal, PolkaCertificate, Round, RoundCertificate, RoundCertificateType, SignedMessage,
     SignedVote, Timeout, Validity, ValueOrigin, VoteType,
 };
 // Brings the `Vote` trait accessors (`vote_type`, `validator_address`) into scope without
@@ -49,10 +49,8 @@ fn handle_effect(
         VerifyPolkaCertificate(_, _, _, r) => r.resume_with(Ok(())),
         VerifyRoundCertificate(_, _, _, r) => r.resume_with(Ok(())),
         VerifyCommitCertificate(_, _, _, r) => r.resume_with(Ok(())),
-        SignVote(vote, r) => r.resume_with(SignedVote::new(vote, Signature::test())),
-        SignProposal(proposal, r) => {
-            r.resume_with(SignedProposal::new(proposal, Signature::test()))
-        }
+        SignVote(vote, r) => r.resume_with(SignedMessage::new(vote, Signature::test())),
+        SignProposal(proposal, r) => r.resume_with(SignedMessage::new(proposal, Signature::test())),
         WalAppend(_, entry, r) => {
             cap.wal.push(entry);
             r.resume_with(())
@@ -137,14 +135,14 @@ fn replay(
 }
 
 fn prevote(addr: Address, round: u32, value_id: NilOrVal<ValueId>) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_prevote(Height::new(1), Round::new(round), value_id, addr),
         Signature::test(),
     )
 }
 
 fn precommit(addr: Address, round: u32, value_id: NilOrVal<ValueId>) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_precommit(Height::new(1), Round::new(round), value_id, addr),
         Signature::test(),
     )
@@ -194,7 +192,7 @@ fn restart_with_polka_certificate() {
             ],
         )),
         // Re-proposal from v2 (the r=1 proposer) with pol_round=0.
-        Input::Proposal(SignedProposal::new(
+        Input::Proposal(SignedMessage::new(
             Proposal::new(
                 Height::new(1),
                 Round::new(1),
@@ -442,7 +440,7 @@ fn restart_with_far_ahead_round_certificate() {
                     prevote(v2, far, NilOrVal::Val(value_id)),
                 ],
             )),
-            Input::Proposal(SignedProposal::new(
+            Input::Proposal(SignedMessage::new(
                 Proposal::new(
                     Height::new(1),
                     far_round,

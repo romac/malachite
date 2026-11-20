@@ -28,7 +28,7 @@ use tracing::{debug, error, warn, Instrument};
 
 use malachitebft_core_consensus::{LivenessMsg, SignedConsensusMsg};
 use malachitebft_core_types::{
-    Context, Height, NilOrVal, Proposal, Round, ValueId, Vote, VoteType,
+    ConsensusTypes, Context, Height, NilOrVal, Proposal, Round, SignedVote, ValueId, Vote, VoteType,
 };
 use malachitebft_engine::network::{Msg as NetworkMsg, NetworkRef};
 use malachitebft_signing::Signer;
@@ -41,7 +41,7 @@ use crate::inbound::InboundFilter;
 /// Used for proposal equivocation: the proxy sends the original proposal
 /// and then a second proposal with the value returned by this function.
 pub type ConflictingValueFn<Ctx> =
-    Box<dyn Fn(&<Ctx as Context>::Value) -> <Ctx as Context>::Value + Send + Sync>;
+    Box<dyn Fn(&<Ctx as ConsensusTypes>::Value) -> <Ctx as ConsensusTypes>::Value + Send + Sync>;
 
 /// A function that creates a conflicting vote value ID.
 ///
@@ -501,7 +501,7 @@ impl<Ctx: Context> ByzantineNetworkProxy<Ctx> {
     async fn sign_and_send_conflicting_vote(
         &self,
         original: &Ctx::Vote,
-        wrap: impl FnOnce(malachitebft_core_types::SignedVote<Ctx>) -> NetworkMsg<Ctx>,
+        wrap: impl FnOnce(SignedVote<Ctx>) -> NetworkMsg<Ctx>,
     ) -> Result<()> {
         let Some(conflicting_vote) = self.make_conflicting_vote(original) else {
             warn!(height = %original.height(), round = %original.round(), vote_type = ?original.vote_type(), "BYZANTINE: Skipping nil vote equivocation");

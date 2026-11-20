@@ -2,21 +2,21 @@
 
 use derive_where::derive_where;
 
-use malachitebft_core_types::{Context, NilOrVal, ValueId, Vote, VoteType};
+use malachitebft_core_types::{ConsensusTypes, NilOrVal, ValueId, Vote, VoteType};
 
 use crate::count::VoteCount;
 use crate::{Threshold, ThresholdParam, Weight};
 
 /// Tracks all the votes for a single round
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct RoundVotes<Ctx: Context> {
+pub struct RoundVotes<Ctx: ConsensusTypes> {
     /// The prevotes for this round.
     prevotes: VoteCount<Ctx::Address, ValueId<Ctx>>,
     /// The precommits for this round.
     precommits: VoteCount<Ctx::Address, ValueId<Ctx>>,
 }
 
-impl<Ctx: Context> RoundVotes<Ctx> {
+impl<Ctx: ConsensusTypes> RoundVotes<Ctx> {
     /// Create a new `RoundVotes` instance.
     pub fn new() -> Self {
         RoundVotes {
@@ -39,8 +39,13 @@ impl<Ctx: Context> RoundVotes<Ctx> {
     /// with the given value and weight.
     pub fn add_vote(&mut self, vote: &Ctx::Vote, weight: Weight) -> Weight {
         match vote.vote_type() {
-            VoteType::Prevote => self.prevotes.add(vote.validator_address(), vote.value(), weight),
-            VoteType::Precommit => self.precommits.add(vote.validator_address(), vote.value(), weight),
+            VoteType::Prevote => self
+                .prevotes
+                .add(vote.validator_address(), vote.value(), weight),
+            VoteType::Precommit => {
+                self.precommits
+                    .add(vote.validator_address(), vote.value(), weight)
+            }
         }
     }
 
@@ -87,7 +92,7 @@ impl<Ctx: Context> RoundVotes<Ctx> {
     }
 }
 
-impl<Ctx: Context> Default for RoundVotes<Ctx> {
+impl<Ctx: ConsensusTypes> Default for RoundVotes<Ctx> {
     fn default() -> Self {
         Self::new()
     }

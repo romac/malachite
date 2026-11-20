@@ -5,7 +5,7 @@ use pretty_assertions::assert_eq;
 use malachitebft_core_state_machine::input::Input;
 use malachitebft_core_state_machine::output::Output;
 use malachitebft_core_state_machine::{state::State as RoundState, state_machine::Info};
-use malachitebft_core_types::{Context, NilOrVal, Round};
+use malachitebft_core_types::{MessageBuilder, NilOrVal, Round};
 use malachitebft_test::{Address, Height, TestContext};
 
 use itf::Runner as ItfRunner;

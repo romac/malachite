@@ -9,7 +9,8 @@ use alloc::vec::Vec;
 
 use async_trait::async_trait;
 use malachitebft_core_types::{
-    Context, PublicKey, Signature, SignedMessage, ValidatorProof, VoteExtensionScope,
+    ConsensusTypes, PublicKey, Signature, SignedExtension, SignedProposal, SignedVote,
+    ValidatorProof, VoteExtensionScope,
 };
 
 mod error;
@@ -63,7 +64,7 @@ impl VerificationResult {
 #[async_trait]
 pub trait Verifier<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Self: Send + Sync,
 {
     /// Verify the given vote's signature using the given public key.
@@ -132,17 +133,14 @@ where
 #[async_trait]
 pub trait Signer<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Self: Send + Sync,
 {
     /// Sign the given vote with our private key.
-    async fn sign_vote(&self, vote: Ctx::Vote) -> Result<SignedMessage<Ctx, Ctx::Vote>, Error>;
+    async fn sign_vote(&self, vote: Ctx::Vote) -> Result<SignedVote<Ctx>, Error>;
 
     /// Sign the given proposal with our private key.
-    async fn sign_proposal(
-        &self,
-        proposal: Ctx::Proposal,
-    ) -> Result<SignedMessage<Ctx, Ctx::Proposal>, Error>;
+    async fn sign_proposal(&self, proposal: Ctx::Proposal) -> Result<SignedProposal<Ctx>, Error>;
 
     /// Sign the given vote extension with our private key.
     ///
@@ -161,7 +159,7 @@ where
         &self,
         scope: VoteExtensionScope<Ctx>,
         extension: Ctx::Extension,
-    ) -> Result<SignedMessage<Ctx, Ctx::Extension>, Error>;
+    ) -> Result<SignedExtension<Ctx>, Error>;
 
     /// Sign a validator proof binding the given public key to the given peer ID.
     ///
@@ -180,7 +178,7 @@ where
 impl<Ctx, T> Verifier<Ctx> for &T
 where
     T: Verifier<Ctx>,
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     async fn verify_signed_vote(
         &self,
@@ -228,16 +226,13 @@ where
 impl<Ctx, T> Signer<Ctx> for &T
 where
     T: Signer<Ctx>,
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
-    async fn sign_vote(&self, vote: Ctx::Vote) -> Result<SignedMessage<Ctx, Ctx::Vote>, Error> {
+    async fn sign_vote(&self, vote: Ctx::Vote) -> Result<SignedVote<Ctx>, Error> {
         (*self).sign_vote(vote).await
     }
 
-    async fn sign_proposal(
-        &self,
-        proposal: Ctx::Proposal,
-    ) -> Result<SignedMessage<Ctx, Ctx::Proposal>, Error> {
+    async fn sign_proposal(&self, proposal: Ctx::Proposal) -> Result<SignedProposal<Ctx>, Error> {
         (*self).sign_proposal(proposal).await
     }
 
@@ -245,7 +240,7 @@ where
         &self,
         scope: VoteExtensionScope<Ctx>,
         extension: Ctx::Extension,
-    ) -> Result<SignedMessage<Ctx, Ctx::Extension>, Error> {
+    ) -> Result<SignedExtension<Ctx>, Error> {
         (*self).sign_vote_extension(scope, extension).await
     }
 
@@ -263,7 +258,7 @@ where
 #[async_trait]
 impl<Ctx> Verifier<Ctx> for Box<dyn Verifier<Ctx> + '_>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     async fn verify_signed_vote(
         &self,
@@ -310,16 +305,13 @@ where
 #[async_trait]
 impl<Ctx> Signer<Ctx> for Box<dyn Signer<Ctx> + '_>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
-    async fn sign_vote(&self, vote: Ctx::Vote) -> Result<SignedMessage<Ctx, Ctx::Vote>, Error> {
+    async fn sign_vote(&self, vote: Ctx::Vote) -> Result<SignedVote<Ctx>, Error> {
         self.as_ref().sign_vote(vote).await
     }
 
-    async fn sign_proposal(
-        &self,
-        proposal: Ctx::Proposal,
-    ) -> Result<SignedMessage<Ctx, Ctx::Proposal>, Error> {
+    async fn sign_proposal(&self, proposal: Ctx::Proposal) -> Result<SignedProposal<Ctx>, Error> {
         self.as_ref().sign_proposal(proposal).await
     }
 
@@ -327,7 +319,7 @@ where
         &self,
         scope: VoteExtensionScope<Ctx>,
         extension: Ctx::Extension,
-    ) -> Result<SignedMessage<Ctx, Ctx::Extension>, Error> {
+    ) -> Result<SignedExtension<Ctx>, Error> {
         self.as_ref().sign_vote_extension(scope, extension).await
     }
 
@@ -347,7 +339,7 @@ where
 #[async_trait]
 impl<Ctx> Verifier<Ctx> for Arc<dyn Verifier<Ctx> + '_>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     async fn verify_signed_vote(
         &self,
@@ -394,16 +386,13 @@ where
 #[async_trait]
 impl<Ctx> Signer<Ctx> for Arc<dyn Signer<Ctx> + '_>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
-    async fn sign_vote(&self, vote: Ctx::Vote) -> Result<SignedMessage<Ctx, Ctx::Vote>, Error> {
+    async fn sign_vote(&self, vote: Ctx::Vote) -> Result<SignedVote<Ctx>, Error> {
         self.as_ref().sign_vote(vote).await
     }
 
-    async fn sign_proposal(
-        &self,
-        proposal: Ctx::Proposal,
-    ) -> Result<SignedMessage<Ctx, Ctx::Proposal>, Error> {
+    async fn sign_proposal(&self, proposal: Ctx::Proposal) -> Result<SignedProposal<Ctx>, Error> {
         self.as_ref().sign_proposal(proposal).await
     }
 
@@ -411,7 +400,7 @@ where
         &self,
         scope: VoteExtensionScope<Ctx>,
         extension: Ctx::Extension,
-    ) -> Result<SignedMessage<Ctx, Ctx::Extension>, Error> {
+    ) -> Result<SignedExtension<Ctx>, Error> {
         self.as_ref().sign_vote_extension(scope, extension).await
     }
 

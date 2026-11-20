@@ -8,7 +8,8 @@ use arc_malachitebft_core_consensus::{
     process, Effect, Error, Input, Params, Resumable, Resume, State, MAX_FUTURE_ROUND_LOOKAHEAD,
 };
 use malachitebft_core_types::{
-    Context, NilOrVal, Round, SignedProposal, SignedVote, Validity, ValueOrigin, ValuePayload,
+    MessageBuilder, NilOrVal, Round, SignedMessage, SignedProposal, SignedVote, Validity,
+    ValueOrigin, ValuePayload,
 };
 use malachitebft_metrics::Metrics;
 use malachitebft_test::utils::validators::make_validators;
@@ -46,7 +47,7 @@ fn signed_prevote_from(
     addr: Address,
 ) -> SignedVote<TestContext> {
     let vote = ctx.new_prevote(height, round, NilOrVal::Val(ValueId::new(1)), addr);
-    SignedVote::new(vote, Signature::test())
+    SignedMessage::new(vote, Signature::test())
 }
 
 struct Counters {
@@ -99,7 +100,7 @@ impl Counters {
 }
 
 fn signed_proposal(height: Height, round: Round, proposer: Address) -> SignedProposal<TestContext> {
-    SignedProposal::new(
+    SignedMessage::new(
         Proposal::new(height, round, Value::new(1), Round::Nil, proposer),
         Signature::test(),
     )

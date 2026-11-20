@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use malachitebft_core_types::{Context, NilOrVal, Round, SignedVote, Value};
+use malachitebft_core_types::{ConsensusTypes, NilOrVal, Round, SignedMessage, Value};
 use malachitebft_core_votekeeper::keeper::{Output, VoteKeeper};
 use malachitebft_core_votekeeper::ThresholdParams;
 use malachitebft_test::{Address, Height, Signature, TestContext, Vote};
@@ -35,7 +35,7 @@ impl VoteKeeperRunner {
 
 impl ItfRunner for VoteKeeperRunner {
     type ActualState = VoteKeeper<TestContext>;
-    type Result = Option<Output<<<TestContext as Context>::Value as Value>::Id>>;
+    type Result = Option<Output<<<TestContext as ConsensusTypes>::Value as Value>::Id>>;
     type ExpectedState = State;
     type Error = ();
 
@@ -97,7 +97,7 @@ impl ItfRunner for VoteKeeperRunner {
 
                 // Execute step.
                 Ok(actual.apply_vote(
-                    SignedVote::new(vote, Signature::test()),
+                    SignedMessage::new(vote, Signature::test()),
                     Round::from(*current_round),
                 ))
             }

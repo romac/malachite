@@ -98,12 +98,12 @@ impl Harness {
 
             SignVote(vote, r) => {
                 self.signed_votes.set(self.signed_votes.get() + 1);
-                r.resume_with(SignedVote::new(vote, self.signature))
+                r.resume_with(SignedMessage::new(vote, self.signature))
             }
 
             SignProposal(proposal, r) => {
                 self.signed_proposals.set(self.signed_proposals.get() + 1);
-                r.resume_with(SignedProposal::new(proposal, self.signature))
+                r.resume_with(SignedMessage::new(proposal, self.signature))
             }
 
             WalAppend(_, entry, r) => {
@@ -214,14 +214,14 @@ fn expect_ok(label: &str, result: Result<(), Error<TestContext>>) {
 }
 
 fn prevote(round: u32, value: NilOrVal<ValueId>, addr: Address) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_prevote(Height::new(HEIGHT), Round::new(round), value, addr),
         live_signature(),
     )
 }
 
 fn precommit(round: u32, value: NilOrVal<ValueId>, addr: Address) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_precommit(Height::new(HEIGHT), Round::new(round), value, addr),
         live_signature(),
     )
@@ -233,7 +233,7 @@ fn proposal(
     pol_round: Round,
     addr: Address,
 ) -> SignedProposal<TestContext> {
-    SignedProposal::new(
+    SignedMessage::new(
         Proposal::new(
             Height::new(HEIGHT),
             Round::new(round),

@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use bytes::Bytes;
 use derive_where::derive_where;
 
-use crate::{Context, Round, SignedExtension, ValueId};
+use crate::{ConsensusTypes, Round, SignedExtension, ValueId};
 
 /// Policy for handling vote extensions at a given height.
 ///
@@ -46,7 +46,7 @@ impl VoteExtensionPolicy {
 /// and verifiers ([`Verifier::verify_signed_vote_extension`](../../../signing/trait.Verifier.html#tymethod.verify_signed_vote_extension))
 /// must agree on the canonical encoding of this scope.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct VoteExtensionScope<Ctx: Context> {
+pub struct VoteExtensionScope<Ctx: ConsensusTypes> {
     /// Height of the precommit the extension is attached to.
     pub height: Ctx::Height,
     /// Round of the precommit the extension is attached to.
@@ -57,7 +57,7 @@ pub struct VoteExtensionScope<Ctx: Context> {
     pub validator_address: Ctx::Address,
 }
 
-impl<Ctx: Context> VoteExtensionScope<Ctx> {
+impl<Ctx: ConsensusTypes> VoteExtensionScope<Ctx> {
     /// Create a new scope from its components.
     pub fn new(
         height: Ctx::Height,
@@ -76,12 +76,12 @@ impl<Ctx: Context> VoteExtensionScope<Ctx> {
 
 /// A set of vote extensions.
 #[derive_where(Clone, Debug, Default, PartialEq, Eq)]
-pub struct VoteExtensions<Ctx: Context> {
+pub struct VoteExtensions<Ctx: ConsensusTypes> {
     /// The vote extensions together with the address of their proposer.
     pub extensions: Vec<(Ctx::Address, SignedExtension<Ctx>)>,
 }
 
-impl<Ctx: Context> VoteExtensions<Ctx> {
+impl<Ctx: ConsensusTypes> VoteExtensions<Ctx> {
     /// Creates a new set of vote extensions.
     pub fn new(mut extensions: Vec<(Ctx::Address, SignedExtension<Ctx>)>) -> Self {
         // Sort vote extensions by their proposer's address

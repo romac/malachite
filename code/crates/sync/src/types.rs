@@ -7,7 +7,7 @@ use libp2p::request_response;
 use serde::{Deserialize, Serialize};
 
 use malachitebft_core_types::ValueResponse as CoreValueResponse;
-use malachitebft_core_types::{Context, ExtendedCommitCertificate, Height};
+use malachitebft_core_types::{ConsensusTypes, ExtendedCommitCertificate, Height};
 
 pub use malachitebft_peer::PeerId;
 
@@ -105,35 +105,35 @@ pub enum InboundFailureReason {
 pub type ResponseChannel = request_response::ResponseChannel<RawResponse>;
 
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct Status<Ctx: Context> {
+pub struct Status<Ctx: ConsensusTypes> {
     pub peer_id: PeerId,
     pub tip_height: Ctx::Height,
     pub history_min_height: Ctx::Height,
 }
 
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub enum Request<Ctx: Context> {
+pub enum Request<Ctx: ConsensusTypes> {
     ValueRequest(ValueRequest<Ctx>),
 }
 
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub enum Response<Ctx: Context> {
+pub enum Response<Ctx: ConsensusTypes> {
     ValueResponse(ValueResponse<Ctx>),
 }
 
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct ValueRequest<Ctx: Context> {
+pub struct ValueRequest<Ctx: ConsensusTypes> {
     pub range: RangeInclusive<Ctx::Height>,
 }
 
-impl<Ctx: Context> ValueRequest<Ctx> {
+impl<Ctx: ConsensusTypes> ValueRequest<Ctx> {
     pub fn new(range: RangeInclusive<Ctx::Height>) -> Self {
         Self { range }
     }
 }
 
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct ValueResponse<Ctx: Context> {
+pub struct ValueResponse<Ctx: ConsensusTypes> {
     /// The height of the first value in the response.
     pub start_height: Ctx::Height,
 
@@ -141,7 +141,7 @@ pub struct ValueResponse<Ctx: Context> {
     pub values: Vec<RawDecidedValue<Ctx>>,
 }
 
-impl<Ctx: Context> ValueResponse<Ctx> {
+impl<Ctx: ConsensusTypes> ValueResponse<Ctx> {
     pub fn new(start_height: Ctx::Height, values: Vec<RawDecidedValue<Ctx>>) -> Self {
         Self {
             start_height,
@@ -165,12 +165,12 @@ impl<Ctx: Context> ValueResponse<Ctx> {
 /// for the next height when the application uses extensions for load-bearing
 /// data.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct RawDecidedValue<Ctx: Context> {
+pub struct RawDecidedValue<Ctx: ConsensusTypes> {
     pub value_bytes: Bytes,
     pub certificate: ExtendedCommitCertificate<Ctx>,
 }
 
-impl<Ctx: Context> RawDecidedValue<Ctx> {
+impl<Ctx: ConsensusTypes> RawDecidedValue<Ctx> {
     pub fn new(value_bytes: Bytes, certificate: ExtendedCommitCertificate<Ctx>) -> Self {
         Self {
             value_bytes,

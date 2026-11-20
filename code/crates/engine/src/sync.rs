@@ -21,7 +21,7 @@ use malachitebft_core_consensus::util::bounded_queue::BoundedQueue;
 use malachitebft_core_consensus::PeerId;
 use malachitebft_core_types::utils::height::DisplayRange;
 use malachitebft_core_types::ValueResponse as CoreValueResponse;
-use malachitebft_core_types::{Context, ExtendedCommitCertificate};
+use malachitebft_core_types::{ConsensusTypes, Context, ExtendedCommitCertificate};
 use malachitebft_network::Channel;
 use malachitebft_sync::{
     self as sync, HeightStartType, InboundFailureReason, InboundRequestId, OutboundRequestId,
@@ -233,7 +233,8 @@ impl<V> BufferedValue<V> {
 }
 
 /// A queue of buffered sync values for heights ahead of consensus, keyed by height.
-type SyncQueue<Ctx> = BoundedQueue<<Ctx as Context>::Height, BufferedValue<CoreValueResponse<Ctx>>>;
+type SyncQueue<Ctx> =
+    BoundedQueue<<Ctx as ConsensusTypes>::Height, BufferedValue<CoreValueResponse<Ctx>>>;
 
 /// Drop everything still buffered from the request that served a faulty value.
 fn purge_values_from_request<H: Ord, V>(

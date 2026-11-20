@@ -7,7 +7,7 @@
 //! - **POL** — at least one proposal uses a non-nil `pol_round` (proof-of-lock / L28-style mux).
 
 use futures::executor::block_on;
-use malachitebft_core_types::{Round, SignedProposal, Validity, ValueOrigin};
+use malachitebft_core_types::{Round, SignedMessage, SignedProposal, Validity, ValueOrigin};
 use malachitebft_signing::Signer;
 use malachitebft_test::utils::validators::make_validators;
 use malachitebft_test::{Address, Ed25519Signer, Proposal, Signature, Value};
@@ -654,7 +654,7 @@ fn store_proposal_surfaces_equivocation_against_proposal_only_entry() {
 
     // A duplicate proposal message is silently ignored.
     let signature_variant =
-        SignedProposal::new(first.message.clone(), Signature::from_bytes([1; 64]));
+        SignedMessage::new(first.message.clone(), Signature::from_bytes([1; 64]));
     assert!(matches!(
         keeper.store_proposal(signature_variant, false),
         StoreProposalResult::DuplicateIgnored
@@ -773,7 +773,7 @@ fn store_proposal_ignores_signature_variant_against_full_entry() {
         StoreProposalResult::Stored
     ));
 
-    let signature_variant = SignedProposal::new(first.message, Signature::from_bytes([1; 64]));
+    let signature_variant = SignedMessage::new(first.message, Signature::from_bytes([1; 64]));
     assert!(matches!(
         keeper.store_proposal(signature_variant, false),
         StoreProposalResult::DuplicateIgnored

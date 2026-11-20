@@ -1,12 +1,12 @@
 use derive_where::derive_where;
 
-use malachitebft_core_types::{Context, Round, Timeout};
+use malachitebft_core_types::{ConsensusTypes, Round, Timeout};
 
 /// Messages emitted by the [`Driver`](crate::Driver)
 #[derive_where(Clone, Debug, PartialEq, Eq)]
 pub enum Output<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Start a new round
     NewRound(Ctx::Height, Round),

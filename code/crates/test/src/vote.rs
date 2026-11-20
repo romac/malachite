@@ -66,7 +66,12 @@ impl Vote {
     }
 }
 
-impl malachitebft_core_types::Vote<TestContext> for Vote {
+impl malachitebft_core_types::Vote for Vote {
+    type Height = Height;
+    type Address = Address;
+    type ValueId = ValueId;
+    type SignedExtension = SignedExtension<TestContext>;
+
     fn height(&self) -> Height {
         self.height
     }

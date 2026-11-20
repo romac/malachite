@@ -6,7 +6,7 @@ use std::ops::RangeInclusive;
 use governor::clock::DefaultClock;
 use governor::state::keyed::DefaultKeyedStateStore;
 use governor::{Quota, RateLimiter};
-use malachitebft_core_types::{Context, Height};
+use malachitebft_core_types::{ConsensusTypes, Height};
 use malachitebft_peer::PeerId;
 
 use crate::scoring::{ema, PeerScorer, Strategy};
@@ -39,7 +39,7 @@ pub struct PendingRequestEntry<H> {
 
 pub struct State<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     pub rng: Box<dyn rand::RngCore + Send>,
 
@@ -88,7 +88,7 @@ where
 
 impl<Ctx> State<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     pub fn new(
         // Random number generator for selecting peers
@@ -251,7 +251,7 @@ where
         range: &RangeInclusive<Ctx::Height>,
     ) -> Option<(PeerId, RangeInclusive<Ctx::Height>)>
     where
-        Ctx: Context,
+        Ctx: ConsensusTypes,
     {
         self.random_peer_with_except(range, &BTreeSet::new())
     }

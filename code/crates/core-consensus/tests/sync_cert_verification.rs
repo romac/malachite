@@ -9,8 +9,9 @@ use arc_malachitebft_core_consensus::{
     process, Effect, Error, Input, Params, ProposedValue, Resumable, Resume, State,
 };
 use malachitebft_core_types::{
-    CertificateError, Context, ExtendedCommitCertificate, ExtendedCommitSignature, NilOrVal, Round,
-    Validity, ValueOrigin, ValuePayload, ValueResponse, VoteExtensionPolicy, VoteExtensionScope,
+    CertificateError, ExtendedCommitCertificate, ExtendedCommitSignature, MessageBuilder, NilOrVal,
+    Round, Validity, ValueOrigin, ValuePayload, ValueResponse, VoteExtensionPolicy,
+    VoteExtensionScope,
 };
 use malachitebft_metrics::Metrics;
 use malachitebft_peer::PeerId;

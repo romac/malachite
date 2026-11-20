@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use derive_where::derive_where;
 
-use malachitebft_core_types::{Context, Round, ValueId};
+use malachitebft_core_types::{ConsensusTypes, Context, Round, ValueId};
 use malachitebft_engine::util::streaming::StreamId;
 
 // This is a temporary store implementation for proposal parts
@@ -20,9 +20,9 @@ type Key<Height> = (StreamId, Height, Round);
 #[derive_where(Clone, Debug, Default)]
 pub struct Entry<Ctx: Context> {
     pub value_id: Option<ValueId<Ctx>>,
-    pub parts: Vec<Arc<<Ctx as Context>::ProposalPart>>,
+    pub parts: Vec<Arc<<Ctx as ConsensusTypes>::ProposalPart>>,
 }
-type Store<Ctx> = BTreeMap<Key<<Ctx as Context>::Height>, Entry<Ctx>>;
+type Store<Ctx> = BTreeMap<Key<<Ctx as ConsensusTypes>::Height>, Entry<Ctx>>;
 
 #[derive_where(Clone, Debug)]
 pub struct PartStore<Ctx: Context> {

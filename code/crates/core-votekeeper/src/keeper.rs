@@ -7,8 +7,8 @@ use tracing::warn;
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 use malachitebft_core_types::{
-    Context, DoubleVote, NilOrVal, Round, SignedVote, Validator, ValidatorSet, ValueId, Vote,
-    VoteType,
+    ConsensusTypes, DoubleVote, NilOrVal, Round, SignedVote, Validator, ValidatorSet, ValueId,
+    Vote, VoteType,
 };
 
 use crate::evidence::EvidenceMap;
@@ -45,7 +45,7 @@ const VOTES_PER_VALIDATOR_PER_ROUND: usize = 2;
 #[derive_where(Clone, Debug, PartialEq, Eq, Default)]
 pub struct PerRound<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// The votes for this round.
     votes: RoundVotes<Ctx>,
@@ -64,7 +64,7 @@ where
 #[derive(Error)]
 pub enum RecordVoteError<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Attempted to record a conflicting vote.
     #[error("Conflicting vote: {existing} vs {conflicting}")]
@@ -78,7 +78,7 @@ where
 
 impl<Ctx> PerRound<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Create a new `PerRound` instance.
     pub fn new() -> Self {
@@ -185,7 +185,7 @@ where
 #[derive_where(Clone, Debug)]
 pub struct VoteKeeper<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// The validator set for this height.
     validator_set: Ctx::ValidatorSet,
@@ -202,7 +202,7 @@ where
 
 impl<Ctx> VoteKeeper<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Create a new `VoteKeeper` instance, for the given
     /// total network weight (ie. voting power) and threshold parameters.
@@ -447,7 +447,7 @@ fn compute_threshold<Ctx>(
     total_weight: Weight,
 ) -> Threshold<ValueId<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     let weight = round.votes.get_weight(vote_type, value);
 

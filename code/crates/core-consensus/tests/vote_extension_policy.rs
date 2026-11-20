@@ -5,8 +5,8 @@ use arc_malachitebft_core_consensus::{
 };
 use bytes::Bytes;
 use malachitebft_core_types::{
-    NilOrVal, Round, RoundCertificate, RoundCertificateType, SignedMessage, SignedProposal,
-    SignedVote, ValuePayload, VoteExtensionPolicy, VoteType,
+    NilOrVal, Round, RoundCertificate, RoundCertificateType, SignedMessage, SignedVote,
+    ValuePayload, VoteExtensionPolicy, VoteType,
 };
 use malachitebft_metrics::Metrics;
 use malachitebft_test::utils::validators::make_validators;
@@ -90,7 +90,7 @@ fn start_disabled_height(
 }
 
 fn signed_prevote(addr: Address, value_id: ValueId) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_prevote(Height::new(1), Round::new(0), NilOrVal::Val(value_id), addr),
         Signature::test(),
     )
@@ -106,21 +106,21 @@ fn signed_prevote_with_extension(addr: Address, value_id: ValueId) -> SignedVote
 }
 
 fn signed_precommit(addr: Address, value_id: ValueId) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_precommit(Height::new(1), Round::new(0), NilOrVal::Val(value_id), addr),
         Signature::test(),
     )
 }
 
 fn signed_nil_precommit(addr: Address) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_precommit(Height::new(1), Round::new(0), NilOrVal::Nil, addr),
         Signature::test(),
     )
 }
 
 fn signed_nil_precommit_with_extension(addr: Address) -> SignedVote<TestContext> {
-    let mut vote = SignedVote::new(
+    let mut vote = SignedMessage::new(
         Vote::new_precommit(Height::new(1), Round::new(0), NilOrVal::Nil, addr),
         Signature::test(),
     );
@@ -141,7 +141,7 @@ fn signed_precommit_with_extension(addr: Address, value_id: ValueId) -> SignedVo
 }
 
 fn signed_precommit_at(addr: Address, round: Round, value_id: ValueId) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_precommit(Height::new(1), round, NilOrVal::Val(value_id), addr),
         Signature::test(),
     )
@@ -205,10 +205,10 @@ impl Counters {
             }
             SignVote(vote, r) => {
                 self.sign_vote.set(self.sign_vote.get() + 1);
-                r.resume_with(SignedVote::new(vote, Signature::test()))
+                r.resume_with(SignedMessage::new(vote, Signature::test()))
             }
             SignProposal(proposal, r) => {
-                r.resume_with(SignedProposal::new(proposal, Signature::test()))
+                r.resume_with(SignedMessage::new(proposal, Signature::test()))
             }
             WalAppend(_, entry, r) => {
                 if matches!(entry, Input::Vote(_)) {
@@ -456,7 +456,7 @@ fn required_policy_errors_before_signing_local_precommit_without_extension() {
 
     start_required_height(&mut state, &metrics, &validators, &counters);
 
-    let proposal = SignedProposal::new(
+    let proposal = SignedMessage::new(
         Proposal::new(
             Height::new(1),
             Round::new(0),
@@ -542,7 +542,7 @@ fn disabled_policy_signs_local_precommit_without_asking_for_extension() {
 
     start_disabled_height(&mut state, &metrics, &validators, &counters);
 
-    let proposal = SignedProposal::new(
+    let proposal = SignedMessage::new(
         Proposal::new(
             Height::new(1),
             Round::new(0),
@@ -634,7 +634,7 @@ fn required_policy_drops_round_certificate_non_nil_precommits_before_wal_append(
 
     start_required_height(&mut state, &metrics, &validators, &counters);
 
-    let proposal = SignedProposal::new(
+    let proposal = SignedMessage::new(
         Proposal::new(Height::new(1), Round::new(0), value, Round::Nil, proposer),
         Signature::test(),
     );
@@ -815,11 +815,11 @@ fn required_policy_applies_skip_round_certificate_prevotes() {
     start_required_height(&mut state, &metrics, &validators, &counters);
     counters.reset();
 
-    let vote_a = SignedVote::new(
+    let vote_a = SignedMessage::new(
         Vote::new_prevote(Height::new(1), skip_round, NilOrVal::Val(value_id), peer_a),
         Signature::test(),
     );
-    let vote_b = SignedVote::new(
+    let vote_b = SignedMessage::new(
         Vote::new_prevote(Height::new(1), skip_round, NilOrVal::Val(value_id), peer_b),
         Signature::test(),
     );

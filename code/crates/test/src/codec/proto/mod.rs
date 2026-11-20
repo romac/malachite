@@ -6,7 +6,7 @@ use malachitebft_codec::{Codec, HasEncodedLen};
 use malachitebft_core_consensus::{LivenessMsg, ProposedValue, SignedConsensusMsg};
 use malachitebft_core_types::{
     ExtendedCommitCertificate, ExtendedCommitSignature, NilOrVal, PolkaCertificate, PolkaSignature,
-    Round, RoundCertificate, RoundCertificateType, RoundSignature, SignedExtension, SignedProposal,
+    Round, RoundCertificate, RoundCertificateType, RoundSignature, SignedExtension, SignedMessage,
     SignedVote, ValidatorProof, Validity,
 };
 use malachitebft_proto::{Error as ProtoError, Protobuf};
@@ -79,13 +79,15 @@ impl Codec<SignedConsensusMsg<TestContext>> for ProtobufCodec {
         match proto_message {
             proto::signed_message::Message::Proposal(proto) => {
                 let proposal = Proposal::from_proto(proto)?;
-                Ok(SignedConsensusMsg::Proposal(SignedProposal::new(
+                Ok(SignedConsensusMsg::Proposal(SignedMessage::new(
                     proposal, signature,
                 )))
             }
             proto::signed_message::Message::Vote(vote) => {
                 let vote = Vote::from_proto(vote)?;
-                Ok(SignedConsensusMsg::Vote(SignedVote::new(vote, signature)))
+                Ok(SignedConsensusMsg::Vote(SignedMessage::new(
+                    vote, signature,
+                )))
             }
         }
     }
@@ -612,7 +614,7 @@ pub fn decode_extension(ext: proto::Extension) -> Result<SignedExtension<TestCon
         .ok_or_else(|| ProtoError::missing_field::<proto::Extension>("signature"))
         .and_then(decode_signature)?;
 
-    Ok(SignedExtension::new(ext.data, signature))
+    Ok(SignedMessage::new(ext.data, signature))
 }
 
 pub fn encode_extension(
@@ -647,7 +649,7 @@ pub fn decode_vote(msg: proto::SignedMessage) -> Result<SignedVote<TestContext>,
 
     let signature = decode_signature(signature)?;
     let vote = Vote::from_proto(vote)?;
-    Ok(SignedVote::new(vote, signature))
+    Ok(SignedMessage::new(vote, signature))
 }
 
 pub fn encode_signature(signature: &Signature) -> proto::Signature {

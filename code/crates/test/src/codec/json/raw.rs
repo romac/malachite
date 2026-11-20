@@ -6,8 +6,7 @@ use malachitebft_app::streaming::StreamId;
 use malachitebft_core_consensus::{LivenessMsg, SignedConsensusMsg};
 use malachitebft_core_types::{
     ExtendedCommitCertificate, ExtendedCommitSignature, NilOrVal, PolkaCertificate, PolkaSignature,
-    Round, RoundCertificate, RoundCertificateType, RoundSignature, SignedExtension, SignedProposal,
-    SignedVote, VoteType,
+    Round, RoundCertificate, RoundCertificateType, RoundSignature, SignedMessage, VoteType,
 };
 use malachitebft_engine::util::streaming::{StreamContent, StreamMessage};
 use malachitebft_proto::Protobuf;
@@ -47,12 +46,12 @@ impl From<SignedConsensusMsg<TestContext>> for RawSignedConsensusMsg {
 impl From<RawSignedConsensusMsg> for SignedConsensusMsg<TestContext> {
     fn from(value: RawSignedConsensusMsg) -> Self {
         match value {
-            RawSignedConsensusMsg::Vote(vote) => SignedConsensusMsg::Vote(SignedVote {
+            RawSignedConsensusMsg::Vote(vote) => SignedConsensusMsg::Vote(SignedMessage {
                 message: Vote::from_bytes(&vote.message).unwrap(),
                 signature: vote.signature.into(),
             }),
             RawSignedConsensusMsg::Proposal(proposal) => {
-                SignedConsensusMsg::Proposal(SignedProposal {
+                SignedConsensusMsg::Proposal(SignedMessage {
                     message: Proposal::from_sign_bytes(&proposal.message).unwrap(),
                     signature: proposal.signature.into(),
                 })
@@ -216,7 +215,7 @@ impl From<RawExtendedCommitCertificate> for ExtendedCommitCertificate<TestContex
                     signature: sig.signature.into(),
                     extension: sig
                         .extension
-                        .map(|ext| SignedExtension::new(ext.extension.data, ext.signature.into())),
+                        .map(|ext| SignedMessage::new(ext.extension.data, ext.signature.into())),
                 })
                 .collect(),
         }
@@ -388,7 +387,7 @@ impl From<LivenessMsg<TestContext>> for RawLivenessMsg {
 impl From<RawLivenessMsg> for LivenessMsg<TestContext> {
     fn from(value: RawLivenessMsg) -> Self {
         match value {
-            RawLivenessMsg::Vote(vote) => LivenessMsg::Vote(SignedVote {
+            RawLivenessMsg::Vote(vote) => LivenessMsg::Vote(SignedMessage {
                 message: Vote::from_bytes(&vote.message).unwrap(),
                 signature: vote.signature.into(),
             }),

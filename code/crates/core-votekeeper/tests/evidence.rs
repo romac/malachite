@@ -1,4 +1,4 @@
-use malachitebft_core_types::{NilOrVal, Round, SignedVote};
+use malachitebft_core_types::{NilOrVal, Round, SignedMessage, SignedVote};
 use malachitebft_test::{Address, Height, PrivateKey, TestContext, ValueId, Vote};
 
 use arc_malachitebft_core_votekeeper::evidence::MAX_EVIDENCE_PER_VALIDATOR;
@@ -64,8 +64,8 @@ fn make_vote_pair(
     };
 
     (
-        SignedVote::new(v1.clone(), pk.sign(&v1.to_sign_bytes())),
-        SignedVote::new(v2.clone(), pk.sign(&v2.to_sign_bytes())),
+        SignedMessage::new(v1.clone(), pk.sign(&v1.to_sign_bytes())),
+        SignedMessage::new(v2.clone(), pk.sign(&v2.to_sign_bytes())),
     )
 }
 

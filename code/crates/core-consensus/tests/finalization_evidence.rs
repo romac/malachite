@@ -4,7 +4,7 @@ use arc_malachitebft_core_consensus::{
     process, Effect, Error, Input, Params, ProposedValue, Resumable, Resume, State,
 };
 use malachitebft_core_types::{
-    NilOrVal, Round, SignedProposal, SignedVote, Validity, ValueOrigin, ValuePayload,
+    NilOrVal, Round, SignedMessage, SignedProposal, Validity, ValueOrigin, ValuePayload,
 };
 use malachitebft_metrics::Metrics;
 use malachitebft_test::utils::validators::make_validators;
@@ -46,10 +46,8 @@ fn handle_effect(effect: Effect<TestContext>) -> Result<Resume<TestContext>, ()>
     Ok(match effect {
         VerifySignature(_, _, r) => r.resume_with(true),
         VerifyCommitCertificate(_, _, _, r) => r.resume_with(Ok(())),
-        SignVote(vote, r) => r.resume_with(SignedVote::new(vote, Signature::test())),
-        SignProposal(proposal, r) => {
-            r.resume_with(SignedProposal::new(proposal, Signature::test()))
-        }
+        SignVote(vote, r) => r.resume_with(SignedMessage::new(vote, Signature::test())),
+        SignProposal(proposal, r) => r.resume_with(SignedMessage::new(proposal, Signature::test())),
         _ => Resume::Continue,
     })
 }
@@ -74,7 +72,7 @@ fn drive_to_finalization(
         with: effect => handle_effect(effect)
     ));
 
-    let proposal = SignedProposal::new(
+    let proposal = SignedMessage::new(
         Proposal::new(
             Height::new(1),
             Round::new(0),
@@ -109,7 +107,7 @@ fn drive_to_finalization(
     ));
 
     for v in validators {
-        let prevote = SignedVote::new(
+        let prevote = SignedMessage::new(
             Vote::new_prevote(
                 Height::new(1),
                 Round::new(0),
@@ -127,7 +125,7 @@ fn drive_to_finalization(
     }
 
     for v in validators {
-        let precommit = SignedVote::new(
+        let precommit = SignedMessage::new(
             Vote::new_precommit(
                 Height::new(1),
                 Round::new(0),
@@ -149,7 +147,7 @@ fn drive_to_finalization(
 }
 
 fn equivocating_proposal(addr: Address) -> Input<TestContext> {
-    Input::Proposal(SignedProposal::new(
+    Input::Proposal(SignedMessage::new(
         Proposal::new(
             Height::new(1),
             Round::new(0),
@@ -162,7 +160,7 @@ fn equivocating_proposal(addr: Address) -> Input<TestContext> {
 }
 
 fn equivocating_prevote(addr: Address) -> Input<TestContext> {
-    Input::Vote(SignedVote::new(
+    Input::Vote(SignedMessage::new(
         Vote::new_prevote(
             Height::new(1),
             Round::new(0),
@@ -174,7 +172,7 @@ fn equivocating_prevote(addr: Address) -> Input<TestContext> {
 }
 
 fn equivocating_precommit(addr: Address) -> Input<TestContext> {
-    Input::Vote(SignedVote::new(
+    Input::Vote(SignedMessage::new(
         Vote::new_precommit(
             Height::new(1),
             Round::new(0),
@@ -215,7 +213,7 @@ fn round_one_proposal(
     value: Value,
     pol_round: Round,
 ) -> SignedProposal<TestContext> {
-    SignedProposal::new(
+    SignedMessage::new(
         Proposal::new(Height::new(1), Round::new(1), value, pol_round, proposer),
         Signature::test(),
     )
@@ -295,7 +293,7 @@ fn distinct_value_proposals_are_recorded_as_evidence_before_any_value_arrives() 
 
     for value in [Value::new(10), Value::new(20)] {
         run(process!(
-            input: Input::Proposal(SignedProposal::new(
+            input: Input::Proposal(SignedMessage::new(
                 Proposal::new(Height::new(1), Round::new(0), value, Round::Nil, proposer),
                 Signature::test(),
             )),
@@ -354,7 +352,7 @@ fn distinct_value_proposals_are_recorded_as_evidence_when_only_one_value_arrives
     let withheld = Value::new(20);
 
     run(process!(
-        input: Input::Proposal(SignedProposal::new(
+        input: Input::Proposal(SignedMessage::new(
             Proposal::new(Height::new(1), Round::new(0), streamed.clone(), Round::Nil, proposer),
             Signature::test(),
         )),
@@ -382,7 +380,7 @@ fn distinct_value_proposals_are_recorded_as_evidence_when_only_one_value_arrives
     ));
 
     run(process!(
-        input: Input::Proposal(SignedProposal::new(
+        input: Input::Proposal(SignedMessage::new(
             Proposal::new(Height::new(1), Round::new(0), withheld.clone(), Round::Nil, proposer),
             Signature::test(),
         )),

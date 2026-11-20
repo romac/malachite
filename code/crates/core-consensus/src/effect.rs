@@ -190,7 +190,7 @@ where
     ///
     /// Resume with: [`resume::SignatureValidity`]
     VerifySignature(
-        SignedMessage<Ctx, ConsensusMsg<Ctx>>,
+        SignedMessage<ConsensusMsg<Ctx>, malachitebft_core_types::Signature<Ctx>>,
         PublicKey<Ctx>,
         resume::SignatureValidity,
     ),
@@ -353,10 +353,10 @@ where
     SignatureValidity(bool),
 
     /// Resume execution with the signed vote
-    SignedVote(SignedMessage<Ctx, Ctx::Vote>),
+    SignedVote(malachitebft_core_types::SignedVote<Ctx>),
 
     /// Resume execution with the signed proposal
-    SignedProposal(SignedMessage<Ctx, Ctx::Proposal>),
+    SignedProposal(malachitebft_core_types::SignedProposal<Ctx>),
 
     /// Resume with an optional vote extension.
     /// See the [`Effect::ExtendVote`] effect for more information.
@@ -400,7 +400,7 @@ pub mod resume {
     pub struct SignedVote;
 
     impl<Ctx: Context> Resumable<Ctx> for SignedVote {
-        type Value = SignedMessage<Ctx, Ctx::Vote>;
+        type Value = malachitebft_core_types::SignedVote<Ctx>;
 
         fn resume_with(self, value: Self::Value) -> Resume<Ctx> {
             Resume::SignedVote(value)
@@ -411,7 +411,7 @@ pub mod resume {
     pub struct SignedProposal;
 
     impl<Ctx: Context> Resumable<Ctx> for SignedProposal {
-        type Value = SignedMessage<Ctx, Ctx::Proposal>;
+        type Value = malachitebft_core_types::SignedProposal<Ctx>;
 
         fn resume_with(self, a: Self::Value) -> Resume<Ctx> {
             Resume::SignedProposal(a)

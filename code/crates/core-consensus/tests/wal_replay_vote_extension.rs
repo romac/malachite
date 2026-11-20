@@ -10,8 +10,8 @@ use arc_malachitebft_core_consensus::{
 };
 use bytes::Bytes;
 use malachitebft_core_types::{
-    NilOrVal, Round, SignedExtension, SignedMessage, SignedProposal, SignedVote, Vote as _,
-    VoteExtensionPolicy, VoteType,
+    NilOrVal, Round, SignedExtension, SignedMessage, SignedVote, Vote as _, VoteExtensionPolicy,
+    VoteType,
 };
 use malachitebft_metrics::Metrics;
 use malachitebft_test::utils::validators::make_validators;
@@ -65,14 +65,14 @@ fn start_required_height(
 }
 
 fn signed_prevote(addr: Address, value_id: ValueId) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_prevote(Height::new(1), Round::new(0), NilOrVal::Val(value_id), addr),
         Signature::test(),
     )
 }
 
 fn signed_precommit(addr: Address, value_id: ValueId) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_precommit(Height::new(1), Round::new(0), NilOrVal::Val(value_id), addr),
         Signature::test(),
     )
@@ -108,10 +108,8 @@ fn handle_effect(
     Ok(match effect {
         VerifySignature(_, _, r) => r.resume_with(true),
         VerifyVoteExtension(_, _, _, _, _, _, r) => r.resume_with(Ok(())),
-        SignVote(vote, r) => r.resume_with(SignedVote::new(vote, Signature::test())),
-        SignProposal(proposal, r) => {
-            r.resume_with(SignedProposal::new(proposal, Signature::test()))
-        }
+        SignVote(vote, r) => r.resume_with(SignedMessage::new(vote, Signature::test())),
+        SignProposal(proposal, r) => r.resume_with(SignedMessage::new(proposal, Signature::test())),
         WalAppend(_, entry, r) => {
             cap.wal.push(entry);
             r.resume_with(())
@@ -151,7 +149,7 @@ fn drive_to_local_precommit(
     assert_ne!(proposer, my_addr);
     assert_ne!(peer_b, my_addr);
 
-    let proposal = SignedProposal::new(
+    let proposal = SignedMessage::new(
         Proposal::new(
             Height::new(1),
             Round::new(0),
@@ -206,7 +204,7 @@ fn record_recovered_extensions_keeps_only_own_non_nil_precommits() {
     let mut own_prevote = signed_prevote(my_addr, prevote_value);
     own_prevote.message.extension = Some(extension(b"prevote-ext"));
 
-    let mut nil_precommit = SignedVote::new(
+    let mut nil_precommit = SignedMessage::new(
         Vote::new_precommit(Height::new(1), Round::new(0), NilOrVal::Nil, my_addr),
         Signature::test(),
     );

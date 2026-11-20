@@ -178,7 +178,7 @@ mod tests {
     }
 
     fn signed(vote: Vote, signature: u8) -> SignedVote<TestContext> {
-        SignedVote::new(vote, Signature::from_bytes([signature; 64]))
+        SignedMessage::new(vote, Signature::from_bytes([signature; 64]))
     }
 
     fn with_extension(mut vote: Vote, extension: &'static [u8]) -> Vote {

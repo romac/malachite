@@ -2,8 +2,8 @@ use derive_where::derive_where;
 use thiserror::Error;
 
 use malachitebft_core_types::{
-    Context, PolkaCertificate, Proposal, Round, RoundCertificate, Signature, SignedProposal,
-    SignedVote, Validity, Vote,
+    ConsensusTypes, Context, PolkaCertificate, Proposal, Round, RoundCertificate, Signature,
+    SignedProposal, SignedVote, Validity, Vote,
 };
 
 pub use malachitebft_core_types::ValuePayload;
@@ -107,8 +107,10 @@ pub enum VoteExtensionError {
 
 /// The application's verdict on each vote extension it was asked about, paired
 /// with the address of the validator that produced it.
-pub type VoteExtensionVerdicts<Ctx> =
-    Vec<(<Ctx as Context>::Address, Result<(), VoteExtensionError>)>;
+pub type VoteExtensionVerdicts<Ctx> = Vec<(
+    <Ctx as ConsensusTypes>::Address,
+    Result<(), VoteExtensionError>,
+)>;
 
 #[derive_where(Clone, Debug, PartialEq, Eq)]
 pub enum LivenessMsg<Ctx: Context> {

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use malachitebft_core_types::{
     CommitCertificate, CommitSignature, ExtendedCommitCertificate, NilOrVal, PolkaCertificate,
-    PolkaSignature, Round, SignedVote, Vote as _, VoteExtensions,
+    PolkaSignature, Round, SignedMessage, Vote as _, VoteExtensions,
 };
 use malachitebft_test::proposer_selector::{FixedProposer, ProposerSelector};
 use malachitebft_test::utils::validators::make_validators;
@@ -233,7 +233,7 @@ fn commit_certificate_equivocates_against_prior_network_vote() {
     // v2 precommits for A as a network message.
     let precommit_for_a =
         Vote::new_precommit(height, round, NilOrVal::Val(value_a.id()), v2.address);
-    let signed_precommit_for_a = SignedVote::new(
+    let signed_precommit_for_a = SignedMessage::new(
         precommit_for_a.clone(),
         sk2.sign(&precommit_for_a.to_sign_bytes()),
     );
@@ -245,7 +245,7 @@ fn commit_certificate_equivocates_against_prior_network_vote() {
     // included in cert_b below — this is a duplicate, not an equivocation.
     let precommit_for_b =
         Vote::new_precommit(height, round, NilOrVal::Val(value_b.id()), v3.address);
-    let signed_precommit_for_b = SignedVote::new(
+    let signed_precommit_for_b = SignedMessage::new(
         precommit_for_b.clone(),
         sk3.sign(&precommit_for_b.to_sign_bytes()),
     );
@@ -307,7 +307,7 @@ fn polka_certificate_equivocates_against_prior_network_vote() {
 
     // v2 prevotes for A as a network message.
     let prevote_for_a = Vote::new_prevote(height, round, NilOrVal::Val(value_a.id()), v2.address);
-    let signed_prevote_for_a = SignedVote::new(
+    let signed_prevote_for_a = SignedMessage::new(
         prevote_for_a.clone(),
         sk2.sign(&prevote_for_a.to_sign_bytes()),
     );
@@ -318,7 +318,7 @@ fn polka_certificate_equivocates_against_prior_network_vote() {
     // v3 prevotes for B as a regular network vote. The same vote is later
     // included in cert_b below — this is a duplicate, not an equivocation.
     let prevote_for_b = Vote::new_prevote(height, round, NilOrVal::Val(value_b.id()), v3.address);
-    let signed_prevote_for_b = SignedVote::new(
+    let signed_prevote_for_b = SignedMessage::new(
         prevote_for_b.clone(),
         sk3.sign(&prevote_for_b.to_sign_bytes()),
     );

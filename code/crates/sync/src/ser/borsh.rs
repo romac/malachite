@@ -1,12 +1,12 @@
 use {
     crate::{RawDecidedValue, Request, Response, Status, ValueRequest, ValueResponse},
     borsh::BorshSerialize,
-    malachitebft_core_types::{Context, ExtendedCommitCertificate},
+    malachitebft_core_types::{ConsensusTypes, ExtendedCommitCertificate},
     malachitebft_peer::PeerId,
     std::ops::RangeInclusive,
 };
 
-impl<Ctx: Context> borsh::BorshSerialize for Status<Ctx>
+impl<Ctx: ConsensusTypes> borsh::BorshSerialize for Status<Ctx>
 where
     Ctx::Height: borsh::BorshSerialize,
 {
@@ -18,7 +18,7 @@ where
     }
 }
 
-impl<Ctx: Context> borsh::BorshDeserialize for Status<Ctx>
+impl<Ctx: ConsensusTypes> borsh::BorshDeserialize for Status<Ctx>
 where
     Ctx::Height: borsh::BorshDeserialize,
 {
@@ -34,7 +34,7 @@ where
     }
 }
 
-impl<Ctx: Context> borsh::BorshSerialize for Request<Ctx>
+impl<Ctx: ConsensusTypes> borsh::BorshSerialize for Request<Ctx>
 where
     Ctx::Height: borsh::BorshSerialize,
 {
@@ -45,7 +45,7 @@ where
     }
 }
 
-impl<Ctx: Context> borsh::BorshDeserialize for Request<Ctx>
+impl<Ctx: ConsensusTypes> borsh::BorshDeserialize for Request<Ctx>
 where
     Ctx::Height: borsh::BorshDeserialize,
 {
@@ -55,7 +55,7 @@ where
     }
 }
 
-impl<Ctx: Context> borsh::BorshSerialize for Response<Ctx>
+impl<Ctx: ConsensusTypes> borsh::BorshSerialize for Response<Ctx>
 where
     ValueResponse<Ctx>: borsh::BorshSerialize,
 {
@@ -66,7 +66,7 @@ where
     }
 }
 
-impl<Ctx: Context> borsh::BorshDeserialize for Response<Ctx>
+impl<Ctx: ConsensusTypes> borsh::BorshDeserialize for Response<Ctx>
 where
     ValueResponse<Ctx>: borsh::BorshDeserialize,
 {
@@ -76,7 +76,7 @@ where
     }
 }
 
-impl<Ctx: Context> borsh::BorshSerialize for ValueResponse<Ctx>
+impl<Ctx: ConsensusTypes> borsh::BorshSerialize for ValueResponse<Ctx>
 where
     Ctx::Height: borsh::BorshSerialize,
     RawDecidedValue<Ctx>: borsh::BorshSerialize,
@@ -88,7 +88,7 @@ where
     }
 }
 
-impl<Ctx: Context> borsh::BorshDeserialize for ValueResponse<Ctx>
+impl<Ctx: ConsensusTypes> borsh::BorshDeserialize for ValueResponse<Ctx>
 where
     Ctx::Height: borsh::BorshDeserialize,
     RawDecidedValue<Ctx>: borsh::BorshDeserialize,
@@ -103,7 +103,7 @@ where
     }
 }
 
-impl<Ctx: Context> borsh::BorshSerialize for RawDecidedValue<Ctx>
+impl<Ctx: ConsensusTypes> borsh::BorshSerialize for RawDecidedValue<Ctx>
 where
     ExtendedCommitCertificate<Ctx>: borsh::BorshSerialize,
 {
@@ -114,7 +114,7 @@ where
     }
 }
 
-impl<Ctx: Context> borsh::BorshDeserialize for RawDecidedValue<Ctx>
+impl<Ctx: ConsensusTypes> borsh::BorshDeserialize for RawDecidedValue<Ctx>
 where
     ExtendedCommitCertificate<Ctx>: borsh::BorshDeserialize,
 {

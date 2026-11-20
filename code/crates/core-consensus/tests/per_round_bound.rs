@@ -19,8 +19,8 @@ use arc_malachitebft_core_consensus::{
 };
 use malachitebft_core_driver::proposal_keeper::MAX_EVIDENCE_PER_VALIDATOR;
 use malachitebft_core_types::{
-    NilOrVal, PolkaCertificate, Round, RoundCertificate, RoundCertificateType, SignedProposal,
-    SignedVote, Timeout, Validity, ValueOrigin, VoteType,
+    NilOrVal, PolkaCertificate, Round, RoundCertificate, RoundCertificateType, SignedMessage,
+    SignedProposal, SignedVote, Timeout, Validity, ValueOrigin, VoteType,
 };
 use malachitebft_metrics::Metrics;
 use malachitebft_test::utils::validators::make_validators;
@@ -45,10 +45,8 @@ fn handle_effect(
         VerifyPolkaCertificate(_, _, _, r) => r.resume_with(Ok(())),
         VerifyRoundCertificate(_, _, _, r) => r.resume_with(Ok(())),
         VerifyCommitCertificate(_, _, _, r) => r.resume_with(Ok(())),
-        SignVote(vote, r) => r.resume_with(SignedVote::new(vote, Signature::test())),
-        SignProposal(proposal, r) => {
-            r.resume_with(SignedProposal::new(proposal, Signature::test()))
-        }
+        SignVote(vote, r) => r.resume_with(SignedMessage::new(vote, Signature::test())),
+        SignProposal(proposal, r) => r.resume_with(SignedMessage::new(proposal, Signature::test())),
         ExtendVote(_, _, _, _, r) => r.resume_with(None),
         VerifyVoteExtension(_, _, _, _, _, _, r) => r.resume_with(Ok(())),
         WalAppend(_, input, r) => {
@@ -66,14 +64,14 @@ fn handle_effect(
 }
 
 fn prevote(addr: Address, round: u32, value_id: NilOrVal<ValueId>) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_prevote(Height::new(1), Round::new(round), value_id, addr),
         Signature::test(),
     )
 }
 
 fn precommit(addr: Address, round: u32, value_id: NilOrVal<ValueId>) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_precommit(Height::new(1), Round::new(round), value_id, addr),
         Signature::test(),
     )
@@ -139,7 +137,7 @@ fn signed_proposal_with_pol_round(
     value: u64,
     pol_round: Round,
 ) -> SignedProposal<TestContext> {
-    SignedProposal::new(
+    SignedMessage::new(
         Proposal::new(
             Height::new(1),
             Round::new(round),
@@ -1043,7 +1041,7 @@ fn proposal_evidence_and_wal_are_capped_per_validator() {
 
     let first = signed_proposal(proposer, proposal_round, 10);
     let signature_variant =
-        SignedProposal::new(first.message.clone(), Signature::from_bytes([1; 64]));
+        SignedMessage::new(first.message.clone(), Signature::from_bytes([1; 64]));
     let mut inputs = vec![
         Input::StartHeight(
             Height::new(1),

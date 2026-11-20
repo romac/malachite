@@ -17,8 +17,8 @@ use arc_malachitebft_test::{
 
 use malachitebft_core_consensus::{Input, LocallyProposedValue, ProposedValue};
 use malachitebft_core_types::{
-    NilOrVal, PolkaCertificate, PolkaSignature, Round, SignedProposal, SignedVote, Timeout,
-    Validity, ValueOrigin,
+    NilOrVal, PolkaCertificate, PolkaSignature, Round, SignedMessage, Timeout, Validity,
+    ValueOrigin,
 };
 use malachitebft_engine::wal::{decode_entry, encode_entry};
 
@@ -44,7 +44,7 @@ fn round_trip(entry: &Input<TestContext>) -> Input<TestContext> {
 
 #[test]
 fn vote_round_trip() {
-    let vote = SignedVote::new(
+    let vote = SignedMessage::new(
         Vote::new_prevote(
             Height::new(11),
             Round::new(2),
@@ -71,7 +71,7 @@ fn vote_round_trip() {
 
 #[test]
 fn proposal_round_trip() {
-    let proposal = SignedProposal::new(
+    let proposal = SignedMessage::new(
         Proposal::new(
             Height::new(11),
             Round::new(2),
@@ -209,7 +209,7 @@ fn invalid_tag_is_rejected() {
 /// produce byte-compatible WAL files.
 #[test]
 fn vote_and_proposal_share_consensus_tag() {
-    let vote = SignedVote::new(
+    let vote = SignedMessage::new(
         Vote::new_prevote(
             Height::new(1),
             Round::new(0),
@@ -218,7 +218,7 @@ fn vote_and_proposal_share_consensus_tag() {
         ),
         Signature::test(),
     );
-    let proposal = SignedProposal::new(
+    let proposal = SignedMessage::new(
         Proposal::new(
             Height::new(1),
             Round::new(0),

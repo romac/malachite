@@ -4,8 +4,8 @@ use arc_malachitebft_core_consensus::{
     process, Effect, Error, Input, Params, Resumable, Resume, State,
 };
 use malachitebft_core_types::{
-    Context, NilOrVal, Round, RoundCertificate, RoundCertificateType, SignedVote, Timeout,
-    ValuePayload, VoteExtensionPolicy,
+    MessageBuilder, NilOrVal, Round, RoundCertificate, RoundCertificateType, SignedMessage,
+    SignedVote, Timeout, ValuePayload, VoteExtensionPolicy,
 };
 use malachitebft_metrics::Metrics;
 use malachitebft_test::utils::validators::make_validators;
@@ -82,12 +82,12 @@ fn prevote(address: Address, round: Round) -> SignedVote<TestContext> {
         NilOrVal::Val(ValueId::new(1)),
         address,
     );
-    SignedVote::new(vote, Signature::test())
+    SignedMessage::new(vote, Signature::test())
 }
 
 fn precommit(address: Address, round: Round) -> SignedVote<TestContext> {
     let vote = TestContext::new().new_precommit(Height::new(1), round, NilOrVal::Nil, address);
-    SignedVote::new(vote, Signature::test())
+    SignedMessage::new(vote, Signature::test())
 }
 
 fn non_nil_precommit(address: Address, round: Round) -> SignedVote<TestContext> {
@@ -97,7 +97,7 @@ fn non_nil_precommit(address: Address, round: Round) -> SignedVote<TestContext> 
         NilOrVal::Val(ValueId::new(1)),
         address,
     );
-    SignedVote::new(vote, Signature::test())
+    SignedMessage::new(vote, Signature::test())
 }
 
 fn started_state() -> (Vec<Validator>, State<TestContext>, Metrics, ActiveTimeouts) {

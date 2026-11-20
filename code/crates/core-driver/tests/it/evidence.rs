@@ -1,4 +1,4 @@
-use malachitebft_core_types::{Round, SignedProposal, Validity};
+use malachitebft_core_types::{Round, SignedMessage, SignedProposal, Validity};
 use malachitebft_test::{Address, Height, PrivateKey, Proposal, Signature, TestContext, Value};
 
 use arc_malachitebft_core_driver::proposal_keeper::{
@@ -42,8 +42,8 @@ fn make_proposal_pair(
     );
 
     (
-        SignedProposal::new(p1.clone(), pk.sign(&p1.to_sign_bytes())),
-        SignedProposal::new(p2.clone(), pk.sign(&p2.to_sign_bytes())),
+        SignedMessage::new(p1.clone(), pk.sign(&p1.to_sign_bytes())),
+        SignedMessage::new(p2.clone(), pk.sign(&p2.to_sign_bytes())),
     )
 }
 
@@ -137,9 +137,9 @@ fn proposal_evidence_deduplicates_signature_variants() {
 
     assert!(evidence.add(first.clone(), conflicting.clone()));
 
-    let first_variant = SignedProposal::new(first.message.clone(), Signature::from_bytes([1; 64]));
+    let first_variant = SignedMessage::new(first.message.clone(), Signature::from_bytes([1; 64]));
     let conflicting_variant =
-        SignedProposal::new(conflicting.message.clone(), Signature::from_bytes([2; 64]));
+        SignedMessage::new(conflicting.message.clone(), Signature::from_bytes([2; 64]));
     assert!(!evidence.add(conflicting_variant, first_variant));
     assert_eq!(evidence.get(&addr("Alice")).map(Vec::len), Some(1));
 }
@@ -223,7 +223,7 @@ fn store_proposal_surfaces_equivocation_to_caller() {
 fn store_proposal_ignores_signature_variant_duplicates() {
     let mut keeper = ProposalKeeper::<TestContext>::new();
     let (first, _) = make_proposal_pair("Alice", 0, [100, 200]);
-    let variant = SignedProposal::new(first.message.clone(), Signature::from_bytes([1; 64]));
+    let variant = SignedMessage::new(first.message.clone(), Signature::from_bytes([1; 64]));
 
     assert!(matches!(
         keeper.store_proposal(first, Validity::Valid),

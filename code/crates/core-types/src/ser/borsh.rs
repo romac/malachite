@@ -1,14 +1,14 @@
 use {
     crate::{
-        CommitCertificate, CommitSignature, Context, NilOrVal, PolkaCertificate, PolkaSignature,
-        Round, RoundCertificate, RoundCertificateType, RoundSignature, Signature, SignedMessage,
-        ValueId, VoteType,
+        CommitCertificate, CommitSignature, ConsensusTypes, NilOrVal, PolkaCertificate,
+        PolkaSignature, Round, RoundCertificate, RoundCertificateType, RoundSignature, Signature,
+        SignedMessage, ValueId, VoteType,
     },
     ::borsh::BorshSerialize,
     alloc::vec::Vec,
 };
 
-impl<Ctx: Context> BorshSerialize for PolkaSignature<Ctx>
+impl<Ctx: ConsensusTypes> BorshSerialize for PolkaSignature<Ctx>
 where
     Ctx::Address: BorshSerialize,
     Signature<Ctx>: BorshSerialize,
@@ -20,7 +20,7 @@ where
     }
 }
 
-impl<Ctx: Context> ::borsh::BorshDeserialize for PolkaSignature<Ctx>
+impl<Ctx: ConsensusTypes> ::borsh::BorshDeserialize for PolkaSignature<Ctx>
 where
     Ctx::Address: borsh::BorshDeserialize,
     Signature<Ctx>: borsh::BorshDeserialize,
@@ -32,7 +32,7 @@ where
     }
 }
 
-impl<Ctx: Context> ::borsh::BorshSerialize for PolkaCertificate<Ctx>
+impl<Ctx: ConsensusTypes> ::borsh::BorshSerialize for PolkaCertificate<Ctx>
 where
     Ctx::Address: borsh::BorshSerialize,
     Ctx::Height: borsh::BorshSerialize,
@@ -48,7 +48,7 @@ where
     }
 }
 
-impl<Ctx: Context> ::borsh::BorshDeserialize for PolkaCertificate<Ctx>
+impl<Ctx: ConsensusTypes> ::borsh::BorshDeserialize for PolkaCertificate<Ctx>
 where
     Ctx::Height: borsh::BorshDeserialize,
     Ctx::Address: borsh::BorshDeserialize,
@@ -69,7 +69,7 @@ where
     }
 }
 
-impl<Ctx: Context> ::borsh::BorshSerialize for RoundCertificate<Ctx>
+impl<Ctx: ConsensusTypes> ::borsh::BorshSerialize for RoundCertificate<Ctx>
 where
     Ctx::Height: borsh::BorshSerialize,
     Ctx::Address: borsh::BorshSerialize,
@@ -85,7 +85,7 @@ where
     }
 }
 
-impl<Ctx: Context> ::borsh::BorshDeserialize for RoundCertificate<Ctx>
+impl<Ctx: ConsensusTypes> ::borsh::BorshDeserialize for RoundCertificate<Ctx>
 where
     Ctx::Height: borsh::BorshDeserialize,
     Ctx::Address: borsh::BorshDeserialize,
@@ -106,7 +106,7 @@ where
     }
 }
 
-impl<Ctx: Context> ::borsh::BorshSerialize for RoundSignature<Ctx>
+impl<Ctx: ConsensusTypes> ::borsh::BorshSerialize for RoundSignature<Ctx>
 where
     NilOrVal<ValueId<Ctx>>: borsh::BorshSerialize,
     Ctx::Address: borsh::BorshSerialize,
@@ -121,7 +121,7 @@ where
     }
 }
 
-impl<Ctx: Context> ::borsh::BorshDeserialize for RoundSignature<Ctx>
+impl<Ctx: ConsensusTypes> ::borsh::BorshDeserialize for RoundSignature<Ctx>
 where
     NilOrVal<ValueId<Ctx>>: borsh::BorshDeserialize,
     Ctx::Address: borsh::BorshDeserialize,
@@ -141,7 +141,7 @@ where
     }
 }
 
-impl<Ctx: Context> ::borsh::BorshSerialize for CommitCertificate<Ctx>
+impl<Ctx: ConsensusTypes> ::borsh::BorshSerialize for CommitCertificate<Ctx>
 where
     Ctx::Height: borsh::BorshSerialize,
     ValueId<Ctx>: borsh::BorshSerialize,
@@ -156,7 +156,7 @@ where
     }
 }
 
-impl<Ctx: Context> ::borsh::BorshDeserialize for CommitCertificate<Ctx>
+impl<Ctx: ConsensusTypes> ::borsh::BorshDeserialize for CommitCertificate<Ctx>
 where
     Ctx::Height: borsh::BorshDeserialize,
     ValueId<Ctx>: borsh::BorshDeserialize,
@@ -176,7 +176,7 @@ where
     }
 }
 
-impl<Ctx: Context> ::borsh::BorshSerialize for CommitSignature<Ctx>
+impl<Ctx: ConsensusTypes> ::borsh::BorshSerialize for CommitSignature<Ctx>
 where
     Ctx::Address: borsh::BorshSerialize,
     Signature<Ctx>: borsh::BorshSerialize,
@@ -188,7 +188,7 @@ where
     }
 }
 
-impl<Ctx: Context> ::borsh::BorshDeserialize for CommitSignature<Ctx>
+impl<Ctx: ConsensusTypes> ::borsh::BorshDeserialize for CommitSignature<Ctx>
 where
     Ctx::Address: borsh::BorshDeserialize,
     Signature<Ctx>: borsh::BorshDeserialize,
@@ -200,11 +200,10 @@ where
     }
 }
 
-impl<Ctx, Msg> borsh::BorshSerialize for SignedMessage<Ctx, Msg>
+impl<Msg, Sig> borsh::BorshSerialize for SignedMessage<Msg, Sig>
 where
-    Ctx: Context,
     Msg: borsh::BorshSerialize,
-    Signature<Ctx>: borsh::BorshSerialize,
+    Sig: borsh::BorshSerialize,
 {
     fn serialize<W: borsh::io::Write>(&self, writer: &mut W) -> borsh::io::Result<()> {
         self.message.serialize(writer)?;
@@ -214,16 +213,15 @@ where
 }
 
 #[cfg(feature = "borsh")]
-impl<Ctx, Msg> borsh::BorshDeserialize for SignedMessage<Ctx, Msg>
+impl<Msg, Sig> borsh::BorshDeserialize for SignedMessage<Msg, Sig>
 where
-    Ctx: Context,
     Msg: borsh::BorshDeserialize,
-    Signature<Ctx>: borsh::BorshDeserialize,
+    Sig: borsh::BorshDeserialize,
 {
     fn deserialize_reader<R: borsh::io::Read>(reader: &mut R) -> borsh::io::Result<Self> {
         Ok(Self {
             message: Msg::deserialize_reader(reader)?,
-            signature: Signature::<Ctx>::deserialize_reader(reader)?,
+            signature: Sig::deserialize_reader(reader)?,
         })
     }
 }

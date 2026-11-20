@@ -5,7 +5,7 @@ use malachitebft_core_types::VotingPower;
 use serde::{Deserialize, Serialize};
 
 use crate::signing::PublicKey;
-use crate::{Address, TestContext};
+use crate::Address;
 
 /// A validator is a public key and voting power
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,7 +38,10 @@ impl Ord for Validator {
     }
 }
 
-impl malachitebft_core_types::Validator<TestContext> for Validator {
+impl malachitebft_core_types::Validator for Validator {
+    type Address = Address;
+    type PublicKey = PublicKey;
+
     fn address(&self) -> &Address {
         &self.address
     }
@@ -128,7 +131,9 @@ impl ValidatorSet {
     }
 }
 
-impl malachitebft_core_types::ValidatorSet<TestContext> for ValidatorSet {
+impl malachitebft_core_types::ValidatorSet for ValidatorSet {
+    type Validator = Validator;
+
     fn count(&self) -> usize {
         self.validators.len()
     }

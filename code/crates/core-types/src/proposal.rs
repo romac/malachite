@@ -1,6 +1,6 @@
 use core::fmt::Debug;
 
-use crate::{Context, Round};
+use crate::{Address, Height, Round, Value};
 
 /// Defines the requirements for a proposal type.
 ///
@@ -10,28 +10,34 @@ use crate::{Context, Round};
 /// Replaying the write-ahead log re-derives every proposal this node made before a crash.
 /// The re-derived proposal and the recorded one are compared (`Eq`) and they must be equal.
 /// Otherwise, it is considered a non-determinism bug.
-pub trait Proposal<Ctx>
+pub trait Proposal
 where
     Self: Clone + Debug + Eq + Send + Sync + 'static,
-    Ctx: Context,
 {
+    /// Block height.
+    type Height: Height;
+    /// Address of the proposer.
+    type Address: Address;
+    /// Proposed value.
+    type Value: Value;
+
     /// The height for which the proposal is for.
-    fn height(&self) -> Ctx::Height;
+    fn height(&self) -> Self::Height;
 
     /// The round for which the proposal is for.
     fn round(&self) -> Round;
 
     /// The value that is proposed.
-    fn value(&self) -> &Ctx::Value;
+    fn value(&self) -> &Self::Value;
 
     /// The value that is proposed.
-    fn take_value(self) -> Ctx::Value;
+    fn take_value(self) -> Self::Value;
 
     /// The POL round for which the proposal is for.
     fn pol_round(&self) -> Round;
 
     /// Address of the validator who issued this proposal
-    fn validator_address(&self) -> &Ctx::Address;
+    fn validator_address(&self) -> &Self::Address;
 }
 
 /// Whether or not a proposal is valid.

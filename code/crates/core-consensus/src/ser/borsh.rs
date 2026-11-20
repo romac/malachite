@@ -36,11 +36,11 @@ where
     fn deserialize_reader<R: Read>(reader: &mut R) -> Result<Self> {
         let discriminant = u8::deserialize_reader(reader)?;
         match discriminant {
-            0 => Ok(SignedConsensusMsg::Vote(SignedVote::deserialize_reader(
-                reader,
-            )?)),
+            0 => Ok(SignedConsensusMsg::Vote(
+                malachitebft_core_types::SignedMessage::deserialize_reader(reader)?,
+            )),
             1 => Ok(SignedConsensusMsg::Proposal(
-                SignedProposal::deserialize_reader(reader)?,
+                malachitebft_core_types::SignedMessage::deserialize_reader(reader)?,
             )),
             _ => Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -83,7 +83,9 @@ where
     fn deserialize_reader<R: Read>(reader: &mut R) -> Result<Self> {
         let discriminant = u8::deserialize_reader(reader)?;
         match discriminant {
-            0 => Ok(LivenessMsg::Vote(SignedVote::deserialize_reader(reader)?)),
+            0 => Ok(LivenessMsg::Vote(
+                malachitebft_core_types::SignedMessage::deserialize_reader(reader)?,
+            )),
             1 => Ok(LivenessMsg::PolkaCertificate(
                 PolkaCertificate::deserialize_reader(reader)?,
             )),

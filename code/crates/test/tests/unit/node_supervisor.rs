@@ -15,7 +15,7 @@ use arc_malachitebft_test::{Address, Height, Signature, TestContext, Value, Vote
 
 use malachitebft_codec::Codec;
 use malachitebft_core_consensus::Input;
-use malachitebft_core_types::{NilOrVal, Round, SignedVote};
+use malachitebft_core_types::{NilOrVal, Round, SignedMessage};
 use malachitebft_engine::node::{Node, NodeRef};
 use malachitebft_engine::wal::{Msg as WalMsg, Wal, WalRef};
 use malachitebft_metrics::{Metrics, SharedRegistry};
@@ -105,7 +105,7 @@ async fn wal_worker_thread_panic_triggers_node_safety_hang() {
     // worker catches the panic and casts `NodeMsg::SafetyFailure` before exiting.
     // We don't await the reply — the panic drops the reply channel.
     let (tx, _rx) = oneshot::channel();
-    let vote = Input::Vote(SignedVote::new(
+    let vote = Input::Vote(SignedMessage::new(
         Vote::new_prevote(
             Height::new(1),
             Round::new(0),

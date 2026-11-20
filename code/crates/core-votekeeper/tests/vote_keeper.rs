@@ -1,5 +1,7 @@
 use bytes::Bytes;
-use malachitebft_core_types::{NilOrVal, Round, SignedExtension, SignedVote, Vote as _, VoteType};
+use malachitebft_core_types::{
+    NilOrVal, Round, SignedExtension, SignedMessage, SignedVote, Vote as _, VoteType,
+};
 
 use arc_malachitebft_core_votekeeper::evidence::MAX_EVIDENCE_PER_VALIDATOR;
 use arc_malachitebft_core_votekeeper::keeper::{Output, VoteKeeper};
@@ -26,7 +28,7 @@ fn new_signed_prevote(
     value: NilOrVal<ValueId>,
     addr: Address,
 ) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_prevote(height, round, value, addr),
         Signature::test(),
     )
@@ -38,7 +40,7 @@ fn new_signed_precommit(
     value: NilOrVal<ValueId>,
     addr: Address,
 ) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_precommit(height, round, value, addr),
         Signature::test(),
     )
@@ -51,14 +53,14 @@ fn new_signed_precommit_with_extension(
     addr: Address,
     extension: SignedExtension<TestContext>,
 ) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_precommit(height, round, value, addr).extend(extension),
         Signature::test(),
     )
 }
 
 fn test_extension(data: &'static [u8]) -> SignedExtension<TestContext> {
-    SignedExtension::new(Bytes::from_static(data), Signature::test())
+    SignedMessage::new(Bytes::from_static(data), Signature::test())
 }
 
 #[test]
@@ -499,10 +501,10 @@ fn has_vote_true_for_signature_variant_duplicate() {
 
     let vote = Vote::new_prevote(height, round, val, addr1);
 
-    let stored = SignedVote::new(vote.clone(), Signature::from_bytes([1; 64]));
+    let stored = SignedMessage::new(vote.clone(), Signature::from_bytes([1; 64]));
     keeper.apply_vote(stored, round);
 
-    let variant = SignedVote::new(vote, Signature::from_bytes([2; 64]));
+    let variant = SignedMessage::new(vote, Signature::from_bytes([2; 64]));
     assert!(keeper.has_vote(&variant));
 }
 

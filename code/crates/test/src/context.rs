@@ -3,7 +3,9 @@ use std::sync::Arc;
 use bytes::Bytes;
 
 use malachitebft_core_types::LinearTimeouts;
-use malachitebft_core_types::{Context, NilOrVal, Round, ValidatorSet as _};
+use malachitebft_core_types::{
+    ConsensusTypes, MessageBuilder, NilOrVal, ProposerSelector, Round, ValidatorSet as _,
+};
 
 use crate::address::*;
 use crate::height::*;
@@ -62,7 +64,7 @@ impl TestContext {
     }
 }
 
-impl Context for TestContext {
+impl ConsensusTypes for TestContext {
     type Address = Address;
     type ProposalPart = ProposalPart;
     type Height = Height;
@@ -74,16 +76,20 @@ impl Context for TestContext {
     type Vote = Vote;
     type Extension = Bytes;
     type SigningScheme = Ed25519;
+}
 
+impl ProposerSelector<TestContext> for TestContext {
     fn select_proposer<'a>(
         &self,
-        validator_set: &'a Self::ValidatorSet,
-        height: Self::Height,
+        validator_set: &'a ValidatorSet,
+        height: Height,
         round: Round,
-    ) -> &'a Self::Validator {
+    ) -> &'a Validator {
         self.select_proposer(validator_set, height, round)
     }
+}
 
+impl MessageBuilder<TestContext> for TestContext {
     fn new_proposal(
         &self,
         height: Height,

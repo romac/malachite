@@ -7,7 +7,8 @@ use arc_malachitebft_core_consensus::{
     process, Effect, Error, Input, Params, Resumable, Resume, State,
 };
 use malachitebft_core_types::{
-    Context, NilOrVal, Round, RoundCertificate, RoundCertificateType, SignedVote, ValuePayload,
+    MessageBuilder, NilOrVal, Round, RoundCertificate, RoundCertificateType, SignedMessage,
+    SignedVote, ValuePayload,
 };
 use malachitebft_metrics::Metrics;
 use malachitebft_test::utils::validators::make_validators;
@@ -38,7 +39,7 @@ impl EffectCounts {
             WalAppend(_, _, r) => r.resume_with(()),
             VerifySignature(_, _, r) => r.resume_with(true),
             VerifyCommitCertificate(_, _, _, r) => r.resume_with(Ok(())),
-            SignVote(vote, r) => r.resume_with(SignedVote::new(vote, Signature::test())),
+            SignVote(vote, r) => r.resume_with(SignedMessage::new(vote, Signature::test())),
             _ => Resume::Continue,
         })
     }
@@ -82,7 +83,7 @@ fn precommit_value(address: Address, round: Round) -> SignedVote<TestContext> {
         NilOrVal::Val(ValueId::new(1)),
         address,
     );
-    SignedVote::new(vote, Signature::test())
+    SignedMessage::new(vote, Signature::test())
 }
 
 fn prevote_value(address: Address, round: Round) -> SignedVote<TestContext> {
@@ -92,7 +93,7 @@ fn prevote_value(address: Address, round: Round) -> SignedVote<TestContext> {
         NilOrVal::Val(ValueId::new(1)),
         address,
     );
-    SignedVote::new(vote, Signature::test())
+    SignedMessage::new(vote, Signature::test())
 }
 
 fn started_state() -> (Vec<Validator>, State<TestContext>, Metrics, EffectCounts) {
@@ -244,7 +245,7 @@ fn precommit_for(
     value: NilOrVal<ValueId>,
 ) -> SignedVote<TestContext> {
     let vote = TestContext::new().new_precommit(Height::new(1), round, value, address);
-    SignedVote::new(vote, Signature::test())
+    SignedMessage::new(vote, Signature::test())
 }
 
 /// A certificate vote that conflicts with one we already hold is recorded as

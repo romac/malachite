@@ -8,7 +8,7 @@ use malachitebft_app::events::RxEvent;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use malachitebft_core_types::{Context, PrivateKey, PublicKey};
+use malachitebft_core_types::{ConsensusTypes, Context, PrivateKey, PublicKey};
 use malachitebft_signing::{Signer, Verifier};
 
 pub use libp2p_identity::Keypair;
@@ -41,7 +41,10 @@ pub trait Node {
 
     fn load_config(&self) -> eyre::Result<Self::Config>;
 
-    fn get_address(&self, pk: &PublicKey<Self::Context>) -> <Self::Context as Context>::Address;
+    fn get_address(
+        &self,
+        pk: &PublicKey<Self::Context>,
+    ) -> <Self::Context as ConsensusTypes>::Address;
 
     fn get_public_key(&self, pk: &PrivateKey<Self::Context>) -> PublicKey<Self::Context>;
 

@@ -1,5 +1,5 @@
 use malachitebft_core_types::{
-    Context, ExtendedCommitCertificate, PolkaCertificate, Round, SignedProposal, SignedVote,
+    ConsensusTypes, ExtendedCommitCertificate, PolkaCertificate, Round, SignedProposal, SignedVote,
     Timeout, Validity,
 };
 
@@ -9,7 +9,7 @@ use derive_where::derive_where;
 #[derive_where(Clone, Debug, PartialEq, Eq)]
 pub enum Input<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Start a new round with the given proposer
     NewRound(Ctx::Height, Round, Ctx::Address),

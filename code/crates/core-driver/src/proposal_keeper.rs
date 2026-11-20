@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use derive_where::derive_where;
 
 use malachitebft_core_types::{
-    Context, DoubleProposal, Proposal, Round, SignedProposal, Validity, Value, ValueId,
+    ConsensusTypes, DoubleProposal, Proposal, Round, SignedProposal, Validity, Value, ValueId,
 };
 pub use malachitebft_core_votekeeper::evidence::MAX_EVIDENCE_PER_VALIDATOR;
 use tracing::{error, warn};
@@ -19,7 +19,7 @@ use tracing::{error, warn};
 /// via [`ProposalKeeper::record_evidence`].
 #[must_use]
 #[derive_where(Clone, Debug)]
-pub enum StoreProposalResult<Ctx: Context> {
+pub enum StoreProposalResult<Ctx: ConsensusTypes> {
     /// The proposal was stored, or a duplicate proposal message was ignored.
     Stored,
     /// A different proposal from the same validator is already stored for this round, so the
@@ -36,7 +36,7 @@ pub enum StoreProposalResult<Ctx: Context> {
 #[derive_where(Clone, Debug, PartialEq, Eq, Default)]
 pub struct PerRound<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// The proposals received in a given round (proposal.round) if any.
     proposals: Vec<(SignedProposal<Ctx>, Validity)>,
@@ -44,7 +44,7 @@ where
 
 impl<Ctx> PerRound<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Return the first proposal and its validity that matches the given value_id, if any.
     fn get_first_proposal_and_validity(
@@ -182,7 +182,7 @@ where
 #[derive_where(Clone, Debug, Default)]
 pub struct ProposalKeeper<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// The proposal for each round.
     per_round: BTreeMap<Round, PerRound<Ctx>>,
@@ -193,7 +193,7 @@ where
 
 impl<Ctx> ProposalKeeper<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Create a new `ProposalKeeper` instance
     pub fn new() -> Self {
@@ -291,14 +291,14 @@ where
 #[derive_where(Clone, Debug, Default)]
 pub struct EvidenceMap<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     map: BTreeMap<Ctx::Address, Vec<DoubleProposal<Ctx>>>,
 }
 
 impl<Ctx> EvidenceMap<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Create a new `EvidenceMap` instance.
     pub fn new() -> Self {
@@ -370,7 +370,7 @@ where
 
 impl<'a, Ctx> IntoIterator for &'a EvidenceMap<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     type Item = (&'a Ctx::Address, &'a Vec<DoubleProposal<Ctx>>);
     type IntoIter = alloc::collections::btree_map::Iter<'a, Ctx::Address, Vec<DoubleProposal<Ctx>>>;
@@ -382,7 +382,7 @@ where
 
 impl<Ctx> IntoIterator for EvidenceMap<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     type Item = (Ctx::Address, Vec<DoubleProposal<Ctx>>);
     type IntoIter = alloc::collections::btree_map::IntoIter<Ctx::Address, Vec<DoubleProposal<Ctx>>>;

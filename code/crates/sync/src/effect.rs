@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::RangeInclusive};
 use derive_where::derive_where;
 use thiserror::Error;
 
-use malachitebft_core_types::Context;
+use malachitebft_core_types::ConsensusTypes;
 use malachitebft_peer::PeerId;
 
 use crate::{InboundRequestId, OutboundRequestId, ValueRequest, ValueResponse};
@@ -31,7 +31,7 @@ use crate::{InboundRequestId, OutboundRequestId, ValueRequest, ValueResponse};
 ///     }
 /// }
 /// ```
-pub trait Resumable<Ctx: Context> {
+pub trait Resumable<Ctx: ConsensusTypes> {
     /// The value type that will be used to resume execution
     type Value;
 
@@ -41,7 +41,7 @@ pub trait Resumable<Ctx: Context> {
 
 #[derive_where(Debug)]
 #[derive(Error)]
-pub enum Error<Ctx: Context> {
+pub enum Error<Ctx: ConsensusTypes> {
     /// The coroutine was resumed with a value which
     /// does not match the expected type of resume value.
     #[error("Unexpected resume: {0:?}, expected one of: {1}")]
@@ -49,19 +49,19 @@ pub enum Error<Ctx: Context> {
 }
 
 #[derive_where(Debug)]
-pub enum Resume<Ctx: Context> {
+pub enum Resume<Ctx: ConsensusTypes> {
     Continue(PhantomData<Ctx>),
     ValueRequestId(Option<OutboundRequestId>),
 }
 
-impl<Ctx: Context> Default for Resume<Ctx> {
+impl<Ctx: ConsensusTypes> Default for Resume<Ctx> {
     fn default() -> Self {
         Self::Continue(PhantomData)
     }
 }
 
 #[derive_where(Debug)]
-pub enum Effect<Ctx: Context> {
+pub enum Effect<Ctx: ConsensusTypes> {
     /// Broadcast our status to our direct peers
     BroadcastStatus(Ctx::Height, resume::Continue),
 
@@ -102,7 +102,7 @@ pub mod resume {
     #[derive(Debug, Default)]
     pub struct Continue;
 
-    impl<Ctx: Context> Resumable<Ctx> for Continue {
+    impl<Ctx: ConsensusTypes> Resumable<Ctx> for Continue {
         type Value = ();
 
         fn resume_with(self, _: ()) -> Resume<Ctx> {
@@ -113,7 +113,7 @@ pub mod resume {
     #[derive(Debug, Default)]
     pub struct ValueRequestId;
 
-    impl<Ctx: Context> Resumable<Ctx> for ValueRequestId {
+    impl<Ctx: ConsensusTypes> Resumable<Ctx> for ValueRequestId {
         type Value = Option<OutboundRequestId>;
 
         fn resume_with(self, value: Self::Value) -> Resume<Ctx> {

@@ -681,7 +681,7 @@ mod tests {
     }
 
     fn signed(vote: Vote) -> SignedVote<TestContext> {
-        SignedVote::new(vote, Signature::test())
+        malachitebft_core_types::SignedMessage::new(vote, Signature::test())
     }
 
     #[test]

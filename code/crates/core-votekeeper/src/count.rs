@@ -32,8 +32,7 @@ impl<Address: Ord + Clone, Id: Ord + Clone> VoteCount<Address, Id> {
             // Validator has already voted, ignore this vote
             self.values_weights.get(value)
         } else {
-            self.validator_addresses
-                .insert(address.clone());
+            self.validator_addresses.insert(address.clone());
             self.values_weights.add(value.clone(), weight)
         }
     }
@@ -78,6 +77,9 @@ impl<Address: Ord + Clone, Id: Ord + Clone> VoteCount<Address, Id> {
 
 impl<Address, Id> Default for VoteCount<Address, Id> {
     fn default() -> Self {
-        Self { values_weights: ValuesWeights::new(), validator_addresses: BTreeSet::new() }
+        Self {
+            values_weights: ValuesWeights::new(),
+            validator_addresses: BTreeSet::new(),
+        }
     }
 }

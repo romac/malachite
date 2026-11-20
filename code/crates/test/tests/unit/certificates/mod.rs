@@ -11,7 +11,7 @@ pub mod types {
         utils, Address, Ed25519Signer, Height, TestContext, Validator, ValidatorSet, ValueId, Vote,
     };
     pub use malachitebft_core_types::{
-        CertificateError, CommitSignature, Context, NilOrVal, PolkaSignature, Round,
+        CertificateError, CommitSignature, MessageBuilder, NilOrVal, PolkaSignature, Round,
         RoundCertificateType, RoundSignature, SignedVote, ThresholdParams, VoteType, VotingPower,
     };
     pub use malachitebft_signing::Signer;

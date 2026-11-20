@@ -2,7 +2,7 @@
 
 use malachitebft_core_state_machine::state::{RoundValue, State, Step};
 use malachitebft_core_types::{
-    ExtendedCommitCertificate, NilOrVal, PolkaCertificate, Round, SignedProposal, SignedVote,
+    ExtendedCommitCertificate, NilOrVal, PolkaCertificate, Round, SignedMessage, SignedVote,
     Timeout, Validity,
 };
 use malachitebft_test::{Address, Height, Proposal, Signature, TestContext, Value, Vote};
@@ -28,7 +28,7 @@ pub fn proposal_output(
 }
 
 pub fn proposal_input_from_proposal(proposal: Proposal, validity: Validity) -> Input<TestContext> {
-    Input::Proposal(SignedProposal::new(proposal, Signature::test()), validity)
+    Input::Proposal(SignedMessage::new(proposal, Signature::test()), validity)
 }
 
 pub fn proposal_input(
@@ -61,7 +61,7 @@ pub fn prevote_nil_output(round: Round, addr: &Address) -> Output<TestContext> {
 }
 
 pub fn prevote_input(value: Value, addr: &Address) -> Input<TestContext> {
-    Input::Vote(SignedVote::new(
+    Input::Vote(SignedMessage::new(
         Vote::new_prevote(
             Height::new(1),
             Round::new(0),
@@ -73,7 +73,7 @@ pub fn prevote_input(value: Value, addr: &Address) -> Input<TestContext> {
 }
 
 pub fn prevote_nil_input_at(round: Round, addr: &Address) -> Input<TestContext> {
-    Input::Vote(SignedVote::new(
+    Input::Vote(SignedMessage::new(
         Vote::new_prevote(Height::new(1), round, NilOrVal::Nil, *addr),
         Signature::test(),
     ))
@@ -84,7 +84,7 @@ pub fn prevote_nil_input(addr: &Address) -> Input<TestContext> {
 }
 
 pub fn prevote_input_at(round: Round, value: Value, addr: &Address) -> Input<TestContext> {
-    Input::Vote(SignedVote::new(
+    Input::Vote(SignedMessage::new(
         Vote::new_prevote(Height::new(1), round, NilOrVal::Val(value.id()), *addr),
         Signature::test(),
     ))
@@ -109,21 +109,21 @@ pub fn precommit_nil_output(round: Round, addr: &Address) -> Output<TestContext>
 }
 
 pub fn precommit_input(round: Round, value: Value, addr: &Address) -> Input<TestContext> {
-    Input::Vote(SignedVote::new(
+    Input::Vote(SignedMessage::new(
         Vote::new_precommit(Height::new(1), round, NilOrVal::Val(value.id()), *addr),
         Signature::test(),
     ))
 }
 
 pub fn precommit_nil_input(round: Round, addr: &Address) -> Input<TestContext> {
-    Input::Vote(SignedVote::new(
+    Input::Vote(SignedMessage::new(
         Vote::new_precommit(Height::new(1), round, NilOrVal::Nil, *addr),
         Signature::test(),
     ))
 }
 
 pub fn precommit_input_at(round: Round, value: Value, addr: &Address) -> Input<TestContext> {
-    Input::Vote(SignedVote::new(
+    Input::Vote(SignedMessage::new(
         Vote::new_precommit(Height::new(1), round, NilOrVal::Val(value.id()), *addr),
         Signature::test(),
     ))
@@ -140,7 +140,7 @@ pub fn polka_certificate_input_at(
     let votes: Vec<SignedVote<TestContext>> = voters
         .iter()
         .map(|addr| {
-            SignedVote::new(
+            SignedMessage::new(
                 Vote::new_prevote(height, round, NilOrVal::Val(value_id), *addr),
                 Signature::test(),
             )
@@ -161,7 +161,7 @@ pub fn commit_certificate_input_at(
     let votes: Vec<SignedVote<TestContext>> = voters
         .iter()
         .map(|addr| {
-            SignedVote::new(
+            SignedMessage::new(
                 Vote::new_precommit(height, round, NilOrVal::Val(value_id), *addr),
                 Signature::test(),
             )

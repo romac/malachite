@@ -207,7 +207,7 @@ impl Verifier<TestContext> for Ed25519Signer {
 impl Signer<TestContext> for Ed25519Signer {
     async fn sign_vote(&self, vote: Vote) -> Result<SignedVote<TestContext>, Error> {
         let signature = self.sign(&vote.to_sign_bytes());
-        Ok(SignedVote::new(vote, signature))
+        Ok(SignedMessage::new(vote, signature))
     }
 
     async fn sign_proposal(
@@ -215,7 +215,7 @@ impl Signer<TestContext> for Ed25519Signer {
         proposal: Proposal,
     ) -> Result<SignedProposal<TestContext>, Error> {
         let signature = self.private_key.sign(&proposal.to_sign_bytes());
-        Ok(SignedProposal::new(proposal, signature))
+        Ok(SignedMessage::new(proposal, signature))
     }
 
     async fn sign_vote_extension(

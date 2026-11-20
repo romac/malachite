@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use malachitebft_core_state_machine::state::{RoundValue, State, Step};
 use malachitebft_core_types::{
-    NilOrVal, Round, SignedProposal, SignedVote, Timeout, TimeoutKind, Validity,
+    NilOrVal, Round, SignedMessage, SignedProposal, SignedVote, Timeout, TimeoutKind, Validity,
 };
 use malachitebft_test::proposer_selector::{FixedProposer, ProposerSelector, RotateProposer};
 use malachitebft_test::utils::validators::make_validators;
@@ -29,7 +29,7 @@ fn new_signed_proposal(
     pol_round: Round,
     address: Address,
 ) -> SignedProposal<TestContext> {
-    SignedProposal::new(
+    SignedMessage::new(
         Proposal::new(height, round, value.clone(), pol_round, address),
         Signature::test(),
     )
@@ -41,7 +41,7 @@ fn new_signed_prevote(
     value: NilOrVal<ValueId>,
     addr: Address,
 ) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_prevote(height, round, value, addr),
         Signature::test(),
     )
@@ -53,7 +53,7 @@ fn new_signed_precommit(
     value: NilOrVal<ValueId>,
     addr: Address,
 ) -> SignedVote<TestContext> {
-    SignedVote::new(
+    SignedMessage::new(
         Vote::new_precommit(height, round, value, addr),
         Signature::test(),
     )
@@ -71,10 +71,10 @@ pub fn output_to_input(
         }
         // Let's consider our own proposal to always be valid
         Output::Propose(p) => Some(Input::Proposal(
-            SignedProposal::new(p, Signature::test()),
+            SignedMessage::new(p, Signature::test()),
             Validity::Valid,
         )),
-        Output::Vote(v) => Some(Input::Vote(SignedVote::new(v, Signature::test()))),
+        Output::Vote(v) => Some(Input::Vote(SignedMessage::new(v, Signature::test()))),
         Output::Decide(_, _) => None,
         Output::ScheduleTimeout(_) => None,
         Output::GetValue(_, _, _) => None,

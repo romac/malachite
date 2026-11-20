@@ -5,7 +5,7 @@ use crate::wal_replay_index::{votes_diverge, RecordKind};
 
 pub async fn verify_signature<Ctx>(
     co: &Co<Ctx>,
-    signed_msg: SignedMessage<Ctx, ConsensusMsg<Ctx>>,
+    signed_msg: SignedMessage<ConsensusMsg<Ctx>, malachitebft_core_types::Signature<Ctx>>,
     validator: &Ctx::Validator,
 ) -> Result<bool, Error<Ctx>>
 where

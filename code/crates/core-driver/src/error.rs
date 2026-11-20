@@ -1,13 +1,13 @@
 use derive_where::derive_where;
 
-use malachitebft_core_types::{Context, Round, Value};
+use malachitebft_core_types::{ConsensusTypes, Round, Value};
 
 /// The type of errors that can be yielded by the `Driver`.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
 #[derive(thiserror::Error)]
 pub enum Error<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// No proposer was set for this round
     #[error("No proposer set for height {0} at round {1}")]

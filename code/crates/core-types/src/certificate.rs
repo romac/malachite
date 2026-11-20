@@ -7,20 +7,20 @@ use malachitebft_peer::PeerId;
 use thiserror::Error;
 
 use crate::{
-    BoxError, Context, NilOrVal, Round, Signature, SignedExtension, SignedVote, ValueId, Vote,
-    VoteExtensions, VoteType, VotingPower,
+    BoxError, ConsensusTypes, NilOrVal, Round, Signature, SignedExtension, SignedVote, ValueId,
+    Vote, VoteExtensions, VoteType, VotingPower,
 };
 
 /// Represents a signature for a commit certificate, with the address of the validator that produced it.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct CommitSignature<Ctx: Context> {
+pub struct CommitSignature<Ctx: ConsensusTypes> {
     /// The address associated with the signature.
     pub address: Ctx::Address,
     /// The signature itself.
     pub signature: Signature<Ctx>,
 }
 
-impl<Ctx: Context> CommitSignature<Ctx> {
+impl<Ctx: ConsensusTypes> CommitSignature<Ctx> {
     /// Create a new `CommitSignature` from an address and a signature.
     pub fn new(address: Ctx::Address, signature: Signature<Ctx>) -> Self {
         Self { address, signature }
@@ -29,7 +29,7 @@ impl<Ctx: Context> CommitSignature<Ctx> {
 
 /// Represents a certificate containing the message (height, round, value_id) and the commit signatures.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct CommitCertificate<Ctx: Context> {
+pub struct CommitCertificate<Ctx: ConsensusTypes> {
     /// The height of the certificate.
     pub height: Ctx::Height,
     /// The round number associated with the certificate.
@@ -40,7 +40,7 @@ pub struct CommitCertificate<Ctx: Context> {
     pub commit_signatures: Vec<CommitSignature<Ctx>>,
 }
 
-impl<Ctx: Context> CommitCertificate<Ctx> {
+impl<Ctx: ConsensusTypes> CommitCertificate<Ctx> {
     /// Creates a new `CommitCertificate` from a vector of signed votes.
     pub fn new(
         height: Ctx::Height,
@@ -82,7 +82,7 @@ impl<Ctx: Context> CommitCertificate<Ctx> {
 /// extension and the precommit signature were produced together by the same validator
 /// for the same decision.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct ExtendedCommitSignature<Ctx: Context> {
+pub struct ExtendedCommitSignature<Ctx: ConsensusTypes> {
     /// Address of the validator that produced the signature.
     pub address: Ctx::Address,
     /// Signature over the precommit (same bytes as [`CommitSignature::signature`]).
@@ -96,7 +96,7 @@ pub struct ExtendedCommitSignature<Ctx: Context> {
     pub extension: Option<SignedExtension<Ctx>>,
 }
 
-impl<Ctx: Context> ExtendedCommitSignature<Ctx> {
+impl<Ctx: ConsensusTypes> ExtendedCommitSignature<Ctx> {
     /// Create a new `ExtendedCommitSignature`.
     pub fn new(
         address: Ctx::Address,
@@ -124,7 +124,7 @@ impl<Ctx: Context> ExtendedCommitSignature<Ctx> {
 /// A bare [`CommitCertificate`] can always be derived from an
 /// `ExtendedCommitCertificate` via [`Self::trim_vote_extensions`].
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct ExtendedCommitCertificate<Ctx: Context> {
+pub struct ExtendedCommitCertificate<Ctx: ConsensusTypes> {
     /// Height at which the value was decided.
     pub height: Ctx::Height,
     /// Round in which the value was decided.
@@ -136,7 +136,7 @@ pub struct ExtendedCommitCertificate<Ctx: Context> {
     pub commit_signatures: Vec<ExtendedCommitSignature<Ctx>>,
 }
 
-impl<Ctx: Context> ExtendedCommitCertificate<Ctx> {
+impl<Ctx: ConsensusTypes> ExtendedCommitCertificate<Ctx> {
     /// Build an `ExtendedCommitCertificate` from precommit votes that may carry
     /// signed extensions.
     ///
@@ -244,14 +244,14 @@ impl<Ctx: Context> ExtendedCommitCertificate<Ctx> {
 
 /// Represents a signature for a polka certificate, with the address of the validator that produced it.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct PolkaSignature<Ctx: Context> {
+pub struct PolkaSignature<Ctx: ConsensusTypes> {
     /// The address associated with the signature.
     pub address: Ctx::Address,
     /// The signature itself.
     pub signature: Signature<Ctx>,
 }
 
-impl<Ctx: Context> PolkaSignature<Ctx> {
+impl<Ctx: ConsensusTypes> PolkaSignature<Ctx> {
     /// Create a new `CommitSignature` from an address and a signature.
     pub fn new(address: Ctx::Address, signature: Signature<Ctx>) -> Self {
         Self { address, signature }
@@ -260,7 +260,7 @@ impl<Ctx: Context> PolkaSignature<Ctx> {
 
 /// Represents a certificate witnessing a Polka at a given height and round.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct PolkaCertificate<Ctx: Context> {
+pub struct PolkaCertificate<Ctx: ConsensusTypes> {
     /// The height at which a Polka was witnessed
     pub height: Ctx::Height,
     /// The round at which a Polka that was witnessed
@@ -271,7 +271,7 @@ pub struct PolkaCertificate<Ctx: Context> {
     pub polka_signatures: Vec<PolkaSignature<Ctx>>,
 }
 
-impl<Ctx: Context> PolkaCertificate<Ctx> {
+impl<Ctx: ConsensusTypes> PolkaCertificate<Ctx> {
     /// Creates a new `PolkaCertificate` from signed prevotes.
     pub fn new(
         height: Ctx::Height,
@@ -305,15 +305,18 @@ impl<Ctx: Context> PolkaCertificate<Ctx> {
     }
 
     /// Reconstruct the signed prevotes this certificate is composed of.
-    pub fn votes<'a>(&'a self, ctx: &'a Ctx) -> impl Iterator<Item = SignedVote<Ctx>> + 'a {
+    pub fn votes<'a>(
+        &'a self,
+        builder: &'a impl crate::MessageBuilder<Ctx>,
+    ) -> impl Iterator<Item = SignedVote<Ctx>> + 'a {
         self.polka_signatures.iter().map(move |polka_signature| {
-            let vote = ctx.new_prevote(
+            let vote = builder.new_prevote(
                 self.height,
                 self.round,
                 NilOrVal::Val(self.value_id.clone()),
                 polka_signature.address.clone(),
             );
-            SignedVote::new(vote, polka_signature.signature.clone())
+            crate::SignedMessage::new(vote, polka_signature.signature.clone())
         })
     }
 }
@@ -321,7 +324,7 @@ impl<Ctx: Context> PolkaCertificate<Ctx> {
 /// Represents an error that can occur when verifying a certificate.
 #[derive(Error)]
 #[derive_where(Debug, PartialEq)]
-pub enum CertificateError<Ctx: Context> {
+pub enum CertificateError<Ctx: ConsensusTypes> {
     /// One of the commit signatures is invalid.
     #[error("Invalid commit signature: {0:?}")]
     InvalidCommitSignature(CommitSignature<Ctx>),
@@ -399,7 +402,7 @@ pub enum CertificateError<Ctx: Context> {
 
 /// Represents a signature for a round certificate, with the address of the validator that produced it.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct RoundSignature<Ctx: Context> {
+pub struct RoundSignature<Ctx: ConsensusTypes> {
     /// The vote type
     pub vote_type: VoteType,
     /// The value id
@@ -410,7 +413,7 @@ pub struct RoundSignature<Ctx: Context> {
     pub signature: Signature<Ctx>,
 }
 
-impl<Ctx: Context> RoundSignature<Ctx> {
+impl<Ctx: ConsensusTypes> RoundSignature<Ctx> {
     /// Create a new `CommitSignature` from an address and a signature.
     pub fn new(
         vote_type: VoteType,
@@ -443,7 +446,7 @@ pub enum RoundCertificateType {
 
 /// Represents a certificate used to justify entering a new round at a given height.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct RoundCertificate<Ctx: Context> {
+pub struct RoundCertificate<Ctx: ConsensusTypes> {
     /// The height at which a certificate was witnessed
     pub height: Ctx::Height,
     /// The round of the votes that made up the certificate
@@ -454,7 +457,7 @@ pub struct RoundCertificate<Ctx: Context> {
     pub round_signatures: Vec<RoundSignature<Ctx>>,
 }
 
-impl<Ctx: Context> RoundCertificate<Ctx> {
+impl<Ctx: ConsensusTypes> RoundCertificate<Ctx> {
     /// Creates a new `RoundCertificate` from a vector of signed votes.
     pub fn new_from_votes(
         height: Ctx::Height,
@@ -484,30 +487,33 @@ impl<Ctx: Context> RoundCertificate<Ctx> {
     ///
     /// Unlike a commit or polka certificate, a round certificate carries votes of both
     /// types and for any value, so each signature supplies its own vote type and value.
-    pub fn votes<'a>(&'a self, ctx: &'a Ctx) -> impl Iterator<Item = SignedVote<Ctx>> + 'a {
+    pub fn votes<'a>(
+        &'a self,
+        builder: &'a impl crate::MessageBuilder<Ctx>,
+    ) -> impl Iterator<Item = SignedVote<Ctx>> + 'a {
         self.round_signatures.iter().map(move |round_signature| {
             let vote = match round_signature.vote_type {
-                VoteType::Prevote => ctx.new_prevote(
+                VoteType::Prevote => builder.new_prevote(
                     self.height,
                     self.round,
                     round_signature.value_id.clone(),
                     round_signature.address.clone(),
                 ),
-                VoteType::Precommit => ctx.new_precommit(
+                VoteType::Precommit => builder.new_precommit(
                     self.height,
                     self.round,
                     round_signature.value_id.clone(),
                     round_signature.address.clone(),
                 ),
             };
-            SignedVote::new(vote, round_signature.signature.clone())
+            crate::SignedMessage::new(vote, round_signature.signature.clone())
         })
     }
 }
 
 /// Represents a local certificate that triggered or will trigger the start of a new round.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct EnterRoundCertificate<Ctx: Context> {
+pub struct EnterRoundCertificate<Ctx: ConsensusTypes> {
     /// The certificate that triggered or will trigger the start of a new round
     pub certificate: RoundCertificate<Ctx>,
     /// The round that will be entered due to the `RoundCertificate`.
@@ -518,7 +524,7 @@ pub struct EnterRoundCertificate<Ctx: Context> {
     pub enter_round: Round,
 }
 
-impl<Ctx: Context> EnterRoundCertificate<Ctx> {
+impl<Ctx: ConsensusTypes> EnterRoundCertificate<Ctx> {
     /// Creates a new `LocalRoundCertificate` from a vector of signed votes.
     pub fn new_from_votes(
         height: Ctx::Height,
@@ -580,7 +586,7 @@ impl<Ctx: Context> EnterRoundCertificate<Ctx> {
 /// next height when the application uses extensions for load-bearing data
 /// (oracle aggregation, threshold attestations, bridge outputs, etc.).
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct ValueResponse<Ctx: Context> {
+pub struct ValueResponse<Ctx: ConsensusTypes> {
     /// The peer that sent the value response
     pub peer: PeerId,
     /// The raw bytes of the value
@@ -591,7 +597,7 @@ pub struct ValueResponse<Ctx: Context> {
     pub certificate: ExtendedCommitCertificate<Ctx>,
 }
 
-impl<Ctx: Context> ValueResponse<Ctx> {
+impl<Ctx: ConsensusTypes> ValueResponse<Ctx> {
     /// Creates a new `ValueResponse` from the raw bytes of the value and the
     /// extended commit certificate.
     pub fn new(
