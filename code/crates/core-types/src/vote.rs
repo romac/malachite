@@ -1,6 +1,6 @@
 use core::fmt::Debug;
 
-use crate::{Address, Height, NilOrVal, Round};
+use crate::{Address, Extension, Height, NilOrVal, Round, SignedMessage};
 
 /// A type of vote.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -41,9 +41,11 @@ where
     /// Validator address.
     type Address: Address;
     /// Identifier of the voted value.
-    type ValueId: Clone + Eq + Ord;
-    /// Signed application extension carried by a precommit.
-    type SignedExtension;
+    type ValueId: Clone + Debug + Eq + Ord;
+    /// Signature used for votes and their extensions.
+    type Signature: Clone + Debug + Eq + Send + Sync;
+    /// Application payload of a vote extension.
+    type Extension: Extension;
 
     /// The height for which the vote is for.
     fn height(&self) -> Self::Height;
@@ -64,12 +66,12 @@ where
     fn validator_address(&self) -> &Self::Address;
 
     /// Votes extensions
-    fn extension(&self) -> Option<&Self::SignedExtension>;
+    fn extension(&self) -> Option<&SignedMessage<Self::Extension, Self::Signature>>;
 
     /// Return an owned reference to this vote's extensions,
     /// removing them from the vote in the process.
-    fn take_extension(&mut self) -> Option<Self::SignedExtension>;
+    fn take_extension(&mut self) -> Option<SignedMessage<Self::Extension, Self::Signature>>;
 
     /// Extend this vote with an extension, overriding any existing extension.
-    fn extend(self, extension: Self::SignedExtension) -> Self;
+    fn extend(self, extension: SignedMessage<Self::Extension, Self::Signature>) -> Self;
 }

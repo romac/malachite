@@ -1464,3 +1464,52 @@ fn run_steps_failing(
         }
     }
 }
+
+#[test]
+fn driver_checks_the_vote_returned_by_the_builder() {
+    use malachitebft_test::middleware::Middleware;
+
+    #[derive(Debug)]
+    struct ChangeVoter(Address);
+
+    impl Middleware for ChangeVoter {
+        fn new_prevote(
+            &self,
+            _ctx: &TestContext,
+            height: Height,
+            round: Round,
+            value: NilOrVal<ValueId>,
+            _address: Address,
+        ) -> Vote {
+            Vote::new_prevote(height, round, value, self.0)
+        }
+    }
+
+    let [(local, _), (other, _)] = make_validators([1, 1]);
+    let round = Round::new(0);
+    let validators = ValidatorSet::new(vec![local.clone(), other.clone()]);
+    for (ctx, expected) in [
+        (
+            TestContext::new(),
+            vec![prevote_nil_output(round, &local.address)],
+        ),
+        (
+            TestContext::with_middleware(Arc::new(ChangeVoter(other.address))),
+            vec![],
+        ),
+    ] {
+        let mut driver = Driver::new(
+            ctx,
+            Height::new(1),
+            validators.clone(),
+            local.address,
+            Default::default(),
+        );
+        driver
+            .process(new_round_input(round, other.address))
+            .unwrap();
+        let outputs = driver.process(timeout_propose_input(round)).unwrap();
+        assert_eq!(outputs, expected);
+        assert_eq!(driver.last_prevote().is_some(), !expected.is_empty());
+    }
+}

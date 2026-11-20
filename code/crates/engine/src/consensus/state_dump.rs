@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use derive_where::derive_where;
-use malachitebft_core_types::Context;
+use malachitebft_core_types::{Context, Signature};
 
 /// All the types used in the state dump.
 pub mod types {
@@ -28,20 +28,20 @@ use self::types::*;
 #[derive_where(Debug, Clone)]
 pub struct VoteKeeperState<Ctx: Context> {
     /// The votes that were received in each round so far
-    pub votes: BTreeMap<Round, VotePerRound<Ctx>>,
+    pub votes: BTreeMap<Round, VotePerRound<Ctx::Vote>>,
 
     /// Misbehavior evidence for voting
-    pub evidence: VoteEvidenceMap<Ctx>,
+    pub evidence: VoteEvidenceMap<Ctx::Vote>,
 }
 
 /// The state of the proposal keeper, which keeps track of proposals and proposal-related misbehavior evidence.
 #[derive_where(Debug, Clone)]
 pub struct ProposalKeeperState<Ctx: Context> {
     /// The proposals that were received in each round so far
-    pub proposals: BTreeMap<Round, ProposalPerRound<Ctx>>,
+    pub proposals: BTreeMap<Round, ProposalPerRound<Ctx::Proposal, Signature<Ctx>>>,
 
     /// Misbehavior evidence for proposals
-    pub evidence: ProposalEvidenceMap<Ctx>,
+    pub evidence: ProposalEvidenceMap<Ctx::Proposal, Signature<Ctx>>,
 }
 
 /// A dump of the current state of the consensus engine.

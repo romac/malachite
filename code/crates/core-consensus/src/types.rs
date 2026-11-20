@@ -2,8 +2,8 @@ use derive_where::derive_where;
 use thiserror::Error;
 
 use malachitebft_core_types::{
-    ConsensusTypes, Context, PolkaCertificate, Proposal, Round, RoundCertificate, Signature,
-    SignedProposal, SignedVote, Validity, Vote,
+    ConsensusTypes, PolkaCertificate, Proposal, Round, RoundCertificate, Signature, SignedProposal,
+    SignedVote, Validity, Vote,
 };
 
 pub use malachitebft_core_types::ValuePayload;
@@ -24,12 +24,12 @@ pub enum Role {
 
 /// A signed consensus message, ie. a signed vote or a signed proposal.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub enum SignedConsensusMsg<Ctx: Context> {
+pub enum SignedConsensusMsg<Ctx: ConsensusTypes> {
     Vote(SignedVote<Ctx>),
     Proposal(SignedProposal<Ctx>),
 }
 
-impl<Ctx: Context> SignedConsensusMsg<Ctx> {
+impl<Ctx: ConsensusTypes> SignedConsensusMsg<Ctx> {
     pub fn height(&self) -> Ctx::Height {
         match self {
             SignedConsensusMsg::Vote(msg) => msg.height(),
@@ -54,7 +54,7 @@ impl<Ctx: Context> SignedConsensusMsg<Ctx> {
 
 /// A message that can be sent by the consensus layer
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub enum ConsensusMsg<Ctx: Context> {
+pub enum ConsensusMsg<Ctx: ConsensusTypes> {
     Vote(Ctx::Vote),
     Proposal(Ctx::Proposal),
 }
@@ -62,13 +62,13 @@ pub enum ConsensusMsg<Ctx: Context> {
 /// A value to propose by the current node.
 /// Used only when the node is the proposer.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct LocallyProposedValue<Ctx: Context> {
+pub struct LocallyProposedValue<Ctx: ConsensusTypes> {
     pub height: Ctx::Height,
     pub round: Round,
     pub value: Ctx::Value,
 }
 
-impl<Ctx: Context> LocallyProposedValue<Ctx> {
+impl<Ctx: ConsensusTypes> LocallyProposedValue<Ctx> {
     pub fn new(height: Ctx::Height, round: Round, value: Ctx::Value) -> Self {
         Self {
             height,
@@ -88,7 +88,7 @@ impl<Ctx: Context> LocallyProposedValue<Ctx> {
 /// for that id, regardless of whether `round` / `valid_round` match the proposal’s `round` /
 /// `pol_round`. The signed proposal still carries the authoritative consensus rounds for the driver.
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct ProposedValue<Ctx: Context> {
+pub struct ProposedValue<Ctx: ConsensusTypes> {
     pub height: Ctx::Height,
     pub round: Round,
     pub valid_round: Round,
@@ -113,7 +113,7 @@ pub type VoteExtensionVerdicts<Ctx> = Vec<(
 )>;
 
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub enum LivenessMsg<Ctx: Context> {
+pub enum LivenessMsg<Ctx: ConsensusTypes> {
     Vote(SignedVote<Ctx>),
     PolkaCertificate(PolkaCertificate<Ctx>),
     SkipRoundCertificate(RoundCertificate<Ctx>),
@@ -123,12 +123,13 @@ pub enum LivenessMsg<Ctx: Context> {
 ///
 /// Contains both proposal and vote equivocation records indexed by validator addr.
 #[derive_where(Clone, Debug)]
-pub struct MisbehaviorEvidence<Ctx: Context> {
-    pub proposals: malachitebft_core_driver::proposal_keeper::EvidenceMap<Ctx>,
-    pub votes: malachitebft_core_votekeeper::EvidenceMap<Ctx>,
+pub struct MisbehaviorEvidence<Ctx: ConsensusTypes> {
+    pub proposals:
+        malachitebft_core_driver::proposal_keeper::EvidenceMap<Ctx::Proposal, Signature<Ctx>>,
+    pub votes: malachitebft_core_votekeeper::EvidenceMap<Ctx::Vote>,
 }
 
-impl<Ctx: Context> MisbehaviorEvidence<Ctx> {
+impl<Ctx: ConsensusTypes> MisbehaviorEvidence<Ctx> {
     pub fn is_empty(&self) -> bool {
         self.proposals.is_empty() && self.votes.is_empty()
     }

@@ -139,7 +139,7 @@ where
         consensus.round = %consensus_round,
         proposal.height = %proposal_height,
         proposal.round = %proposal_round,
-        proposal.msg = %PrettyProposal::<Ctx>(&signed_proposal.message),
+        proposal.msg = %PrettyProposal(&signed_proposal.message),
         proposer = %proposer_address,
         "Received proposal"
     );
@@ -265,7 +265,7 @@ where
             proposal.height = %proposal_height,
             proposer = %proposer_address,
             "Received invalid signature for proposal: {}",
-            PrettyProposal::<Ctx>(&signed_proposal.message)
+            PrettyProposal(&signed_proposal.message)
         );
 
         return Ok(false);

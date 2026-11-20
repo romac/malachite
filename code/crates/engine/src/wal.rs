@@ -8,7 +8,7 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 
 use malachitebft_core_consensus::Input;
-use malachitebft_core_types::{Context, Height};
+use malachitebft_core_types::{ConsensusTypes, Height};
 use malachitebft_metrics::SharedRegistry;
 use malachitebft_wal as wal;
 
@@ -31,7 +31,7 @@ pub struct Wal<Ctx, Codec> {
 
 impl<Ctx, Codec> Wal<Ctx, Codec>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Codec: WalCodec<Ctx>,
 {
     pub fn new(span: tracing::Span) -> Self {
@@ -57,7 +57,7 @@ where
 
 pub type WalReply<T> = RpcReplyPort<eyre::Result<T>>;
 
-pub enum Msg<Ctx: Context> {
+pub enum Msg<Ctx: ConsensusTypes> {
     StartedHeight(Ctx::Height, WalReply<Vec<io::Result<Input<Ctx>>>>),
     Reset(Ctx::Height, WalReply<()>),
     Append(Ctx::Height, Input<Ctx>, WalReply<()>),
@@ -71,7 +71,7 @@ pub struct Args<Codec> {
     pub node: NodeRef,
 }
 
-pub struct State<Ctx: Context> {
+pub struct State<Ctx: ConsensusTypes> {
     height: Ctx::Height,
     wal_sender: mpsc::Sender<self::thread::WalMsg<Ctx>>,
     _handle: std::thread::JoinHandle<()>,
@@ -79,7 +79,7 @@ pub struct State<Ctx: Context> {
 
 impl<Ctx, Codec> Wal<Ctx, Codec>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Codec: WalCodec<Ctx>,
 {
     async fn handle_msg(
@@ -227,7 +227,7 @@ where
 #[async_trait]
 impl<Ctx, Codec> Actor for Wal<Ctx, Codec>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Codec: WalCodec<Ctx>,
 {
     type Msg = Msg<Ctx>;
@@ -302,7 +302,7 @@ where
 
 /// Use the height we are about to start instead of the current height
 /// for the tracing span of the WAL actor when starting a new height.
-fn span_height<Ctx: Context>(height: Ctx::Height, msg: &Msg<Ctx>) -> Ctx::Height {
+fn span_height<Ctx: ConsensusTypes>(height: Ctx::Height, msg: &Msg<Ctx>) -> Ctx::Height {
     if let Msg::StartedHeight(h, _) = msg {
         *h
     } else {

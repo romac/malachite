@@ -3,7 +3,9 @@ use tracing::{error, warn};
 
 use derive_where::derive_where;
 
-use malachitebft_core_types::{Context, Proposal, Round, SignedProposal, Validity, Value, ValueId};
+use malachitebft_core_types::{
+    ConsensusTypes, Proposal, Round, SignedProposal, Validity, Value, ValueId,
+};
 
 use crate::ProposedValue;
 
@@ -14,7 +16,7 @@ pub const MAX_PROPOSALS_PER_ROUND: usize = 2;
 
 /// A full proposal, ie. a proposal together with its value and validity.
 #[derive_where(Clone, Debug)]
-pub struct FullProposal<Ctx: Context> {
+pub struct FullProposal<Ctx: ConsensusTypes> {
     /// Value received from the builder
     pub builder_value: Ctx::Value,
     /// Validity of the proposal
@@ -23,7 +25,7 @@ pub struct FullProposal<Ctx: Context> {
     pub proposal: SignedProposal<Ctx>,
 }
 
-impl<Ctx: Context> FullProposal<Ctx> {
+impl<Ctx: ConsensusTypes> FullProposal<Ctx> {
     pub fn new(
         builder_value: Ctx::Value,
         validity: Validity,
@@ -39,7 +41,7 @@ impl<Ctx: Context> FullProposal<Ctx> {
 
 /// An entry in the keeper.
 #[derive_where(Clone, Debug)]
-pub enum Entry<Ctx: Context> {
+pub enum Entry<Ctx: ConsensusTypes> {
     /// The full proposal has been received,i.e. both the value and the proposal.
     Full(FullProposal<Ctx>),
 
@@ -56,7 +58,7 @@ pub enum Entry<Ctx: Context> {
     Empty,
 }
 
-impl<Ctx: Context> Entry<Ctx> {
+impl<Ctx: ConsensusTypes> Entry<Ctx> {
     fn full(value: Ctx::Value, validity: Validity, proposal: SignedProposal<Ctx>) -> Self {
         Entry::Full(FullProposal::new(value, validity, proposal))
     }
@@ -83,7 +85,7 @@ impl<Ctx: Context> Entry<Ctx> {
 }
 
 #[allow(clippy::derivable_impls)]
-impl<Ctx: Context> Default for Entry<Ctx> {
+impl<Ctx: ConsensusTypes> Default for Entry<Ctx> {
     fn default() -> Self {
         Entry::Empty
     }
@@ -92,7 +94,7 @@ impl<Ctx: Context> Default for Entry<Ctx> {
 /// Outcome of [`FullProposalKeeper::store_proposal`].
 #[must_use]
 #[derive_where(Clone, Debug)]
-pub enum StoreProposalResult<Ctx: Context> {
+pub enum StoreProposalResult<Ctx: ConsensusTypes> {
     /// The proposal was stored as a new entry, or it upgraded an existing entry to `Full`.
     Stored,
     /// The proposal message was already stored and was ignored.
@@ -161,7 +163,7 @@ pub enum StoreProposalResult<Ctx: Context> {
 /// `store_value_at_round` when an entry may be retained, and `store_value_in_matching_entries`
 /// when no bucket may grow.
 #[derive_where(Clone, Debug, Default)]
-pub struct FullProposalKeeper<Ctx: Context> {
+pub struct FullProposalKeeper<Ctx: ConsensusTypes> {
     keeper: BTreeMap<(Ctx::Height, Round), Vec<Entry<Ctx>>>,
 }
 
@@ -179,7 +181,7 @@ macro_rules! replace_with {
     };
 }
 
-impl<Ctx: Context> FullProposalKeeper<Ctx> {
+impl<Ctx: ConsensusTypes> FullProposalKeeper<Ctx> {
     pub fn new() -> Self {
         Self::default()
     }

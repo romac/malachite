@@ -12,7 +12,7 @@ use derive_where::derive_where;
 use tracing::error;
 
 use malachitebft_core_types::{
-    Context, Proposal, Round, SignedProposal, SignedVote, Vote, VoteType,
+    ConsensusTypes, Proposal, Round, SignedProposal, SignedVote, Vote, VoteType,
 };
 
 use crate::input::Input;
@@ -50,10 +50,7 @@ impl fmt::Display for RecordKind {
 
 /// Whether a re-derived vote disagrees with the one recorded on the WAL.
 /// The vote extension is excluded from the comparison because it is non-deterministic.
-pub fn votes_diverge<Ctx>(derived: &Ctx::Vote, recorded: &Ctx::Vote) -> bool
-where
-    Ctx: Context,
-{
+pub fn votes_diverge<V: Vote>(derived: &V, recorded: &V) -> bool {
     let mut derived_bare = derived.clone();
     let mut recorded_bare = recorded.clone();
     derived_bare.take_extension();
@@ -76,7 +73,7 @@ fn report_double_sign(kind: RecordKind, height: impl fmt::Display, round: Round)
 #[derive_where(Clone, Debug, Default)]
 pub struct ReplayIndex<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     votes: BTreeMap<(VoteType, Ctx::Height, Round), SignedVote<Ctx>>,
     proposals: BTreeMap<(Ctx::Height, Round), SignedProposal<Ctx>>,
@@ -84,7 +81,7 @@ where
 
 impl<Ctx> ReplayIndex<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Index the messages recorded in `entries` filtered by the given `address`.
     pub fn from_wal_entries<'a, I>(entries: I, address: &Ctx::Address) -> Self
@@ -126,7 +123,7 @@ where
         let take_incoming = match self.votes.get(&key) {
             None => true,
 
-            Some(existing) if votes_diverge::<Ctx>(&vote.message, &existing.message) => {
+            Some(existing) if votes_diverge(&vote.message, &existing.message) => {
                 // Keep the vote we recorded first
                 report_double_sign(RecordKind::of_vote(key.0), key.1, key.2);
                 false
@@ -193,20 +190,20 @@ mod tests {
     fn identical_votes_do_not_diverge() {
         let vote = prevote(NilOrVal::Val(ValueId::new(1)), address(1));
 
-        assert!(!votes_diverge::<TestContext>(&vote, &vote.clone()));
+        assert!(!votes_diverge(&vote, &vote.clone()));
     }
 
     #[test]
     fn votes_differing_only_in_their_extension_are_not_divergent() {
         let vote = prevote(NilOrVal::Val(ValueId::new(1)), address(1));
 
-        assert!(!votes_diverge::<TestContext>(
+        assert!(!votes_diverge(
             &with_extension(vote.clone(), b"derived"),
             &with_extension(vote.clone(), b"recorded"),
         ));
 
         // Gaining or losing an extension counts the same: consensus does not act on it.
-        assert!(!votes_diverge::<TestContext>(
+        assert!(!votes_diverge(
             &vote,
             &with_extension(vote.clone(), b"recorded")
         ));
@@ -216,7 +213,7 @@ mod tests {
     fn votes_differing_in_their_value_are_divergent() {
         let addr = address(1);
 
-        assert!(votes_diverge::<TestContext>(
+        assert!(votes_diverge(
             &prevote(NilOrVal::Nil, addr),
             &prevote(NilOrVal::Val(ValueId::new(1)), addr),
         ));

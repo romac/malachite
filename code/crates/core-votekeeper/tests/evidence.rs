@@ -163,7 +163,7 @@ fn test_vote_evidence_deduplication() {
     ];
 
     for case in cases {
-        let mut evidence = EvidenceMap::<TestContext>::new();
+        let mut evidence = EvidenceMap::<Vote>::new();
 
         for &(addr_id, vote_type, round, values) in case.evidence {
             let (v1, v2) = make_vote_pair(addr_id, vote_type, round, values);
@@ -183,7 +183,7 @@ fn test_vote_evidence_deduplication() {
 
 #[test]
 fn test_vote_evidence_into_iterator_and_len() {
-    let mut evidence = EvidenceMap::<TestContext>::new();
+    let mut evidence = EvidenceMap::<Vote>::new();
 
     let (v1_alice, v2_alice) = make_vote_pair("Alice", Prevote, 0, [100, 200]);
     let (v1_bob, v2_bob) = make_vote_pair("Bob", Prevote, 0, [300, 400]);
@@ -214,14 +214,14 @@ fn test_vote_evidence_into_iterator_and_len() {
 
 #[test]
 fn test_vote_evidence_len_empty() {
-    let evidence = EvidenceMap::<TestContext>::new();
+    let evidence = EvidenceMap::<Vote>::new();
     assert_eq!(evidence.len(), 0);
     assert!(evidence.is_empty());
 }
 
 #[test]
 fn is_full_only_at_the_per_validator_cap() {
-    let mut evidence = EvidenceMap::<TestContext>::new();
+    let mut evidence = EvidenceMap::<Vote>::new();
     let alice = addr("Alice");
 
     assert!(!evidence.is_full(&alice));

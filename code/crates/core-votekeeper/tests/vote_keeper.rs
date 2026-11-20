@@ -10,7 +10,7 @@ use malachitebft_test::{
     Address, Height, PrivateKey, Signature, TestContext, Validator, ValidatorSet, ValueId, Vote,
 };
 
-fn setup<const N: usize>(vp: [u64; N]) -> ([Address; N], VoteKeeper<TestContext>) {
+fn setup<const N: usize>(vp: [u64; N]) -> ([Address; N], VoteKeeper<Vote, ValidatorSet>) {
     let mut addrs = [Address::new([0; 20]); N];
     let mut vals = Vec::with_capacity(N);
     for i in 0..N {

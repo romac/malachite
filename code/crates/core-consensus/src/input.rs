@@ -1,7 +1,7 @@
 use derive_where::derive_where;
 use malachitebft_core_types::{
-    Context, PolkaCertificate, RoundCertificate, SignedProposal, SignedVote, Timeout, ValueOrigin,
-    ValueResponse, VoteExtensionPolicy,
+    ConsensusTypes, PolkaCertificate, RoundCertificate, SignedProposal, SignedVote, Timeout,
+    ValueOrigin, ValueResponse, VoteExtensionPolicy,
 };
 use std::time::Duration;
 
@@ -17,7 +17,7 @@ use crate::types::{LocallyProposedValue, ProposedValue};
 #[derive_where(Clone, Debug, PartialEq, Eq)]
 pub enum Input<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Start consensus for the given height with an optional validator set update.
     /// The boolean indicates whether this is a restart of consensus for the given height.

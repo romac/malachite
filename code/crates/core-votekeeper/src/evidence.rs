@@ -5,7 +5,7 @@ use alloc::{vec, vec::Vec};
 
 use derive_where::derive_where;
 
-use malachitebft_core_types::{ConsensusTypes, DoubleVote, SignedVote, Vote};
+use malachitebft_core_types::{SignedMessage, Vote};
 
 /// Maximum number of distinct equivocation pairs retained per validator.
 ///
@@ -13,18 +13,24 @@ use malachitebft_core_types::{ConsensusTypes, DoubleVote, SignedVote, Vote};
 /// validator are dropped so per-validator storage remains bounded.
 pub const MAX_EVIDENCE_PER_VALIDATOR: usize = 3;
 
+/// Two signed votes retained as evidence of equivocation.
+pub type VotePair<V> = (
+    SignedMessage<V, <V as Vote>::Signature>,
+    SignedMessage<V, <V as Vote>::Signature>,
+);
+
 /// Keeps track of evidence of equivocation.
 #[derive_where(Clone, Debug, Default)]
-pub struct EvidenceMap<Ctx>
+pub struct EvidenceMap<V>
 where
-    Ctx: ConsensusTypes,
+    V: Vote,
 {
-    map: BTreeMap<Ctx::Address, Vec<DoubleVote<Ctx>>>,
+    map: BTreeMap<V::Address, Vec<VotePair<V>>>,
 }
 
-impl<Ctx> EvidenceMap<Ctx>
+impl<V> EvidenceMap<V>
 where
-    Ctx: ConsensusTypes,
+    V: Vote,
 {
     /// Create a new `EvidenceMap` instance.
     pub fn new() -> Self {
@@ -37,14 +43,14 @@ where
     }
 
     /// Return the evidence of equivocation for a given address, if any.
-    pub fn get(&self, address: &Ctx::Address) -> Option<&Vec<DoubleVote<Ctx>>> {
+    pub fn get(&self, address: &V::Address) -> Option<&Vec<VotePair<V>>> {
         self.map.get(address)
     }
 
     /// Whether this validator already has [`MAX_EVIDENCE_PER_VALIDATOR`] pairs.
     /// A further conflicting vote cannot add evidence and should not be
     /// verified or written to the WAL.
-    pub fn is_full(&self, address: &Ctx::Address) -> bool {
+    pub fn is_full(&self, address: &V::Address) -> bool {
         self.get(address)
             .is_some_and(|pairs| pairs.len() >= MAX_EVIDENCE_PER_VALIDATOR)
     }
@@ -57,7 +63,11 @@ where
     ///
     /// # Precondition
     /// - Both votes must be from the same validator (debug-asserted).
-    pub fn add(&mut self, existing: SignedVote<Ctx>, conflicting: SignedVote<Ctx>) {
+    pub fn add(
+        &mut self,
+        existing: SignedMessage<V, V::Signature>,
+        conflicting: SignedMessage<V, V::Signature>,
+    ) {
         debug_assert_eq!(
             existing.validator_address(),
             conflicting.validator_address()
@@ -85,31 +95,29 @@ where
     }
 
     /// Iterate over all addresses with recorded vote equivocations.
-    pub fn iter(
-        &self,
-    ) -> alloc::collections::btree_map::Iter<'_, Ctx::Address, Vec<DoubleVote<Ctx>>> {
+    pub fn iter(&self) -> alloc::collections::btree_map::Iter<'_, V::Address, Vec<VotePair<V>>> {
         self.map.iter()
     }
 }
 
-impl<'a, Ctx> IntoIterator for &'a EvidenceMap<Ctx>
+impl<'a, V> IntoIterator for &'a EvidenceMap<V>
 where
-    Ctx: ConsensusTypes,
+    V: Vote,
 {
-    type Item = (&'a Ctx::Address, &'a Vec<DoubleVote<Ctx>>);
-    type IntoIter = alloc::collections::btree_map::Iter<'a, Ctx::Address, Vec<DoubleVote<Ctx>>>;
+    type Item = (&'a V::Address, &'a Vec<VotePair<V>>);
+    type IntoIter = alloc::collections::btree_map::Iter<'a, V::Address, Vec<VotePair<V>>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.iter()
     }
 }
 
-impl<Ctx> IntoIterator for EvidenceMap<Ctx>
+impl<V> IntoIterator for EvidenceMap<V>
 where
-    Ctx: ConsensusTypes,
+    V: Vote,
 {
-    type Item = (Ctx::Address, Vec<DoubleVote<Ctx>>);
-    type IntoIter = alloc::collections::btree_map::IntoIter<Ctx::Address, Vec<DoubleVote<Ctx>>>;
+    type Item = (V::Address, Vec<VotePair<V>>);
+    type IntoIter = alloc::collections::btree_map::IntoIter<V::Address, Vec<VotePair<V>>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.into_iter()

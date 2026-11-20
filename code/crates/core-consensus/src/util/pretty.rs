@@ -1,6 +1,6 @@
 use core::fmt;
 
-use malachitebft_core_types::{Context, Extension, NilOrVal, Proposal, Value};
+use malachitebft_core_types::{Extension, NilOrVal, Proposal, Value, Vote};
 
 pub struct PrettyVal<'a, T>(pub NilOrVal<&'a T>);
 
@@ -16,15 +16,14 @@ where
     }
 }
 
-pub struct PrettyVote<'a, Ctx: Context>(pub &'a Ctx::Vote);
+pub struct PrettyVote<'a, V: Vote>(pub &'a V);
 
-impl<Ctx> fmt::Display for PrettyVote<'_, Ctx>
+impl<V> fmt::Display for PrettyVote<'_, V>
 where
-    Ctx: Context,
+    V: Vote,
+    V::ValueId: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use malachitebft_core_types::Vote;
-
         write!(
             f,
             "{:?}(height: {}, round: {}, value: {}, from: {}",
@@ -43,11 +42,11 @@ where
     }
 }
 
-pub struct PrettyProposal<'a, Ctx: Context>(pub &'a Ctx::Proposal);
+pub struct PrettyProposal<'a, P: Proposal>(pub &'a P);
 
-impl<Ctx> fmt::Display for PrettyProposal<'_, Ctx>
+impl<P> fmt::Display for PrettyProposal<'_, P>
 where
-    Ctx: Context,
+    P: Proposal,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

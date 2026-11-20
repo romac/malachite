@@ -88,7 +88,7 @@ fn test_proposal_evidence_deduplication() {
     ];
 
     for case in cases {
-        let mut evidence = EvidenceMap::<TestContext>::new();
+        let mut evidence = EvidenceMap::<Proposal, Signature>::new();
 
         for &(addr_id, round, values) in case.evidence {
             let (p1, p2) = make_proposal_pair(addr_id, round, values);
@@ -108,7 +108,7 @@ fn test_proposal_evidence_deduplication() {
 
 #[test]
 fn proposal_evidence_is_capped_per_validator_and_reports_retention() {
-    let mut evidence = EvidenceMap::<TestContext>::new();
+    let mut evidence = EvidenceMap::<Proposal, Signature>::new();
 
     for round in 0..MAX_EVIDENCE_PER_VALIDATOR + 2 {
         let (first, conflicting) = make_proposal_pair("Alice", round as u32, [100, 200]);
@@ -132,7 +132,7 @@ fn proposal_evidence_is_capped_per_validator_and_reports_retention() {
 
 #[test]
 fn proposal_evidence_deduplicates_signature_variants() {
-    let mut evidence = EvidenceMap::<TestContext>::new();
+    let mut evidence = EvidenceMap::<Proposal, Signature>::new();
     let (first, conflicting) = make_proposal_pair("Alice", 0, [100, 200]);
 
     assert!(evidence.add(first.clone(), conflicting.clone()));
@@ -146,7 +146,7 @@ fn proposal_evidence_deduplicates_signature_variants() {
 
 #[test]
 fn test_proposal_evidence_into_iterator_and_len() {
-    let mut evidence = EvidenceMap::<TestContext>::new();
+    let mut evidence = EvidenceMap::<Proposal, Signature>::new();
 
     let (p1_alice, p2_alice) = make_proposal_pair("Alice", 0, [100, 200]);
     let (p1_bob, p2_bob) = make_proposal_pair("Bob", 0, [300, 400]);
@@ -177,14 +177,14 @@ fn test_proposal_evidence_into_iterator_and_len() {
 
 #[test]
 fn test_proposal_evidence_len_empty() {
-    let evidence = EvidenceMap::<TestContext>::new();
+    let evidence = EvidenceMap::<Proposal, Signature>::new();
     assert_eq!(evidence.len(), 0);
     assert!(evidence.is_empty());
 }
 
 #[test]
 fn store_proposal_surfaces_equivocation_to_caller() {
-    let mut keeper = ProposalKeeper::<TestContext>::new();
+    let mut keeper = ProposalKeeper::<Proposal, Signature>::new();
     let (first, conflicting) = make_proposal_pair("Alice", 0, [100, 200]);
 
     // First proposal from the validator is stored without equivocation.
@@ -221,7 +221,7 @@ fn store_proposal_surfaces_equivocation_to_caller() {
 
 #[test]
 fn store_proposal_ignores_signature_variant_duplicates() {
-    let mut keeper = ProposalKeeper::<TestContext>::new();
+    let mut keeper = ProposalKeeper::<Proposal, Signature>::new();
     let (first, _) = make_proposal_pair("Alice", 0, [100, 200]);
     let variant = SignedMessage::new(first.message.clone(), Signature::from_bytes([1; 64]));
 

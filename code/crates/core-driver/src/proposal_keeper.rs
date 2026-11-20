@@ -4,13 +4,16 @@ use alloc::collections::BTreeMap;
 use alloc::vec;
 use alloc::vec::Vec;
 
+use core::fmt::Debug;
+
 use derive_where::derive_where;
 
-use malachitebft_core_types::{
-    ConsensusTypes, DoubleProposal, Proposal, Round, SignedProposal, Validity, Value, ValueId,
-};
+use malachitebft_core_types::{Proposal, Round, SignedMessage, Validity, Value};
 pub use malachitebft_core_votekeeper::evidence::MAX_EVIDENCE_PER_VALIDATOR;
 use tracing::{error, warn};
+
+/// Two signed proposals retained as evidence of equivocation.
+pub type ProposalPair<P, Sig> = (SignedMessage<P, Sig>, SignedMessage<P, Sig>);
 
 /// Outcome of storing a proposal in a [`PerRound`] / [`ProposalKeeper`].
 ///
@@ -19,50 +22,52 @@ use tracing::{error, warn};
 /// via [`ProposalKeeper::record_evidence`].
 #[must_use]
 #[derive_where(Clone, Debug)]
-pub enum StoreProposalResult<Ctx: ConsensusTypes> {
+pub enum StoreProposalResult<P: Proposal, Sig: Clone + Debug + Eq> {
     /// The proposal was stored, or a duplicate proposal message was ignored.
     Stored,
     /// A different proposal from the same validator is already stored for this round, so the
     /// proposer has equivocated. Both proposals are returned so the caller can record evidence.
     Equivocation {
         /// The proposal already stored for this round.
-        existing: SignedProposal<Ctx>,
+        existing: SignedMessage<P, Sig>,
         /// The conflicting proposal, from the same validator.
-        conflicting: SignedProposal<Ctx>,
+        conflicting: SignedMessage<P, Sig>,
     },
 }
 
 /// The proposals received in a given round, if any.
 #[derive_where(Clone, Debug, PartialEq, Eq, Default)]
-pub struct PerRound<Ctx>
+pub struct PerRound<P, Sig>
 where
-    Ctx: ConsensusTypes,
+    P: Proposal,
+    Sig: Clone + Debug + Eq,
 {
     /// The proposals received in a given round (proposal.round) if any.
-    proposals: Vec<(SignedProposal<Ctx>, Validity)>,
+    proposals: Vec<(SignedMessage<P, Sig>, Validity)>,
 }
 
-impl<Ctx> PerRound<Ctx>
+impl<P, Sig> PerRound<P, Sig>
 where
-    Ctx: ConsensusTypes,
+    P: Proposal,
+    Sig: Clone + Debug + Eq,
 {
     /// Return the first proposal and its validity that matches the given value_id, if any.
     fn get_first_proposal_and_validity(
         &self,
-        value_id: ValueId<Ctx>,
-    ) -> Option<&(SignedProposal<Ctx>, Validity)> {
+        value_id: <P::Value as Value>::Id,
+    ) -> Option<&(SignedMessage<P, Sig>, Validity)> {
         self.proposals
             .iter()
             .find(|(proposal, _)| proposal.value().id() == value_id)
     }
 
     // /// Return the first proposal, if any, without validity.
-    fn get_first_proposal(&self) -> Option<&SignedProposal<Ctx>> {
+    fn get_first_proposal(&self) -> Option<&SignedMessage<P, Sig>> {
         self.proposals.first().map(|(p, _)| p)
     }
 
     /// Returns all proposals and their validities.
-    pub fn get_proposals_and_validities(&self) -> &[(SignedProposal<Ctx>, Validity)] {
+    pub fn get_proposals_and_validities(&self) -> &[(SignedMessage<P, Sig>, Validity)] {
         &self.proposals
     }
 
@@ -78,9 +83,9 @@ where
     /// - Panics if proposals come from **different validators**.
     pub fn add(
         &mut self,
-        proposal: SignedProposal<Ctx>,
+        proposal: SignedMessage<P, Sig>,
         validity: Validity,
-    ) -> StoreProposalResult<Ctx> {
+    ) -> StoreProposalResult<P, Sig> {
         // Signatures are not part of proposal identity.
         if self.contains_message_with_validity(&proposal, validity) {
             return StoreProposalResult::Stored;
@@ -105,7 +110,7 @@ where
 
     fn contains_message_with_validity(
         &self,
-        proposal: &SignedProposal<Ctx>,
+        proposal: &SignedMessage<P, Sig>,
         validity: Validity,
     ) -> bool {
         self.proposals
@@ -113,7 +118,7 @@ where
             .any(|(p, v)| p.message == proposal.message && *v == validity)
     }
 
-    fn verify_same_validator(&self, proposal: &SignedProposal<Ctx>) {
+    fn verify_same_validator(&self, proposal: &SignedMessage<P, Sig>) {
         if let Some(first) = self.get_first_proposal() {
             assert_eq!(
                 first.validator_address(),
@@ -126,14 +131,14 @@ where
         }
     }
 
-    fn proposal_validity_mut(&mut self, proposal: &SignedProposal<Ctx>) -> Option<&mut Validity> {
+    fn proposal_validity_mut(&mut self, proposal: &SignedMessage<P, Sig>) -> Option<&mut Validity> {
         self.proposals
             .iter_mut()
             .find(|(p, _)| p.message == proposal.message)
             .map(|(_, v)| v)
     }
 
-    fn update_validity(proposal: &SignedProposal<Ctx>, current: &mut Validity, new: Validity) {
+    fn update_validity(proposal: &SignedMessage<P, Sig>, current: &mut Validity, new: Validity) {
         use Validity::{Invalid, Valid};
 
         match (&current, &new) {
@@ -161,7 +166,7 @@ where
         }
     }
 
-    fn check_equivocation(&self, proposal: SignedProposal<Ctx>) -> StoreProposalResult<Ctx> {
+    fn check_equivocation(&self, proposal: SignedMessage<P, Sig>) -> StoreProposalResult<P, Sig> {
         if self.proposals.len() > 1 {
             let existing = self
                 .get_first_proposal()
@@ -180,20 +185,22 @@ where
 
 /// Keeps track of proposals.
 #[derive_where(Clone, Debug, Default)]
-pub struct ProposalKeeper<Ctx>
+pub struct ProposalKeeper<P, Sig>
 where
-    Ctx: ConsensusTypes,
+    P: Proposal,
+    Sig: Clone + Debug + Eq,
 {
     /// The proposal for each round.
-    per_round: BTreeMap<Round, PerRound<Ctx>>,
+    per_round: BTreeMap<Round, PerRound<P, Sig>>,
 
     /// Evidence of equivocation.
-    evidence: EvidenceMap<Ctx>,
+    evidence: EvidenceMap<P, Sig>,
 }
 
-impl<Ctx> ProposalKeeper<Ctx>
+impl<P, Sig> ProposalKeeper<P, Sig>
 where
-    Ctx: ConsensusTypes,
+    P: Proposal,
+    Sig: Clone + Debug + Eq,
 {
     /// Create a new `ProposalKeeper` instance
     pub fn new() -> Self {
@@ -204,8 +211,8 @@ where
     pub fn get_proposal_and_validity_for_round_and_value(
         &self,
         round: Round,
-        value_id: ValueId<Ctx>,
-    ) -> Option<&(SignedProposal<Ctx>, Validity)> {
+        value_id: <P::Value as Value>::Id,
+    ) -> Option<&(SignedMessage<P, Sig>, Validity)> {
         self.per_round
             .get(&round)
             .and_then(|round_info| round_info.get_first_proposal_and_validity(value_id))
@@ -215,7 +222,7 @@ where
     pub fn get_proposals_and_validities_for_round(
         &self,
         round: Round,
-    ) -> &[(SignedProposal<Ctx>, Validity)] {
+    ) -> &[(SignedMessage<P, Sig>, Validity)] {
         self.per_round
             .get(&round)
             .map(PerRound::get_proposals_and_validities)
@@ -223,17 +230,17 @@ where
     }
 
     /// Returns all proposals and their validities for all rounds.
-    pub fn all_rounds(&self) -> &BTreeMap<Round, PerRound<Ctx>> {
+    pub fn all_rounds(&self) -> &BTreeMap<Round, PerRound<P, Sig>> {
         &self.per_round
     }
 
     /// Return the evidence of equivocation.
-    pub fn evidence(&self) -> &EvidenceMap<Ctx> {
+    pub fn evidence(&self) -> &EvidenceMap<P, Sig> {
         &self.evidence
     }
 
     /// Remove and return all recorded evidence.
-    pub fn take_evidence(&mut self) -> EvidenceMap<Ctx> {
+    pub fn take_evidence(&mut self) -> EvidenceMap<P, Sig> {
         core::mem::take(&mut self.evidence)
     }
 
@@ -243,9 +250,9 @@ where
     /// [`record_evidence`](Self::record_evidence).
     pub fn store_proposal(
         &mut self,
-        proposal: SignedProposal<Ctx>,
+        proposal: SignedMessage<P, Sig>,
         validity: Validity,
-    ) -> StoreProposalResult<Ctx> {
+    ) -> StoreProposalResult<P, Sig> {
         self.per_round
             .entry(proposal.round())
             .or_default()
@@ -264,8 +271,8 @@ where
     /// per-validator cap was reached.
     pub fn record_evidence(
         &mut self,
-        existing: SignedProposal<Ctx>,
-        conflicting: SignedProposal<Ctx>,
+        existing: SignedMessage<P, Sig>,
+        conflicting: SignedMessage<P, Sig>,
     ) -> bool {
         let height = conflicting.message.height();
         let round = conflicting.message.round();
@@ -289,16 +296,18 @@ where
 
 /// Keeps track of evidence of equivocation.
 #[derive_where(Clone, Debug, Default)]
-pub struct EvidenceMap<Ctx>
+pub struct EvidenceMap<P, Sig>
 where
-    Ctx: ConsensusTypes,
+    P: Proposal,
+    Sig: Clone + Debug + Eq,
 {
-    map: BTreeMap<Ctx::Address, Vec<DoubleProposal<Ctx>>>,
+    map: BTreeMap<P::Address, Vec<ProposalPair<P, Sig>>>,
 }
 
-impl<Ctx> EvidenceMap<Ctx>
+impl<P, Sig> EvidenceMap<P, Sig>
 where
-    Ctx: ConsensusTypes,
+    P: Proposal,
+    Sig: Clone + Debug + Eq,
 {
     /// Create a new `EvidenceMap` instance.
     pub fn new() -> Self {
@@ -311,7 +320,7 @@ where
     }
 
     /// Return the evidence of equivocation for a given address, if any.
-    pub fn get(&self, address: &Ctx::Address) -> Option<&Vec<DoubleProposal<Ctx>>> {
+    pub fn get(&self, address: &P::Address) -> Option<&Vec<ProposalPair<P, Sig>>> {
         self.map.get(address)
     }
 
@@ -327,7 +336,11 @@ where
     ///
     /// # Precondition
     /// - Both proposals must be from the same validator (debug-asserted).
-    pub fn add(&mut self, existing: SignedProposal<Ctx>, conflicting: SignedProposal<Ctx>) -> bool {
+    pub fn add(
+        &mut self,
+        existing: SignedMessage<P, Sig>,
+        conflicting: SignedMessage<P, Sig>,
+    ) -> bool {
         debug_assert_eq!(
             existing.validator_address(),
             conflicting.validator_address()
@@ -363,29 +376,31 @@ where
     /// Iterate over all addresses with recorded proposal equivocations.
     pub fn iter(
         &self,
-    ) -> alloc::collections::btree_map::Iter<'_, Ctx::Address, Vec<DoubleProposal<Ctx>>> {
+    ) -> alloc::collections::btree_map::Iter<'_, P::Address, Vec<ProposalPair<P, Sig>>> {
         self.map.iter()
     }
 }
 
-impl<'a, Ctx> IntoIterator for &'a EvidenceMap<Ctx>
+impl<'a, P, Sig> IntoIterator for &'a EvidenceMap<P, Sig>
 where
-    Ctx: ConsensusTypes,
+    P: Proposal,
+    Sig: Clone + Debug + Eq,
 {
-    type Item = (&'a Ctx::Address, &'a Vec<DoubleProposal<Ctx>>);
-    type IntoIter = alloc::collections::btree_map::Iter<'a, Ctx::Address, Vec<DoubleProposal<Ctx>>>;
+    type Item = (&'a P::Address, &'a Vec<ProposalPair<P, Sig>>);
+    type IntoIter = alloc::collections::btree_map::Iter<'a, P::Address, Vec<ProposalPair<P, Sig>>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.iter()
     }
 }
 
-impl<Ctx> IntoIterator for EvidenceMap<Ctx>
+impl<P, Sig> IntoIterator for EvidenceMap<P, Sig>
 where
-    Ctx: ConsensusTypes,
+    P: Proposal,
+    Sig: Clone + Debug + Eq,
 {
-    type Item = (Ctx::Address, Vec<DoubleProposal<Ctx>>);
-    type IntoIter = alloc::collections::btree_map::IntoIter<Ctx::Address, Vec<DoubleProposal<Ctx>>>;
+    type Item = (P::Address, Vec<ProposalPair<P, Sig>>);
+    type IntoIter = alloc::collections::btree_map::IntoIter<P::Address, Vec<ProposalPair<P, Sig>>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.into_iter()

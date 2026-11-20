@@ -1,5 +1,5 @@
 use malachitebft_core_types::{NilOrVal, Round};
-use malachitebft_test::{Address, Height, TestContext, ValueId, Vote};
+use malachitebft_test::{Address, Height, ValueId, Vote};
 
 use arc_malachitebft_core_votekeeper::round_votes::RoundVotes;
 
@@ -15,7 +15,7 @@ fn add_votes_nil() {
     let h = Height::new(1);
     let r = Round::new(0);
 
-    let mut round_votes = RoundVotes::<TestContext>::new();
+    let mut round_votes = RoundVotes::<Vote>::new();
 
     let vote1 = Vote::new_prevote(h, r, NilOrVal::Nil, ADDRESS1);
     let weight1 = round_votes.add_vote(&vote1, 1);
@@ -38,7 +38,7 @@ fn add_votes_single_value() {
     let val = NilOrVal::Val(v);
     let weight = 1;
 
-    let mut round_votes = RoundVotes::<TestContext>::new();
+    let mut round_votes = RoundVotes::<Vote>::new();
 
     // add a vote, nothing changes.
     let vote1 = Vote::new_prevote(h, r, val, ADDRESS1);
@@ -71,7 +71,7 @@ fn add_votes_multi_values() {
     let val1 = NilOrVal::Val(v1);
     let val2 = NilOrVal::Val(v2);
 
-    let mut round_votes = RoundVotes::<TestContext>::new();
+    let mut round_votes = RoundVotes::<Vote>::new();
 
     let vote1 = Vote::new_precommit(h, r, val1, ADDRESS1);
     let weight1 = round_votes.add_vote(&vote1, 1);

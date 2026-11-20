@@ -10,8 +10,8 @@ use malachitebft_core_state_machine::state_machine::Info;
 use malachitebft_core_types::{
     ConsensusTypes, EnterRoundCertificate, ExtendedCommitCertificate, MessageBuilder, NilOrVal,
     PolkaCertificate, PolkaSignature, Proposal, Round, RoundCertificate, RoundCertificateType,
-    RoundSignature, SignedProposal, SignedVote, Threshold, Timeout, TimeoutKind, Validator,
-    ValidatorSet, Validity, Value, ValueId, Vote, VoteType,
+    RoundSignature, Signature, SignedProposal, SignedVote, Threshold, Timeout, TimeoutKind,
+    Validator, ValidatorSet, Validity, Value, ValueId, Vote, VoteType,
 };
 use malachitebft_core_votekeeper::keeper::Output as VKOutput;
 use malachitebft_core_votekeeper::keeper::VoteKeeper;
@@ -43,10 +43,10 @@ where
     proposer: Option<Ctx::Address>,
 
     /// The proposals to decide on.
-    pub(crate) proposal_keeper: ProposalKeeper<Ctx>,
+    pub(crate) proposal_keeper: ProposalKeeper<Ctx::Proposal, Signature<Ctx>>,
 
     /// The vote keeper.
-    pub(crate) vote_keeper: VoteKeeper<Ctx>,
+    pub(crate) vote_keeper: VoteKeeper<Ctx::Vote, Ctx::ValidatorSet>,
 
     /// The extended commit certificates, bundling per-validator precommit
     /// signatures with their vote extensions (iff required) for each decided value
@@ -178,12 +178,12 @@ where
     }
 
     /// Return a reference to the votekeper
-    pub fn votes(&self) -> &VoteKeeper<Ctx> {
+    pub fn votes(&self) -> &VoteKeeper<Ctx::Vote, Ctx::ValidatorSet> {
         &self.vote_keeper
     }
 
     /// Return a mutable reference to the votekeper
-    pub fn votes_mut(&mut self) -> &mut VoteKeeper<Ctx> {
+    pub fn votes_mut(&mut self) -> &mut VoteKeeper<Ctx::Vote, Ctx::ValidatorSet> {
         &mut self.vote_keeper
     }
 
@@ -200,7 +200,7 @@ where
     }
 
     /// Return a reference to the proposal keeper
-    pub fn proposals(&self) -> &ProposalKeeper<Ctx> {
+    pub fn proposals(&self) -> &ProposalKeeper<Ctx::Proposal, Signature<Ctx>> {
         &self.proposal_keeper
     }
 
@@ -233,7 +233,9 @@ where
     }
 
     /// Remove and return recorded evidence of proposal equivocation.
-    pub fn take_proposal_evidence(&mut self) -> proposal_keeper::EvidenceMap<Ctx> {
+    pub fn take_proposal_evidence(
+        &mut self,
+    ) -> proposal_keeper::EvidenceMap<Ctx::Proposal, Signature<Ctx>> {
         self.proposal_keeper.take_evidence()
     }
 
@@ -251,7 +253,7 @@ where
     }
 
     /// Remove and return recorded evidence of vote equivocation.
-    pub fn take_vote_evidence(&mut self) -> malachitebft_core_votekeeper::EvidenceMap<Ctx> {
+    pub fn take_vote_evidence(&mut self) -> malachitebft_core_votekeeper::EvidenceMap<Ctx::Vote> {
         self.vote_keeper.take_evidence()
     }
 

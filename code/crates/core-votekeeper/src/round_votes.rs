@@ -2,21 +2,21 @@
 
 use derive_where::derive_where;
 
-use malachitebft_core_types::{ConsensusTypes, NilOrVal, ValueId, Vote, VoteType};
+use malachitebft_core_types::{NilOrVal, Vote, VoteType};
 
 use crate::count::VoteCount;
 use crate::{Threshold, ThresholdParam, Weight};
 
 /// Tracks all the votes for a single round
 #[derive_where(Clone, Debug, PartialEq, Eq)]
-pub struct RoundVotes<Ctx: ConsensusTypes> {
+pub struct RoundVotes<V: Vote> {
     /// The prevotes for this round.
-    prevotes: VoteCount<Ctx::Address, ValueId<Ctx>>,
+    prevotes: VoteCount<V::Address, V::ValueId>,
     /// The precommits for this round.
-    precommits: VoteCount<Ctx::Address, ValueId<Ctx>>,
+    precommits: VoteCount<V::Address, V::ValueId>,
 }
 
-impl<Ctx: ConsensusTypes> RoundVotes<Ctx> {
+impl<V: Vote> RoundVotes<V> {
     /// Create a new `RoundVotes` instance.
     pub fn new() -> Self {
         RoundVotes {
@@ -26,18 +26,18 @@ impl<Ctx: ConsensusTypes> RoundVotes<Ctx> {
     }
 
     /// Return the prevotes for this round.
-    pub fn prevotes(&self) -> &VoteCount<Ctx::Address, ValueId<Ctx>> {
+    pub fn prevotes(&self) -> &VoteCount<V::Address, V::ValueId> {
         &self.prevotes
     }
 
     /// Return the precommits for this round.
-    pub fn precommits(&self) -> &VoteCount<Ctx::Address, ValueId<Ctx>> {
+    pub fn precommits(&self) -> &VoteCount<V::Address, V::ValueId> {
         &self.precommits
     }
 
     /// Add a vote to the round, of the given type, from the given address,
     /// with the given value and weight.
-    pub fn add_vote(&mut self, vote: &Ctx::Vote, weight: Weight) -> Weight {
+    pub fn add_vote(&mut self, vote: &V, weight: Weight) -> Weight {
         match vote.vote_type() {
             VoteType::Prevote => self
                 .prevotes
@@ -52,7 +52,7 @@ impl<Ctx: ConsensusTypes> RoundVotes<Ctx> {
     /// Get the weight of the vote of the given type for the given value.
     ///
     /// If there is no vote for that value, return 0.
-    pub fn get_weight(&self, vote_type: VoteType, value: &NilOrVal<ValueId<Ctx>>) -> Weight {
+    pub fn get_weight(&self, vote_type: VoteType, value: &NilOrVal<V::ValueId>) -> Weight {
         match vote_type {
             VoteType::Prevote => self.prevotes.get(value),
             VoteType::Precommit => self.precommits.get(value),
@@ -68,7 +68,7 @@ impl<Ctx: ConsensusTypes> RoundVotes<Ctx> {
     }
 
     /// Get the sum of the weights of all votes, regardless of type, for the given value.
-    pub fn combined_weight(&self, value: &NilOrVal<ValueId<Ctx>>) -> Weight {
+    pub fn combined_weight(&self, value: &NilOrVal<V::ValueId>) -> Weight {
         self.prevotes.get(value) + self.precommits.get(value)
     }
 
@@ -76,7 +76,7 @@ impl<Ctx: ConsensusTypes> RoundVotes<Ctx> {
     pub fn is_threshold_met(
         &self,
         vote_type: VoteType,
-        threshold: Threshold<ValueId<Ctx>>,
+        threshold: Threshold<V::ValueId>,
         param: ThresholdParam,
         total_weight: Weight,
     ) -> bool {
@@ -92,7 +92,7 @@ impl<Ctx: ConsensusTypes> RoundVotes<Ctx> {
     }
 }
 
-impl<Ctx: ConsensusTypes> Default for RoundVotes<Ctx> {
+impl<V: Vote> Default for RoundVotes<V> {
     fn default() -> Self {
         Self::new()
     }

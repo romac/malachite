@@ -36,7 +36,6 @@ use malachitebft_core_types::{
     Proposal, Round, SignedMessage, SignedProposal, Validity, Value, ValueId, Vote, VoteType,
 };
 use malachitebft_core_votekeeper::keeper::Output as VKOutput;
-use malachitebft_core_votekeeper::keeper::VoteKeeper;
 use malachitebft_core_votekeeper::Threshold;
 
 use crate::proposal_keeper::StoreProposalResult;
@@ -457,7 +456,7 @@ where
                 }
 
                 Step::Prevote
-                    if has_polka_value(&self.vote_keeper, round, proposal)
+                    if self.has_polka_value(round, proposal)
                         || self
                             .polka_certificate(round, &proposal.value().id())
                             .is_some() =>
@@ -472,7 +471,7 @@ where
             }
         }
 
-        for threshold in find_non_value_threshold(&self.vote_keeper, round) {
+        for threshold in self.find_non_value_threshold(round) {
             result.push(self.multiplex_vote_threshold(threshold, round))
         }
 
@@ -501,63 +500,44 @@ where
 
         result
     }
-}
 
-fn find_non_value_threshold<Ctx>(
-    votekeeper: &VoteKeeper<Ctx>,
-    round: Round,
-) -> Vec<VKOutput<ValueId<Ctx>>>
-where
-    Ctx: ConsensusTypes,
-{
-    let mut outputs = Vec::new();
-    if has_polka_nil(votekeeper, round) {
-        outputs.push(VKOutput::PolkaNil)
-    } else if has_polka_any(votekeeper, round) {
-        outputs.push(VKOutput::PolkaAny)
+    fn find_non_value_threshold(&self, round: Round) -> Vec<VKOutput<ValueId<Ctx>>> {
+        let mut outputs = Vec::new();
+        if self.has_polka_nil(round) {
+            outputs.push(VKOutput::PolkaNil)
+        } else if self.has_polka_any(round) {
+            outputs.push(VKOutput::PolkaAny)
+        }
+        if self.has_precommit_any(round) {
+            outputs.push(VKOutput::PrecommitAny)
+        }
+        outputs
     }
-    if has_precommit_any(votekeeper, round) {
-        outputs.push(VKOutput::PrecommitAny)
+
+    /// Check if we have a polka for a value
+    fn has_polka_value(&self, round: Round, proposal: &Ctx::Proposal) -> bool {
+        self.vote_keeper.is_threshold_met(
+            &round,
+            VoteType::Prevote,
+            Threshold::Value(proposal.value().id()),
+        )
     }
-    outputs
-}
 
-/// Check if we have a polka for a value
-fn has_polka_value<Ctx>(
-    votekeeper: &VoteKeeper<Ctx>,
-    round: Round,
-    proposal: &Ctx::Proposal,
-) -> bool
-where
-    Ctx: ConsensusTypes,
-{
-    votekeeper.is_threshold_met(
-        &round,
-        VoteType::Prevote,
-        Threshold::Value(proposal.value().id()),
-    )
-}
+    /// Check if we have a polka for nil
+    fn has_polka_nil(&self, round: Round) -> bool {
+        self.vote_keeper
+            .is_threshold_met(&round, VoteType::Prevote, Threshold::Nil)
+    }
 
-/// Check if we have a polka for nil
-fn has_polka_nil<Ctx>(votekeeper: &VoteKeeper<Ctx>, round: Round) -> bool
-where
-    Ctx: ConsensusTypes,
-{
-    votekeeper.is_threshold_met(&round, VoteType::Prevote, Threshold::Nil)
-}
+    /// Check if we have a polka for any
+    fn has_polka_any(&self, round: Round) -> bool {
+        self.vote_keeper
+            .is_threshold_met(&round, VoteType::Prevote, Threshold::Any)
+    }
 
-/// Check if we have a polka for any
-fn has_polka_any<Ctx>(votekeeper: &VoteKeeper<Ctx>, round: Round) -> bool
-where
-    Ctx: ConsensusTypes,
-{
-    votekeeper.is_threshold_met(&round, VoteType::Prevote, Threshold::Any)
-}
-
-/// Check if we have a quorum of precommits for any
-fn has_precommit_any<Ctx>(votekeeper: &VoteKeeper<Ctx>, round: Round) -> bool
-where
-    Ctx: ConsensusTypes,
-{
-    votekeeper.is_threshold_met(&round, VoteType::Precommit, Threshold::Any)
+    /// Check if we have a quorum of precommits for any
+    fn has_precommit_any(&self, round: Round) -> bool {
+        self.vote_keeper
+            .is_threshold_met(&round, VoteType::Precommit, Threshold::Any)
+    }
 }

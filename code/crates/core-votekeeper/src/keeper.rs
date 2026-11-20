@@ -7,11 +7,10 @@ use tracing::warn;
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 use malachitebft_core_types::{
-    ConsensusTypes, DoubleVote, NilOrVal, Round, SignedVote, Validator, ValidatorSet, ValueId,
-    Vote, VoteType,
+    NilOrVal, Round, SignedMessage, Validator, ValidatorSet, Vote, VoteType,
 };
 
-use crate::evidence::EvidenceMap;
+use crate::evidence::{EvidenceMap, VotePair};
 use crate::round_votes::RoundVotes;
 use crate::round_weights::RoundWeights;
 use crate::{Threshold, ThresholdParams, Weight};
@@ -43,42 +42,42 @@ const VOTES_PER_VALIDATOR_PER_ROUND: usize = 2;
 
 /// Keeps track of votes and emitted outputs for a given round.
 #[derive_where(Clone, Debug, PartialEq, Eq, Default)]
-pub struct PerRound<Ctx>
+pub struct PerRound<V>
 where
-    Ctx: ConsensusTypes,
+    V: Vote,
 {
     /// The votes for this round.
-    votes: RoundVotes<Ctx>,
+    votes: RoundVotes<V>,
 
     /// The addresses and their weights for this round.
-    addresses_weights: RoundWeights<Ctx::Address>,
+    addresses_weights: RoundWeights<V::Address>,
 
     /// All the votes received for this round.
-    received_votes: Vec<SignedVote<Ctx>>,
+    received_votes: Vec<SignedMessage<V, V::Signature>>,
 
     /// The emitted outputs for this round.
-    emitted_outputs: BTreeSet<Output<ValueId<Ctx>>>,
+    emitted_outputs: BTreeSet<Output<V::ValueId>>,
 }
 
 /// Errors can that be yielded when recording a vote.
 #[derive(Error)]
-pub enum RecordVoteError<Ctx>
+pub enum RecordVoteError<V>
 where
-    Ctx: ConsensusTypes,
+    V: Vote,
 {
     /// Attempted to record a conflicting vote.
     #[error("Conflicting vote: {existing} vs {conflicting}")]
     ConflictingVote {
         /// The vote already recorded.
-        existing: SignedVote<Ctx>,
+        existing: SignedMessage<V, V::Signature>,
         /// The conflicting vote.
-        conflicting: SignedVote<Ctx>,
+        conflicting: SignedMessage<V, V::Signature>,
     },
 }
 
-impl<Ctx> PerRound<Ctx>
+impl<V> PerRound<V>
 where
-    Ctx: ConsensusTypes,
+    V: Vote,
 {
     /// Create a new `PerRound` instance.
     pub fn new() -> Self {
@@ -97,9 +96,9 @@ where
     /// Add a vote to the round, checking for conflicts.
     pub fn add(
         &mut self,
-        vote: SignedVote<Ctx>,
+        vote: SignedMessage<V, V::Signature>,
         weight: Weight,
-    ) -> Result<(), RecordVoteError<Ctx>> {
+    ) -> Result<(), RecordVoteError<V>> {
         let existing_idx = self.received_votes.iter().position(|v| {
             v.vote_type() == vote.vote_type() && v.validator_address() == vote.validator_address()
         });
@@ -141,25 +140,28 @@ where
     pub fn get_vote<'a>(
         &'a self,
         vote_type: VoteType,
-        address: &'a Ctx::Address,
-    ) -> Option<&'a SignedVote<Ctx>> {
+        address: &'a V::Address,
+    ) -> Option<&'a SignedMessage<V, V::Signature>> {
         self.received_votes
             .iter()
             .find(move |vote| vote.vote_type() == vote_type && vote.validator_address() == address)
     }
 
     /// Return the votes for this round.
-    pub fn votes(&self) -> &RoundVotes<Ctx> {
+    pub fn votes(&self) -> &RoundVotes<V> {
         &self.votes
     }
 
     /// Return the votes for this round.
-    pub fn received_votes(&self) -> &Vec<SignedVote<Ctx>> {
+    pub fn received_votes(&self) -> &Vec<SignedMessage<V, V::Signature>> {
         &self.received_votes
     }
 
     /// Return precommits for the given value in this round.
-    pub fn precommits_for_value(&self, value_id: &ValueId<Ctx>) -> Vec<SignedVote<Ctx>> {
+    pub fn precommits_for_value(
+        &self,
+        value_id: &V::ValueId,
+    ) -> Vec<SignedMessage<V, V::Signature>> {
         self.received_votes
             .iter()
             .filter(|v| {
@@ -171,42 +173,44 @@ where
     }
 
     /// Return the addresses and their weights for this round.
-    pub fn addresses_weights(&self) -> &RoundWeights<Ctx::Address> {
+    pub fn addresses_weights(&self) -> &RoundWeights<V::Address> {
         &self.addresses_weights
     }
 
     /// Return the emitted outputs for this round.
-    pub fn emitted_outputs(&self) -> &BTreeSet<Output<ValueId<Ctx>>> {
+    pub fn emitted_outputs(&self) -> &BTreeSet<Output<V::ValueId>> {
         &self.emitted_outputs
     }
 }
 
 /// Keeps track of votes and emits messages when thresholds are reached.
 #[derive_where(Clone, Debug)]
-pub struct VoteKeeper<Ctx>
+pub struct VoteKeeper<V, Set>
 where
-    Ctx: ConsensusTypes,
+    V: Vote,
+    Set: ValidatorSet<Validator: Validator<Address = V::Address>>,
 {
     /// The validator set for this height.
-    validator_set: Ctx::ValidatorSet,
+    validator_set: Set,
 
     /// The threshold parameters.
     threshold_params: ThresholdParams,
 
     /// The votes and emitted outputs for each round.
-    per_round: BTreeMap<Round, PerRound<Ctx>>,
+    per_round: BTreeMap<Round, PerRound<V>>,
 
     /// Evidence of equivocation.
-    evidence: EvidenceMap<Ctx>,
+    evidence: EvidenceMap<V>,
 }
 
-impl<Ctx> VoteKeeper<Ctx>
+impl<V, Set> VoteKeeper<V, Set>
 where
-    Ctx: ConsensusTypes,
+    V: Vote,
+    Set: ValidatorSet<Validator: Validator<Address = V::Address>>,
 {
     /// Create a new `VoteKeeper` instance, for the given
     /// total network weight (ie. voting power) and threshold parameters.
-    pub fn new(validator_set: Ctx::ValidatorSet, threshold_params: ThresholdParams) -> Self {
+    pub fn new(validator_set: Set, threshold_params: ThresholdParams) -> Self {
         Self {
             validator_set,
             threshold_params,
@@ -216,7 +220,7 @@ where
     }
 
     /// Return the current validator set
-    pub fn validator_set(&self) -> &Ctx::ValidatorSet {
+    pub fn validator_set(&self) -> &Set {
         &self.validator_set
     }
 
@@ -226,12 +230,12 @@ where
     }
 
     /// Return the votes for the given round.
-    pub fn per_round(&self, round: Round) -> Option<&PerRound<Ctx>> {
+    pub fn per_round(&self, round: Round) -> Option<&PerRound<V>> {
         self.per_round.get(&round)
     }
 
     /// Return votes for all rounds we have seen so far.
-    pub fn all_rounds(&self) -> &BTreeMap<Round, PerRound<Ctx>> {
+    pub fn all_rounds(&self) -> &BTreeMap<Round, PerRound<V>> {
         &self.per_round
     }
 
@@ -246,12 +250,12 @@ where
     }
 
     /// Return the evidence of equivocation.
-    pub fn evidence(&self) -> &EvidenceMap<Ctx> {
+    pub fn evidence(&self) -> &EvidenceMap<V> {
         &self.evidence
     }
 
     /// Remove and return all recorded evidence.
-    pub fn take_evidence(&mut self) -> EvidenceMap<Ctx> {
+    pub fn take_evidence(&mut self) -> EvidenceMap<V> {
         core::mem::take(&mut self.evidence)
     }
 
@@ -261,7 +265,7 @@ where
     /// same validator with the same type and value counts as "seen", unless
     /// the incoming vote carries an extension the stored one lacks — in
     /// which case the stored vote can still be upgraded.
-    pub fn has_vote(&self, vote: &SignedVote<Ctx>) -> bool {
+    pub fn has_vote(&self, vote: &SignedMessage<V, V::Signature>) -> bool {
         self.per_round
             .get(&vote.round())
             .and_then(|per_round| per_round.get_vote(vote.vote_type(), vote.validator_address()))
@@ -278,7 +282,7 @@ where
     /// they can reach [`EvidenceMap::add`]. Once the map is full, further
     /// distinct values teach the node nothing and must not be verified or
     /// WAL-appended.
-    pub fn is_saturated_conflict(&self, vote: &SignedVote<Ctx>) -> bool {
+    pub fn is_saturated_conflict(&self, vote: &SignedMessage<V, V::Signature>) -> bool {
         let Some(existing) = self
             .per_round
             .get(&vote.round())
@@ -292,9 +296,9 @@ where
     /// Apply a vote with a given weight, potentially triggering an output.
     pub fn apply_vote(
         &mut self,
-        vote: SignedVote<Ctx>,
+        vote: SignedMessage<V, V::Signature>,
         round: Round,
-    ) -> Option<Output<ValueId<Ctx>>> {
+    ) -> Option<Output<V::ValueId>> {
         let total_weight = self.total_weight();
         let per_round =
             self.per_round
@@ -360,7 +364,7 @@ where
         &self,
         round: &Round,
         vote_type: VoteType,
-        threshold: Threshold<ValueId<Ctx>>,
+        threshold: Threshold<V::ValueId>,
     ) -> bool {
         self.per_round.get(round).is_some_and(|per_round| {
             per_round.votes.is_threshold_met(
@@ -381,8 +385,8 @@ where
     /// different value — without mutating the keeper. Returns `None` if no conflict exists.
     pub fn conflicting_vote<'a>(
         &'a self,
-        vote: &'a SignedVote<Ctx>,
-    ) -> Option<&'a SignedVote<Ctx>> {
+        vote: &'a SignedMessage<V, V::Signature>,
+    ) -> Option<&'a SignedMessage<V, V::Signature>> {
         let existing = self
             .per_round
             .get(&vote.round())?
@@ -399,7 +403,7 @@ where
     ///
     /// Lets callers skip re-verifying the signature of a conflicting vote whose evidence
     /// is already stored.
-    pub fn has_equivocation_evidence(&self, vote: &SignedVote<Ctx>) -> bool {
+    pub fn has_equivocation_evidence(&self, vote: &SignedMessage<V, V::Signature>) -> bool {
         self.evidence
             .get(vote.validator_address())
             .is_some_and(|pairs| pairs.iter().any(|(e, c)| e == vote || c == vote))
@@ -414,7 +418,7 @@ where
     ///
     /// This is the guard [`Self::detect_equivocation`] itself applies, so callers can use it to
     /// gate the cost of verifying `vote`'s signature on there being something to gain from it.
-    pub fn can_record_equivocation(&self, vote: &SignedVote<Ctx>) -> bool {
+    pub fn can_record_equivocation(&self, vote: &SignedMessage<V, V::Signature>) -> bool {
         self.conflicting_vote(vote).is_some()
             && !self.has_equivocation_evidence(vote)
             && !self.evidence.is_full(vote.validator_address())
@@ -425,7 +429,10 @@ where
     ///
     /// Repeated deliveries of the same conflicting vote, and deliveries once the validator has
     /// reached the per-validator cap, retain nothing and return `None`.
-    pub fn detect_equivocation(&mut self, vote: SignedVote<Ctx>) -> Option<DoubleVote<Ctx>> {
+    pub fn detect_equivocation(
+        &mut self,
+        vote: SignedMessage<V, V::Signature>,
+    ) -> Option<VotePair<V>> {
         if !self.can_record_equivocation(&vote) {
             return None;
         }
@@ -439,15 +446,15 @@ where
 
 /// Compute whether or not we have reached a threshold for the given value,
 /// and return that threshold.
-fn compute_threshold<Ctx>(
+fn compute_threshold<V>(
     vote_type: VoteType,
-    round: &PerRound<Ctx>,
-    value: &NilOrVal<ValueId<Ctx>>,
+    round: &PerRound<V>,
+    value: &NilOrVal<V::ValueId>,
     thresholds: ThresholdParams,
     total_weight: Weight,
-) -> Threshold<ValueId<Ctx>>
+) -> Threshold<V::ValueId>
 where
-    Ctx: ConsensusTypes,
+    V: Vote,
 {
     let weight = round.votes.get_weight(vote_type, value);
 

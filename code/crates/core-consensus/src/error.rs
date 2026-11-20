@@ -5,7 +5,7 @@ use derive_where::derive_where;
 
 use malachitebft_core_driver::Error as DriverError;
 use malachitebft_core_types::{
-    CertificateError, Context, ExtendedCommitCertificate, Round, ValueId,
+    CertificateError, ConsensusTypes, ExtendedCommitCertificate, Round, ValueId,
 };
 
 use crate::effect::Resume;
@@ -17,7 +17,7 @@ use crate::wal_replay_index::RecordKind;
 #[allow(private_interfaces)]
 pub enum Error<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// The consensus process was resumed with a value which
     /// does not match the expected type of resume value.

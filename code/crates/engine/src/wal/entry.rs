@@ -4,7 +4,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt, BE};
 
 use malachitebft_codec::Codec;
 use malachitebft_core_consensus::{Input, ProposedValue, SignedConsensusMsg};
-use malachitebft_core_types::{Context, PolkaCertificate, Round, Timeout, ValueOrigin};
+use malachitebft_core_types::{ConsensusTypes, PolkaCertificate, Round, Timeout, ValueOrigin};
 
 /// Codec bounds required to encode and decode WAL entries.
 ///
@@ -12,7 +12,7 @@ use malachitebft_core_types::{Context, PolkaCertificate, Round, Timeout, ValueOr
 /// per-payload types stored in the WAL.
 pub trait WalCodec<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Self: Codec<SignedConsensusMsg<Ctx>>,
     Self: Codec<ProposedValue<Ctx>>,
     Self: Codec<PolkaCertificate<Ctx>>,
@@ -21,7 +21,7 @@ where
 
 impl<Ctx, C> WalCodec<Ctx> for C
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     C: Codec<SignedConsensusMsg<Ctx>>,
     C: Codec<ProposedValue<Ctx>>,
     C: Codec<PolkaCertificate<Ctx>>,
@@ -44,7 +44,7 @@ const TAG_POLKA_CERTIFICATE: u8 = 0x08;
 /// rather than silently dropped — the WAL contract forbids partial writes.
 pub fn encode_entry<Ctx, C, W>(entry: Input<Ctx>, codec: &C, buf: W) -> io::Result<()>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     C: WalCodec<Ctx>,
     W: Write,
 {
@@ -84,7 +84,7 @@ where
 /// `Vote`, `Proposal`, `TimeoutElapsed`, `ProposedValue`, or `PolkaCertificate`.
 pub fn decode_entry<Ctx, C, R>(codec: &C, mut buf: R) -> io::Result<Input<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     C: WalCodec<Ctx>,
     R: Read,
 {

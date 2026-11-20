@@ -28,7 +28,7 @@ use crate::{ConsensusMsg, Error, Input, PeerId, Role, VoteExtensionError};
 ///     }
 /// }
 /// ```
-pub trait Resumable<Ctx: Context> {
+pub trait Resumable<Ctx: ConsensusTypes> {
     /// The value type that will be used to resume execution
     type Value;
 
@@ -47,7 +47,7 @@ pub trait Resumable<Ctx: Context> {
 #[derive_where(Debug)]
 pub enum Effect<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Cancel all outstanding timeouts
     ///
@@ -336,7 +336,7 @@ where
 #[derive_where(Debug)]
 pub enum Resume<Ctx>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
 {
     /// Internal effect to start the coroutine.
     #[doc(hidden)]
@@ -377,7 +377,7 @@ pub mod resume {
     #[derive(Debug, Default)]
     pub struct Continue;
 
-    impl<Ctx: Context> Resumable<Ctx> for Continue {
+    impl<Ctx: ConsensusTypes> Resumable<Ctx> for Continue {
         type Value = ();
 
         fn resume_with(self, _: ()) -> Resume<Ctx> {
@@ -388,7 +388,7 @@ pub mod resume {
     #[derive(Debug, Default)]
     pub struct SignatureValidity;
 
-    impl<Ctx: Context> Resumable<Ctx> for SignatureValidity {
+    impl<Ctx: ConsensusTypes> Resumable<Ctx> for SignatureValidity {
         type Value = bool;
 
         fn resume_with(self, value: Self::Value) -> Resume<Ctx> {
@@ -399,7 +399,7 @@ pub mod resume {
     #[derive(Debug, Default)]
     pub struct SignedVote;
 
-    impl<Ctx: Context> Resumable<Ctx> for SignedVote {
+    impl<Ctx: ConsensusTypes> Resumable<Ctx> for SignedVote {
         type Value = malachitebft_core_types::SignedVote<Ctx>;
 
         fn resume_with(self, value: Self::Value) -> Resume<Ctx> {
@@ -410,7 +410,7 @@ pub mod resume {
     #[derive(Debug, Default)]
     pub struct SignedProposal;
 
-    impl<Ctx: Context> Resumable<Ctx> for SignedProposal {
+    impl<Ctx: ConsensusTypes> Resumable<Ctx> for SignedProposal {
         type Value = malachitebft_core_types::SignedProposal<Ctx>;
 
         fn resume_with(self, a: Self::Value) -> Resume<Ctx> {
@@ -421,7 +421,7 @@ pub mod resume {
     #[derive(Debug, Default)]
     pub struct VoteExtension;
 
-    impl<Ctx: Context> Resumable<Ctx> for VoteExtension {
+    impl<Ctx: ConsensusTypes> Resumable<Ctx> for VoteExtension {
         type Value = Option<SignedExtension<Ctx>>;
 
         fn resume_with(self, value: Self::Value) -> Resume<Ctx> {
@@ -432,7 +432,7 @@ pub mod resume {
     #[derive(Debug, Default)]
     pub struct CertificateValidity;
 
-    impl<Ctx: Context> Resumable<Ctx> for CertificateValidity {
+    impl<Ctx: ConsensusTypes> Resumable<Ctx> for CertificateValidity {
         type Value = Result<(), CertificateError<Ctx>>;
 
         fn resume_with(self, value: Self::Value) -> Resume<Ctx> {
@@ -443,7 +443,7 @@ pub mod resume {
     #[derive(Debug, Default)]
     pub struct VoteExtensionValidity;
 
-    impl<Ctx: Context> Resumable<Ctx> for VoteExtensionValidity {
+    impl<Ctx: ConsensusTypes> Resumable<Ctx> for VoteExtensionValidity {
         type Value = Result<(), VoteExtensionError>;
 
         fn resume_with(self, value: Self::Value) -> Resume<Ctx> {

@@ -7,7 +7,7 @@ use eyre::{eyre, Result};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info};
 
-use malachitebft_core_types::{Context, Height};
+use malachitebft_core_types::{ConsensusTypes, Height};
 use malachitebft_wal as wal;
 
 use crate::node::{NodeMsg, NodeRef};
@@ -18,7 +18,7 @@ use super::iter::log_entries;
 
 pub type ReplyTo<T> = oneshot::Sender<Result<T>>;
 
-pub enum WalMsg<Ctx: Context> {
+pub enum WalMsg<Ctx: ConsensusTypes> {
     StartedHeight(Ctx::Height, ReplyTo<Vec<io::Result<Input<Ctx>>>>),
     Reset(Ctx::Height, ReplyTo<()>),
     Append(Input<Ctx>, ReplyTo<()>),
@@ -35,7 +35,7 @@ pub fn spawn<Ctx, Codec>(
     node: NodeRef,
 ) -> JoinHandle<()>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Codec: WalCodec<Ctx>,
 {
     thread::spawn(move || {
@@ -93,7 +93,7 @@ fn process_msg<Ctx, Codec>(
     codec: &Codec,
 ) -> Result<ControlFlow<()>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Codec: WalCodec<Ctx>,
 {
     match msg {
@@ -201,7 +201,7 @@ fn fetch_entries<Ctx, Codec>(
     codec: &Codec,
 ) -> Result<Vec<io::Result<Input<Ctx>>>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Codec: WalCodec<Ctx>,
 {
     if log.is_empty() {
@@ -242,7 +242,7 @@ fn decode_result<Ctx, Codec>(
     codec: &Codec,
 ) -> io::Result<Input<Ctx>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Codec: WalCodec<Ctx>,
 {
     result
@@ -259,7 +259,7 @@ where
 
 fn dump_entries<'a, Ctx, Codec>(log: &'a mut wal::Log, codec: &'a Codec) -> Result<()>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Codec: WalCodec<Ctx>,
 {
     let len = log.len();
@@ -290,7 +290,7 @@ where
     Ok(())
 }
 
-fn span_sequence(sequence: u64, msg: &WalMsg<impl Context>) -> u64 {
+fn span_sequence(sequence: u64, msg: &WalMsg<impl ConsensusTypes>) -> u64 {
     if let WalMsg::StartedHeight(height, _) = msg {
         height.as_u64()
     } else {
@@ -298,7 +298,7 @@ fn span_sequence(sequence: u64, msg: &WalMsg<impl Context>) -> u64 {
     }
 }
 
-fn wal_entry_type<Ctx: Context>(entry: &Input<Ctx>) -> &'static str {
+fn wal_entry_type<Ctx: ConsensusTypes>(entry: &Input<Ctx>) -> &'static str {
     match entry {
         Input::Vote(_) => "Consensus(Vote)",
         Input::Proposal(_) => "Consensus(Proposal)",

@@ -1,10 +1,10 @@
 use bytes::Bytes;
-use malachitebft_core_types::{NilOrVal, Round, SignedExtension, VoteType};
+use malachitebft_core_types::{NilOrVal, Round, SignedMessage, VoteType};
 use malachitebft_proto::{Error as ProtoError, Protobuf};
 
 use crate::codec::proto::{decode_extension, encode_extension};
 use crate::proto;
-use crate::{Address, Height, TestContext, ValueId};
+use crate::{Address, Height, Signature, ValueId};
 
 pub use malachitebft_core_types::Extension;
 
@@ -16,7 +16,7 @@ pub struct Vote {
     pub round: Round,
     pub value: NilOrVal<ValueId>,
     pub validator_address: Address,
-    pub extension: Option<SignedExtension<TestContext>>,
+    pub extension: Option<SignedMessage<Bytes, Signature>>,
 }
 
 impl Vote {
@@ -70,7 +70,8 @@ impl malachitebft_core_types::Vote for Vote {
     type Height = Height;
     type Address = Address;
     type ValueId = ValueId;
-    type SignedExtension = SignedExtension<TestContext>;
+    type Signature = Signature;
+    type Extension = Bytes;
 
     fn height(&self) -> Height {
         self.height
@@ -96,15 +97,15 @@ impl malachitebft_core_types::Vote for Vote {
         &self.validator_address
     }
 
-    fn extension(&self) -> Option<&SignedExtension<TestContext>> {
+    fn extension(&self) -> Option<&SignedMessage<Bytes, Signature>> {
         self.extension.as_ref()
     }
 
-    fn take_extension(&mut self) -> Option<SignedExtension<TestContext>> {
+    fn take_extension(&mut self) -> Option<SignedMessage<Bytes, Signature>> {
         self.extension.take()
     }
 
-    fn extend(self, extension: SignedExtension<TestContext>) -> Self {
+    fn extend(self, extension: SignedMessage<Bytes, Signature>) -> Self {
         Self {
             extension: Some(extension),
             ..self

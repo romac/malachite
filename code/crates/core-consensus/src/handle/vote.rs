@@ -28,7 +28,7 @@ where
             consensus.round = %consensus_round,
             vote.height = %vote_height,
             vote.round = %vote_round,
-            vote.msg = %PrettyVote::<Ctx>(&signed_vote.message),
+            vote.msg = %PrettyVote(&signed_vote.message),
             validator = %validator_address,
             "Received vote for lower height, dropping"
         );
@@ -43,7 +43,7 @@ where
             consensus.round = %consensus_round,
             vote.height = %vote_height,
             vote.round = %vote_round,
-            vote.msg = %PrettyVote::<Ctx>(&signed_vote.message),
+            vote.msg = %PrettyVote(&signed_vote.message),
             validator = %validator_address,
             "Received vote for higher height, queuing for later"
         );
@@ -62,7 +62,7 @@ where
             consensus.round = %consensus_round,
             vote.height = %vote_height,
             vote.round = %vote_round,
-            vote.msg = %PrettyVote::<Ctx>(&signed_vote.message),
+            vote.msg = %PrettyVote(&signed_vote.message),
             validator = %validator_address,
             "Received vote at round -1, queuing for later"
         );
@@ -123,7 +123,7 @@ where
         consensus.round = %consensus_round,
         vote.height = %vote_height,
         vote.round = %vote_round,
-        vote.msg = %PrettyVote::<Ctx>(&signed_vote.message),
+        vote.msg = %PrettyVote(&signed_vote.message),
         validator = %validator_address,
         "Received vote",
     );
@@ -178,7 +178,7 @@ where
             vote.height = %vote_height,
             vote.round = %vote_round,
             validator = %validator_address,
-            "Received vote with invalid signature: {}", PrettyVote::<Ctx>(&signed_vote.message)
+            "Received vote with invalid signature: {}", PrettyVote(&signed_vote.message)
         );
 
         return Ok(false);
@@ -205,7 +205,7 @@ where
                 vote.round = %vote.round(),
                 validator = %validator_address,
                 "Received non-precommit vote with vote extension: {}",
-                PrettyVote::<Ctx>(&vote.message)
+                PrettyVote(&vote.message)
             );
 
             return Ok(false);
@@ -222,7 +222,7 @@ where
                 vote.round = %vote.round(),
                 validator = %validator_address,
                 "Received nil precommit with vote extension: {}",
-                PrettyVote::<Ctx>(&vote.message)
+                PrettyVote(&vote.message)
             );
 
             return Ok(false);
@@ -239,7 +239,7 @@ where
                 vote.round = %vote.round(),
                 validator = %validator_address,
                 "Received non-nil precommit without required vote extension: {}",
-                PrettyVote::<Ctx>(&vote.message)
+                PrettyVote(&vote.message)
             );
 
             return Ok(false);
@@ -255,7 +255,7 @@ where
             vote.round = %vote.round(),
             validator = %validator_address,
             "Received non-nil precommit with disabled vote extension: {}",
-            PrettyVote::<Ctx>(&vote.message)
+            PrettyVote(&vote.message)
         );
 
         return Ok(false);
@@ -294,7 +294,7 @@ where
             vote.round = %vote.round(),
             validator = %validator_address,
             "Received vote with invalid extension: {}, reason: {e}",
-            PrettyVote::<Ctx>(&vote.message)
+            PrettyVote(&vote.message)
         );
 
         return Ok(false);

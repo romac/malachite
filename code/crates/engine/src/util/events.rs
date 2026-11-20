@@ -10,17 +10,18 @@ use malachitebft_core_consensus::{
     SignedConsensusMsg,
 };
 use malachitebft_core_types::{
-    CommitCertificate, Context, PolkaCertificate, Round, RoundCertificate, SignedVote, ValueOrigin,
+    CommitCertificate, ConsensusTypes, PolkaCertificate, Round, RoundCertificate, SignedVote,
+    ValueOrigin,
 };
 
 pub type RxEvent<Ctx> = broadcast::Receiver<Event<Ctx>>;
 
 #[derive_where(Clone)]
-pub struct TxEvent<Ctx: Context> {
+pub struct TxEvent<Ctx: ConsensusTypes> {
     tx: broadcast::Sender<Event<Ctx>>,
 }
 
-impl<Ctx: Context> TxEvent<Ctx> {
+impl<Ctx: ConsensusTypes> TxEvent<Ctx> {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(128);
         Self { tx }
@@ -37,14 +38,14 @@ impl<Ctx: Context> TxEvent<Ctx> {
     }
 }
 
-impl<Ctx: Context> Default for TxEvent<Ctx> {
+impl<Ctx: ConsensusTypes> Default for TxEvent<Ctx> {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[derive_where(Clone, Debug)]
-pub enum Event<Ctx: Context> {
+pub enum Event<Ctx: ConsensusTypes> {
     StartedHeight(Ctx::Height, bool),
     StartedRound(Ctx::Height, Round, Ctx::Address, Role),
     Published(SignedConsensusMsg<Ctx>),
@@ -70,7 +71,7 @@ pub enum Event<Ctx: Context> {
     WalCorrupted(Arc<io::Error>),
 }
 
-impl<Ctx: Context> fmt::Display for Event<Ctx> {
+impl<Ctx: ConsensusTypes> fmt::Display for Event<Ctx> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Event::StartedHeight(height, restart) => {

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use derive_where::derive_where;
 
-use malachitebft_core_types::{ConsensusTypes, Context, Round, ValueId};
+use malachitebft_core_types::{ConsensusTypes, Round, ValueId};
 use malachitebft_engine::util::streaming::StreamId;
 
 // This is a temporary store implementation for proposal parts
@@ -18,24 +18,24 @@ type Key<Height> = (StreamId, Height, Round);
 /// `value_id` is the value id of the proposal as computed by the proposer. It is also included in one of the parts but stored here for convenience.
 /// `parts` is a list of `ProposalPart`s, ordered by the sequence of the `StreamMessage` that delivered them.
 #[derive_where(Clone, Debug, Default)]
-pub struct Entry<Ctx: Context> {
+pub struct Entry<Ctx: ConsensusTypes> {
     pub value_id: Option<ValueId<Ctx>>,
     pub parts: Vec<Arc<<Ctx as ConsensusTypes>::ProposalPart>>,
 }
 type Store<Ctx> = BTreeMap<Key<<Ctx as ConsensusTypes>::Height>, Entry<Ctx>>;
 
 #[derive_where(Clone, Debug)]
-pub struct PartStore<Ctx: Context> {
+pub struct PartStore<Ctx: ConsensusTypes> {
     store: Store<Ctx>,
 }
 
-impl<Ctx: Context> Default for PartStore<Ctx> {
+impl<Ctx: ConsensusTypes> Default for PartStore<Ctx> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<Ctx: Context> PartStore<Ctx> {
+impl<Ctx: ConsensusTypes> PartStore<Ctx> {
     pub fn new() -> Self {
         Self {
             store: Default::default(),

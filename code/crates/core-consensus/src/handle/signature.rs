@@ -70,7 +70,7 @@ where
 
     let kind = RecordKind::of_vote(vote.vote_type());
 
-    if votes_diverge::<Ctx>(&vote, &recorded.message) {
+    if votes_diverge(&vote, &recorded.message) {
         error!(
             %kind,
             height = %vote.height(),

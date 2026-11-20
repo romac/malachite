@@ -38,7 +38,8 @@ where
         Height = Self::Height,
         Address = Self::Address,
         ValueId = ValueId<Self>,
-        SignedExtension = crate::SignedExtension<Self>,
+        Signature = crate::Signature<Self>,
+        Extension = Self::Extension,
     >;
 
     /// The type of vote extensions.

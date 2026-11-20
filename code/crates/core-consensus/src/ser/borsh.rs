@@ -5,11 +5,12 @@ use {
         BorshDeserialize, BorshSerialize,
     },
     malachitebft_core_types::{
-        Context, PolkaCertificate, Round, RoundCertificate, SignedProposal, SignedVote, Validity,
+        ConsensusTypes, PolkaCertificate, Round, RoundCertificate, SignedProposal, SignedVote,
+        Validity,
     },
 };
 
-impl<Ctx: Context> BorshSerialize for SignedConsensusMsg<Ctx>
+impl<Ctx: ConsensusTypes> BorshSerialize for SignedConsensusMsg<Ctx>
 where
     SignedVote<Ctx>: BorshSerialize,
     SignedProposal<Ctx>: BorshSerialize,
@@ -28,7 +29,7 @@ where
     }
 }
 
-impl<Ctx: Context> BorshDeserialize for SignedConsensusMsg<Ctx>
+impl<Ctx: ConsensusTypes> BorshDeserialize for SignedConsensusMsg<Ctx>
 where
     SignedVote<Ctx>: BorshDeserialize,
     SignedProposal<Ctx>: BorshDeserialize,
@@ -50,7 +51,7 @@ where
     }
 }
 
-impl<Ctx: Context> BorshSerialize for LivenessMsg<Ctx>
+impl<Ctx: ConsensusTypes> BorshSerialize for LivenessMsg<Ctx>
 where
     SignedVote<Ctx>: BorshSerialize,
     PolkaCertificate<Ctx>: BorshSerialize,
@@ -74,7 +75,7 @@ where
     }
 }
 
-impl<Ctx: Context> BorshDeserialize for LivenessMsg<Ctx>
+impl<Ctx: ConsensusTypes> BorshDeserialize for LivenessMsg<Ctx>
 where
     SignedVote<Ctx>: BorshDeserialize,
     PolkaCertificate<Ctx>: BorshDeserialize,
@@ -100,7 +101,7 @@ where
     }
 }
 
-impl<Ctx: Context> BorshSerialize for ProposedValue<Ctx>
+impl<Ctx: ConsensusTypes> BorshSerialize for ProposedValue<Ctx>
 where
     Ctx::Height: BorshSerialize,
     Ctx::Address: BorshSerialize,
@@ -116,7 +117,7 @@ where
     }
 }
 
-impl<Ctx: Context> BorshDeserialize for ProposedValue<Ctx>
+impl<Ctx: ConsensusTypes> BorshDeserialize for ProposedValue<Ctx>
 where
     Ctx::Height: BorshDeserialize,
     Ctx::Address: BorshDeserialize,

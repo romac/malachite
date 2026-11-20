@@ -1,7 +1,7 @@
 use std::io;
 use std::marker::PhantomData;
 
-use malachitebft_core_types::Context;
+use malachitebft_core_types::ConsensusTypes;
 use malachitebft_wal as wal;
 
 use eyre::Result;
@@ -16,7 +16,7 @@ pub fn log_entries<'a, Ctx, Codec>(
     codec: &'a Codec,
 ) -> Result<WalIter<'a, Ctx, Codec>>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Codec: WalCodec<Ctx>,
 {
     Ok(WalIter {
@@ -34,7 +34,7 @@ pub struct WalIter<'a, Ctx, Codec> {
 
 impl<Ctx, Codec> Iterator for WalIter<'_, Ctx, Codec>
 where
-    Ctx: Context,
+    Ctx: ConsensusTypes,
     Codec: WalCodec<Ctx>,
 {
     type Item = io::Result<Input<Ctx>>;
