@@ -32,7 +32,7 @@ Note: Published crate names use the `arc-malachitebft-*` prefix, but workspace d
 
 Malachite's consensus logic is **pure and stateless** — it performs no I/O. Instead, it uses a coroutine-based effect system:
 
-1. The `Context` trait (`core-types`) parameterizes all consensus types (Address, Height, Value, Vote, Proposal, ValidatorSet, SigningScheme, etc.)
+1. `ConsensusTypes` binds the application types at the integration boundary. `MessageBuilder` constructs messages, and `ProposerSelector` selects the proposer. The round machine takes a proposal type and emits vote and proposal fields for the driver to materialize.
 2. The consensus `handle()` function is a coroutine (via `genawaiter`) that yields **Effects** (sign, publish, decide, WAL append, etc.) and receives **Resume** values back
 3. The `process!` macro (`core-consensus/src/macros.rs`) drives this loop: feed an Input → run coroutine → handle yielded Effect → resume with result → repeat
 4. **Actors** (via `ractor`) handle effects asynchronously in the engine layer
@@ -40,7 +40,7 @@ Malachite's consensus logic is **pure and stateless** — it performs no I/O. In
 ### Crate Organization
 
 **Core consensus** (pure, no I/O, `no_std`-friendly):
-- `core-types` — `Context` trait and all type traits (Value, Vote, Proposal, etc.)
+- `core-types` — Application type family, builder and proposer selection traits, and domain traits (Value, Vote, Proposal, etc.)
 - `core-state-machine` — single-round Tendermint state machine
 - `core-votekeeper` — vote aggregation and quorum tracking
 - `core-driver` — multi-round orchestration
