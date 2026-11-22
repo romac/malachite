@@ -31,9 +31,6 @@ pub(crate) fn generate_named_test_traces(
         .arg(format!("{gen_dir}/test_{{test}}.itf.json"))
         .arg("--match")
         .arg(match_pattern);
-    if let Some(backend) = std::env::var_os("QUINT_BACKEND") {
-        command.arg("--backend").arg(backend);
-    }
     run_quint(command, spec_path, quint_seed);
 
     names
@@ -138,6 +135,8 @@ fn is_ident_continue(b: u8) -> bool {
 
 pub(crate) fn run_quint(mut command: std::process::Command, spec: &Path, seed: u64) {
     let output = command
+        .arg("--backend")
+        .arg(std::env::var_os("QUINT_BACKEND").unwrap_or_else(|| "rust".into()))
         .arg("--seed")
         .arg(seed.to_string())
         .arg(spec)

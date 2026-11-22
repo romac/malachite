@@ -154,7 +154,7 @@ module part_stream {
         messages.exclude(state.received) == Set()
     }
 
-    val inv = {
+    invariant inv = {
         if (isDone) all {
             state.initMessage != None,
             state.finReceived,
@@ -200,6 +200,9 @@ module part_stream {
         .then(processMessage(createMessage(1, DATA, "Data 1")))
         .expect(state.finReceived == true)
     }
+
+    observation finBeforeInit = state.finReceived and state.initMessage == None
+    observation completeStream = isDone
 
     temporal eventuallyDone =
         eventually(isDone)

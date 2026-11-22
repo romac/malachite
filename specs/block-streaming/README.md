@@ -1,108 +1,20 @@
 ## Quint specification for proposal parts streaming
 
-Check that the main invariant holds at each step (over 5 steps):
+Install the pinned CLI with `make -C code install-quint` from the repository root. Run these commands from `specs/block-streaming`. Apalache requires Java.
 
-```
-$ quint verify part_stream.qnt --max-steps 5 --invariant inv 
-[ok] No violation found (176881ms).
-```
+The model delivers four parts in any order. CI checks the declared invariant at every reachable state through four deliveries, then searches for a state where FIN arrives before INIT and a state where the full stream has been emitted.
 
-Verify that the process eventually terminates (in at most 5 steps):
-
-```
-$ quint verify part_stream.qnt --max-steps 5 --temporal 'eventually(isDone)'
-[ok] No violation found (176881ms).
+```sh
+quint verify part_stream.qnt --backend=apalache --max-steps=4 --search-observations
 ```
 
-Find a counter-example showing that the process terminates (in at most 5 steps):
+The reachability report includes `finBeforeInit was observed` and `completeStream was observed`. To save a concrete delivery order that completes the stream, run:
 
-```
-$ quint verify part_stream.qnt --max-steps 5 --invariant 'not(isDone)'
-State 4: state invariant 0 violated.                              I@16:16:53.536
-Found 1 error(s)                                                  I@16:16:53.543
-The outcome is: Error                                             I@16:16:53.576
-An example execution:
-
-[State 0] { state: { buffer: [], emitted: [], finReceived: false, initMessage: None, initReceived: false, nextSequence: 0, received: Set(), totalMessages: 0 } }
-
-[State 1]
-{
-  state:
-    {
-      buffer: [(1, { msgType: DATA, payload: "Data 1", sequence: 1 })],
-      emitted: [],
-      finReceived: false,
-      initMessage: None,
-      initReceived: false,
-      nextSequence: 0,
-      received: Set({ msgType: DATA, payload: "Data 1", sequence: 1 }),
-      totalMessages: 0
-    }
-}
-
-[State 2]
-{
-  state:
-    {
-      buffer: [(1, { msgType: DATA, payload: "Data 1", sequence: 1 }), (2, { msgType: DATA, payload: "Data 2", sequence: 2 })],
-      emitted: [],
-      finReceived: false,
-      initMessage: None,
-      initReceived: false,
-      nextSequence: 0,
-      received: Set({ msgType: DATA, payload: "Data 1", sequence: 1 }, { msgType: DATA, payload: "Data 2", sequence: 2 }),
-      totalMessages: 0
-    }
-}
-
-[State 3]
-{
-  state:
-    {
-      buffer:
-        [(1, { msgType: DATA, payload: "Data 1", sequence: 1 }), (2, { msgType: DATA, payload: "Data 2", sequence: 2 }), (3, { msgType: FIN, payload: "Fin", sequence: 3 })],
-      emitted: [],
-      finReceived: true,
-      initMessage: None,
-      initReceived: false,
-      nextSequence: 0,
-      received: Set({ msgType: DATA, payload: "Data 1", sequence: 1 }, { msgType: DATA, payload: "Data 2", sequence: 2 }, { msgType: FIN, payload: "Fin", sequence: 3 }),
-      totalMessages: 4
-    }
-}
-
-[State 4]
-{
-  state:
-    {
-      buffer: [],
-      emitted:
-        [
-          { msgType: INIT, payload: "Init", sequence: 0 },
-          { msgType: DATA, payload: "Data 1", sequence: 1 },
-          { msgType: DATA, payload: "Data 2", sequence: 2 },
-          { msgType: FIN, payload: "Fin", sequence: 3 }
-        ],
-      finReceived: true,
-      initMessage: Some({ msgType: INIT, payload: "Init", sequence: 0 }),
-      initReceived: true,
-      nextSequence: 4,
-      received:
-        Set(
-          { msgType: DATA, payload: "Data 1", sequence: 1 },
-          { msgType: DATA, payload: "Data 2", sequence: 2 },
-          { msgType: FIN, payload: "Fin", sequence: 3 },
-          { msgType: INIT, payload: "Init", sequence: 0 }
-        ),
-      totalMessages: 4
-    }
-}
-
-[violation] Found an issue (9558ms).
-error: found a counterexample
+```sh
+quint run part_stream.qnt --observation=completeStream --max-steps=4 --out-itf=complete-stream.itf.json
 ```
 
-Find a counter-example showing that the process eventually terminates (in at most 5 steps):
+The model also defines the temporal property `eventuallyDone`. The following older trace illustrates the loop that the temporal encoding adds after delivery.
 
 ```
 $ quint verify part_stream.qnt --max-steps 5 --temporal 'not(eventually(isDone))'

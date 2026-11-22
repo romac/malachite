@@ -51,27 +51,28 @@ To build and test Malachite, you need the following tools:
    ```bash
    # Using nvm
    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-   nvm install 21
-   nvm use 21
+   nvm install 24
+   nvm use 24
    ```
 
-3. **Install Quint**: (only required for running model-based tests)
-
-   ```bash
-   npm install -g @informalsystems/quint
-   ```
-
-4. **Install cargo-nextest**:
-
-   ```bash
-   cargo install cargo-nextest
-   ```
-
-5. **Fork and clone the repository**:
+3. **Fork and clone the repository**
 
    ```bash
    git clone https://github.com/USERNAME/malachite.git
-   cd malachite/code
+   cd malachite
+   ```
+
+4. **Install the pinned Quint CLI** for model-based testing. CI reads the same version from `specs/quint-version`.
+
+   ```bash
+   make -C code install-quint
+   ```
+
+5. **Enter the Rust workspace and install cargo-nextest**
+
+   ```bash
+   cd code
+   cargo install cargo-nextest
    ```
 
 > [!NOTE]

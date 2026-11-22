@@ -1,6 +1,7 @@
 module voteReplaySampling {
   import types.* from "../../types"
   import votekeeper.* from "../../votekeeper"
+  import voteKeeperProperties.* from "./votekeeperModels"
 
   pure val weights = Map("alice" -> 1, "bob" -> 2, "john" -> 3)
   var sequence: int

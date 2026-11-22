@@ -1,10 +1,5 @@
-#!/bin/bash
-#
-# Accepts optional parameters to `quint`, default: `--max-samples 100`.
-
-QUINT_PARAMS=${@-"--max-samples 100"}
-
-for TEST_FILE in */*Test.qnt
-do
-	quint test $QUINT_PARAMS $TEST_FILE
-done 
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+if (( $# == 0 )); then set -- --max-samples=100; fi
+find . -name '*Test.qnt' | ../../../../scripts/quint-forall.sh test "$@"
