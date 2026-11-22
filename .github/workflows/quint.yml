@@ -13,26 +13,23 @@ jobs:
     runs-on: ${{ github.repository_owner == 'circlefin' && 'github-hosted-small' || 'ubuntu-24.04' }}
     permissions:
       contents: read
-      pull-requests: read
     outputs:
-      specs: ${{ steps.filter.outputs.specs }}
+      changed: ${{ steps.filter.outputs.changed }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: step-security/paths-filter@6eee183b0d2fd101d3f8ee2935c127bca14c5625 # v3.0.5
-        id: filter
-        if: github.event_name != 'workflow_dispatch'
         with:
-          filters: |
-            specs:
-              - 'specs/**'
-              - 'scripts/quint-*'
-              - 'code/Makefile'
-              - '.github/workflows/quint.yml'
+          fetch-depth: 0
+      - id: filter
+        name: Check relevant paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+        run: ./scripts/quint-ci-changes.sh specs 'scripts/quint-*' code/Makefile .github/workflows/quint.yml
 
   quint-typecheck:
     name: Typecheck
     needs: changes
-    if: ${{ needs.changes.outputs.specs == 'true' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    if: needs.changes.outputs.changed == 'true'
     runs-on: ${{ github.repository_owner == 'circlefin' && 'github-hosted-small' || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -45,7 +42,7 @@ jobs:
   quint-test:
     name: Test (${{ matrix.backend }})
     needs: changes
-    if: ${{ needs.changes.outputs.specs == 'true' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    if: needs.changes.outputs.changed == 'true'
     runs-on: ${{ github.repository_owner == 'circlefin' && 'github-hosted-large' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
@@ -75,7 +72,7 @@ jobs:
   quint-verify:
     name: Verify proposal-part streaming
     needs: changes
-    if: ${{ needs.changes.outputs.specs == 'true' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    if: needs.changes.outputs.changed == 'true'
     runs-on: ${{ github.repository_owner == 'circlefin' && 'github-hosted-large' || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
