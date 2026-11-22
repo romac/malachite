@@ -48,6 +48,11 @@ jobs:
         run: make -C code install-quint
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
+        with:
+          # Rust 1.100 warns about unreachable code in libp2p's NetworkBehaviour derive.
+          # Keep warnings as errors on the compiler used to validate these replays.
+          toolchain: "1.93.1"
+          cache-workspaces: "code"
       - name: Install cargo-nextest
         uses: taiki-e/install-action@554bdce7edf79d43854a6b7c1e392e7da7eb97a9 # cargo-nextest
       - name: Current time as random seed for Quint
