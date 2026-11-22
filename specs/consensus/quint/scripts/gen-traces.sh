@@ -1,62 +1,22 @@
 #!/usr/bin/env bash
-
-BLUE=$(tput setaf 4)
-RED=$(tput setaf 1)
-RESET=$(tput sgr0)
-
-# [INFO] message in blue
-info()
-{
-    echo "${BLUE}[INFO] $*${RESET}"
-} 
-
-# [ERROR] message in red
-error()
-{
-    echo "${RED}[ERROR] $*${RESET} "
-}
-
-FILEPATH=$1
-PROP=$2
-MAX_STEPS=${3:-100}
-[[ ! -f "$FILEPATH" ]] && error "file $FILEPATH does not exist" && exit 1
-[[ -z "$PROP" ]] && error "property name required" && exit 1
-
-MODULE=$(basename ${FILEPATH%".qnt"})
-TRACES_DIR="traces/$MODULE"
-mkdir -p "$TRACES_DIR"
-
-# Given dir, name and ext, if "dir/name-N.ext" exists, it will return 
-# "dir/name-M.ext" with M=N+1, otherwise it will return "dir/name-1.ext".
-function nextFilename() {
-    local dir=$1
-    local name=$2
-    local ext=$3
-    local result="$dir/$name.$ext"
-    if [ -f $result ]; then 
-        i=1
-        result="$dir/$name-$i.$ext"
-        while [[ -e "$result" || -L "$result" ]] ; do
-            result="$dir/$name-$((i+1)).$ext"
-        done
-    fi
-    echo "$result"
-}
-
-TRACE_PATH=$(nextFilename "$TRACES_DIR" "$PROP" "itf.json")
-OUTPUT=$(npx @informalsystems/quint run \
-    --max-steps=$MAX_STEPS \
-    --max-samples=1 \
-    --invariant "$PROP" \
-    --out-itf "$TRACE_PATH" \
-    "$FILEPATH" 2>&1)
-case $OUTPUT in
-    "error: Invariant violated")
-        # info "Success: reached a state that violates $FILEPATH::$PROP"
-        info "Generated trace: $TRACE_PATH"
-        ;;
-    *)
-        error "Failed: did not find a state that violates $FILEPATH::$PROP in $MAX_STEPS steps"
-        [ -f $TRACE_PATH ] && info "Generated trace: $TRACE_PATH"
-        ;;
-esac
+# Save the first trace reaching a declared observation. Quint returns nonzero on a miss.
+set -euo pipefail
+spec=${1:?usage: gen-traces.sh SPEC OBSERVATION [MAX_STEPS]}
+goal=${2:?missing observation name}
+steps=${3:-24}
+module=$(basename "$spec" .qnt)
+dir="traces/$module"
+mkdir -p "$dir"
+# Keep earlier traces even if several searches run at the same time.
+run_dir=$(mktemp -d "$dir/$goal.XXXXXXXX")
+trace="$run_dir/trace.itf.json"
+if quint run "$spec" --backend="${QUINT_BACKEND:-rust}" --seed="${QUINT_SEED:-118}" \
+    --observation="$goal" --max-steps="$steps" --max-samples=512 --out-itf="$trace" --verbosity=1; then
+    test -s "$trace"
+    printf 'Trace: %s\n' "$trace"
+else
+    status=$?
+    # Keep any counterexample emitted for an invariant violation.
+    rmdir "$run_dir" 2>/dev/null || true
+    exit "$status"
+fi

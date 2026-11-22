@@ -86,11 +86,15 @@ pub struct VoteCount {
     #[serde(with = "As::<HashMap<Same, Integer>>")]
     pub values_weights: HashMap<Value, Weight>,
     pub votes_addresses: HashSet<Address>,
+    pub received_votes: HashSet<Vote>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct State {
+    /// The simulator increments this on every delivery, including identical retries.
+    #[serde(default, with = "As::<Option<Integer>>")]
+    pub sequence: Option<u64>,
     pub bookkeeper: Bookkeeper,
     pub last_emitted: VoteKeeperOutput,
     pub weighted_vote: WeightedVote,

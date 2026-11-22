@@ -127,4 +127,36 @@ module consensusTest {
         .then(fireInput(ProposalInvalidCInput))
         .expect(output.isVoteMsgWith(Prevote, Nil) and state.step == PrevoteStep)
 
+    run latePolkaUpdatesValidValueTest =
+        init.then(fireInput(NewRoundCInput(0)))
+        .then(fireInput(TimeoutProposeCInput((1, 0))))
+        .then(fireInput(PolkaAnyCInput))
+        .then(fireInput(TimeoutPrevoteCInput((1, 0))))
+        .then(fireInput(ProposalAndPolkaAndValidCInput(Val("block"))))
+        .expect(output == NoConsensusOutput and state.validValue == Val("block"))
+
+    run prevoteTimeoutDuringProposeTest =
+        init.then(fireInput(NewRoundCInput(0)))
+        .then(fireInput(TimeoutPrevoteCInput((1, 0))))
+        .expect(state.step == ProposeStep)
+
+    run nonAdjacentRoundSkipTest =
+        init.then(fireInput(NewRoundCInput(0)))
+        .then(fireInput(RoundSkipCInput(3)))
+        .expect(output == SkipRoundOutput(3))
+        .then(fireInput(TimeoutPrevoteCInput((1, 0))))
+        .expect(state.step == UnstartedStep)
+        .then(fireInput(NewRoundCInput(3)))
+        .expect(state.round == 3 and state.step == ProposeStep)
+
+    run priorPolkaWithInvalidProposalTest =
+        init.then(fireInput(NewRoundCInput(1)))
+        .then(fireInput(ProposalAndPolkaAndInvalidCInput(Val("invalid"))))
+        .expect(output.isVoteMsgWith(Prevote, Nil) and state.step == PrevoteStep)
+
+    run pastRoundDecisionTest =
+        init.then(fireInput(NewRoundCInput(2)))
+        .then(fireInput(ProposalAndCommitAndValidCInput((0, "block"))))
+        .expect(state.step == CommitStep and state.round == 2)
+
 }

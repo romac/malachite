@@ -541,15 +541,15 @@ module valuesync {
   // Safety invariants -----------------------------------------------------------
 
   // I1. syncHeight is always strictly above the tip (once consensus has started).
-  val invSyncAboveTip: bool =
+  invariant invSyncAboveTip: bool =
     client.started implies client.syncHeight > client.tip
 
   // I2. syncHeight never falls inside a pending request range.
-  val invSyncUncovered: bool =
+  invariant invSyncUncovered: bool =
     not(coversHeight(client.pending, client.syncHeight))
 
   // I3. pending request ranges are pairwise disjoint.
-  val invDisjoint: bool =
+  invariant invDisjoint: bool =
     client.pending.keys().forall(i =>
       client.pending.keys().forall(j =>
         (i == j) or rDisjoint(client.pending.get(i).range, client.pending.get(j).range)))
@@ -557,43 +557,43 @@ module valuesync {
   // I4. no IN-FLIGHT entry is owned by a peer absent from the known set. A request that no peer
   // can answer must never stay outstanding. Reservations are exempt: their values already
   // arrived, so `peer` only records who served them, and the entry survives that peer leaving.
-  val invNoOrphanedOwner: bool =
+  invariant invNoOrphanedOwner: bool =
     client.pending.keys().forall(id =>
       client.pending.get(id).inflight
         implies client.known.keys().contains(client.pending.get(id).peer))
 
   // I5. every height strictly between tip and syncHeight is covered by a pending request.
-  val invNoLostHeight: bool =
+  invariant invNoLostHeight: bool =
     client.started implies
       0.to(MAXH).forall(h =>
         (client.tip < h and h < client.syncHeight) implies coversHeight(client.pending, h))
 
   // I6. Completed reservations cannot exhaust capacity while useful frontier work is available.
-  val invNoCapacityBlockedFrontier: bool = not(capacityBlockedFrontier)
+  invariant invNoCapacityBlockedFrontier: bool = not(capacityBlockedFrontier)
 
   // I7. the in-flight requests never exceed the parallel-request budget.
-  val invBudgetRespected: bool = inflightCount <= maxParallelRequests
+  invariant invBudgetRespected: bool = inflightCount <= maxParallelRequests
 
-  // Witnesses (reachability) -----------------------------------------------------
-  val wStarted: bool = client.started
-  val wPending: bool = client.pending.keys().size() > 0
-  val wParallel: bool = inflightCount > 1
-  val wPlaceholder: bool =
+  // Observations (reachability) -----------------------------------------------------
+  observation wStarted: bool = client.started
+  observation wPending: bool = client.pending.keys().size() > 0
+  observation wParallel: bool = inflightCount > 1
+  observation wPlaceholder: bool =
     client.pending.keys().exists(id => not(client.pending.get(id).inflight))
-  val wRetried: bool =
+  observation wRetried: bool =
     client.pending.keys().exists(id => client.pending.get(id).excluded.size() > 0)
-  val wPrunedStatus: bool =
+  observation wPrunedStatus: bool =
     client.known.keys().exists(p => client.known.get(p).historyMin > HISTORY_MIN)
-  val wProgress: bool = client.tip >= 2
-  val wCaughtUp: bool = client.started and client.tip == TOP
+  observation wProgress: bool = client.tip >= 2
+  observation wCaughtUp: bool = client.started and client.tip == TOP
   val wCapacityBlockedFrontier: bool = capacityBlockedFrontier
 
   // A reservation was re-requested, so the `on_peer_fault` path above is reachable.
-  val wRetriedReservation: bool = client.retriedReservation
+  observation wRetriedReservation: bool = client.retriedReservation
   // Evidence the disconnect+reroute path fired: a pending entry carries a disconnected peer
   // (now absent from known) in its excluded set — only a reroute after disconnect/failure
   // produces this.
-  val wReroutedPastDisconnected: bool =
+  observation wReroutedPastDisconnected: bool =
     client.pending.keys().exists(id =>
       client.pending.get(id).excluded.exists(q => not(client.known.keys().contains(q))))
 }

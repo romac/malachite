@@ -1,5 +1,27 @@
 // -*- mode: Bluespec; -*-
 
+// These properties read the standalone vote keeper initialized by initWith.
+// The driver instead stores a separate bookkeeper inside each node.
+module voteKeeperProperties {
+    import types.* from "../../types"
+    import votekeeper.* from "../../votekeeper"
+
+    invariant validVoteWeights = Inv
+
+    observation emitPrecommitValue = match lastEmitted {
+        | PrecommitValueVKOutput(_) => true | _ => false
+    }
+    observation emitPolkaAny = match lastEmitted {
+        | PolkaAnyVKOutput(_) => true | _ => false
+    }
+    observation emitPolkaNil = match lastEmitted {
+        | PolkaNilVKOutput(_) => true | _ => false
+    }
+    observation emitSkip = match lastEmitted {
+        | SkipVKOutput(_) => true | _ => false
+    }
+}
+
 // ****************************************************************************
 // Vote Bookkeeper State Machine
 // **************************************************************************** 
@@ -9,6 +31,8 @@ module votekeeperSM  {
     import types.* from "../../types"
     import votekeeper.* from "../../votekeeper"
     export votekeeper.*
+    import voteKeeperProperties.*
+    export voteKeeperProperties.*
 
     // ************************************************************************
     // Model parameters 
@@ -35,32 +59,6 @@ module votekeeperSM  {
         val height = INITIAL_HEIGHT
         val vote: Vote = mkVote(voteType, address, height, round, id(value))
         applyVoteAction(vote, round)
-
-    // ****************************************************************************
-    // Properties that define an expected final state (for generating traces)
-    // ****************************************************************************
-
-    val emitPrecommitValueState = 
-        nondet round = oneOf(ROUNDS)
-        nondet value = oneOf(VALUES)
-        lastEmitted == PrecommitValueVKOutput((round, value))
-    val emitPrecommitValue = not(emitPrecommitValueState)
-
-    val emitPolkaAnyState = 
-        nondet round = oneOf(ROUNDS)
-        lastEmitted == PolkaAnyVKOutput(round)
-    val emitPolkaAny = not(emitPolkaAnyState)
-
-    val emitPolkaNilState = 
-        nondet round = oneOf(ROUNDS)
-        lastEmitted == PolkaNilVKOutput(round)
-    val emitPolkaNil = not(emitPolkaNilState)
-
-    val emitSkipState = 
-        nondet round = oneOf(ROUNDS)
-        lastEmitted == SkipVKOutput(round)
-    val emitSkip = not(emitSkipState)
-
 }
 
 // ****************************************************************************

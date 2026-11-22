@@ -1,6 +1,14 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub fn generate_test_traces(spec_rel_path: &str, gen_dir: &str, quint_seed: u64) {
+    generate_named_test_traces(spec_rel_path, gen_dir, quint_seed);
+}
+
+pub(crate) fn generate_named_test_traces(
+    spec_rel_path: &str,
+    gen_dir: &str,
+    quint_seed: u64,
+) -> Vec<(String, PathBuf)> {
     println!("🪄 Generating test traces for {spec_rel_path:?}...");
 
     let spec_abs_path = format!("{}/specs/{spec_rel_path}", env!("CARGO_MANIFEST_DIR"),);
@@ -11,48 +19,31 @@ pub fn generate_test_traces(spec_rel_path: &str, gen_dir: &str, quint_seed: u64)
     // `votekeeper.qnt`). Those tests don't mutate state, so their ITF traces have
     // `"vars": []` and cannot be deserialized into the Rust `State` type. Restrict
     // `quint test` to the runs defined directly in the target spec via `--match`.
-    let match_pattern = build_run_match_pattern(spec_path);
+    let source = std::fs::read_to_string(spec_path).expect("read Quint test module");
+    let names = top_level_run_names(&source);
+    assert!(!names.is_empty(), "no test runs in {spec_rel_path}");
+    let match_pattern = format!("^({})$", names.join("|"));
 
-    let output = std::process::Command::new("quint")
+    let mut command = std::process::Command::new("quint");
+    command
         .arg("test")
         .arg("--out-itf")
-        .arg(format!("{gen_dir}/test_{{test}}_{{seq}}.itf.json"))
-        .arg("--seed")
-        .arg(quint_seed.to_string())
+        .arg(format!("{gen_dir}/test_{{test}}.itf.json"))
         .arg("--match")
-        .arg(&match_pattern)
-        .arg(spec_path)
-        .current_dir(spec_path.parent().unwrap())
-        .output()
-        .expect("Failed to run quint test");
+        .arg(match_pattern);
+    run_quint(command, spec_path, quint_seed);
 
-    if !output.status.success() {
-        panic!(
-            "quint test failed (exit {:?}):\nstdout: {}\nstderr: {}",
-            output.status.code(),
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        );
-    }
-
-    println!("🪄 Generated traces in {gen_dir:?}");
-}
-
-/// Build a regex that matches exactly the top-level `run NAME = ...` definitions
-/// in `spec_path`. Panics if the file has no top-level runs, since that would
-/// silently mean no traces get generated.
-fn build_run_match_pattern(spec_path: &Path) -> String {
-    let source = std::fs::read_to_string(spec_path)
-        .unwrap_or_else(|e| panic!("failed to read spec file {}: {e}", spec_path.display()));
-
-    let names = top_level_run_names(&source);
-    assert!(
-        !names.is_empty(),
-        "no top-level `run` definitions found in {}",
-        spec_path.display()
-    );
-
-    format!("^({})$", names.join("|"))
+    names
+        .into_iter()
+        .map(|name| {
+            let path = Path::new(gen_dir).join(format!("test_{name}.itf.json"));
+            assert!(
+                path.is_file(),
+                "Quint emitted no trace for {spec_rel_path}::{name}, seed {quint_seed}"
+            );
+            (name, path)
+        })
+        .collect()
 }
 
 /// Extract the names of top-level `run NAME = ...` definitions from a Quint source.
@@ -142,34 +133,25 @@ fn is_ident_continue(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
-// pub fn generate_random_traces(
-//     spec_rel_path: &str,
-//     gen_dir: &str,
-//     quint_seed: u64,
-//     num_traces: u64,
-// ) {
-//     println!("🪄 Generating random traces for {spec_rel_path:?}...");
-
-//     let spec_abs_path = format!("{}/specs/{spec_rel_path}", env!("CARGO_MANIFEST_DIR"),);
-//     let spec_path = Path::new(&spec_abs_path);
-
-//     std::process::Command::new("quint")
-//         .arg("run")
-//         .arg("--n-traces")
-//         .arg(num_traces.to_string())
-//         .arg("--max-samples")
-//         .arg("1000")
-//         .arg("--out-itf")
-//         .arg(format!("{gen_dir}/random_{{seq}}.itf.json"))
-//         .arg("--seed")
-//         .arg(quint_seed.to_string())
-//         .arg(spec_path)
-//         .current_dir(spec_path.parent().unwrap())
-//         .output()
-//         .expect("Failed to run quint test");
-
-//     println!("🪄 Generated traces in {gen_dir:?}");
-// }
+pub(crate) fn run_quint(mut command: std::process::Command, spec: &Path, seed: u64) {
+    let output = command
+        .arg("--backend")
+        .arg(std::env::var_os("QUINT_BACKEND").unwrap_or_else(|| "rust".into()))
+        .arg("--seed")
+        .arg(seed.to_string())
+        .arg(spec)
+        .current_dir(spec.parent().unwrap())
+        .output()
+        .expect("run Quint");
+    assert!(
+        output.status.success(),
+        "Quint failed for {} with seed {seed} ({}):\n{}\n{}",
+        spec.display(),
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
 
 const DEFAULT_QUINT_SEED: u64 = 118;
 

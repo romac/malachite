@@ -12,7 +12,7 @@ oracle**. It is an executable model: every property below is checked by sampled 
 
 | File | Contents |
 |------|----------|
-| `valuesync.qnt` | The model: types, pure logic, actions, invariants, witnesses, concrete instances, scope, and abstractions. |
+| `valuesync.qnt` | The model: types, pure logic, actions, invariants, observations, concrete instances, scope, and abstractions. |
 | `valuesyncTest.qnt` | Deterministic `run` tests for catch-up, retries, and peer-status changes. Imports `valuesync`. |
 
 ### Correspondence to the code
@@ -25,7 +25,7 @@ The model grounds these files (update the model and re-check its invariants *bef
 
 ## Prerequisites
 
-Quint **≥ 0.32.0** (`npm install -g @informalsystems/quint`). Check with `quint --version`.
+Install the pinned CLI from the repository root with `make -C code install-quint`. Check it with `quint --version`.
 
 Run all commands from this directory (`specs/synchronization/valuesync/client-model`).
 
@@ -53,16 +53,10 @@ The model exposes two concrete instances (modules) to run against:
 | `vs`     | 3     | 2         | 2            | 4   |
 | `vsBig`  | 4     | 3         | 3            | 6   |
 
-Check all invariants in one run:
+Quint automatically checks all seven declared invariants and reports how often the ten observations were reached. Run the CI sample locally with:
 
 ```bash
-quint run valuesync.qnt \
-  --main=vs \
-  --max-steps=30 \
-  --max-samples=1000 \
-  --invariants invSyncAboveTip invSyncUncovered invDisjoint invNoOrphanedOwner invNoLostHeight \
-               invNoCapacityBlockedFrontier invBudgetRespected \
-  --verbosity=1
+quint run valuesync.qnt --main=vs --seed=118 --max-steps=30 --max-samples=1000 --verbosity=2
 ```
 
 Swap `--main=vs` for `--main=vsBig` to stress a larger configuration.
@@ -102,30 +96,28 @@ quint run valuesync.qnt --main=vs --max-steps=30 \
   --invariant=<invariant> --seed=<seed> --backend=rust --verbosity=3
 ```
 
-## Check reachability (witnesses)
+## Check reachability
 
-Witnesses confirm the interesting states are reachable (a 0% witness means a dead action):
+Read the per-observation trace counts under `Observations` in the simulation output. CI requires each of the ten to be reached at least once with its fixed seed. A zero count means the sampled executions missed that state. To save a trace reaching full catch-up to `TOP`, target `wCaughtUp`:
 
 ```bash
 quint run valuesync.qnt --main=vs --max-steps=30 --max-samples=1000 \
-  --witnesses wStarted wPending wParallel wPlaceholder wRetried wRetriedReservation \
-              wPrunedStatus wProgress wCaughtUp wReroutedPastDisconnected
+  --observation=wCaughtUp --mbt --out-itf=caught-up.itf.json
 ```
 
-`wCaughtUp` (full catch-up to `TOP`) fires in roughly 45% of traces; the rest fire in a healthy
-fraction too. `wParallel` and `wReroutedPastDisconnected` are the rarest (~0.5% and ~1%).
+The search stops at its first match and exits with status 1 if the budget is exhausted.
 
 `wRetriedReservation` reads a latch that the retry actions set, not a shape of the state. Which
 entry a retry started from is a property of the step, and every retry ends in an in-flight entry,
 so no predicate over the resulting state can tell a reservation retry from an ordinary one.
 
-`wCapacityBlockedFrontier` is the forbidden-state witness negated by
+`wCapacityBlockedFrontier` is the forbidden-state predicate negated by
 `invNoCapacityBlockedFrontier`. It should remain unreachable. When checking a suspected regression,
 search for a counterexample trace without scripting the interleaving:
 
 ```bash
 quint run valuesync.qnt --main=vs --max-steps=30 --max-samples=2000 \
-  --witnesses wCapacityBlockedFrontier --mbt --out-itf=cex.itf.json
+  --invariant=invNoCapacityBlockedFrontier --mbt --out-itf=cex.itf.json
 ```
 
 > Note: `quint run` (sampled) is the primary workflow. For exhaustive bounded checking with

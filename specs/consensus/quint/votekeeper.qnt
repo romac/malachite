@@ -95,6 +95,17 @@ module votekeeper {
         assert(isQuorum(5,6) == true),
     }
 
+    run fullWidthQuorumTest = {
+        val total = 2^64 - 1
+        val third = total / 3
+        all {
+            assert(not(isSkip(third, total))),
+            assert(isSkip(third + 1, total)),
+            assert(not(isQuorum(2 * third, total))),
+            assert(isQuorum(2 * third + 1, total)),
+        }
+    }
+
     // True iff the vote count has a quorum on a specific value.
     pure def hasQuorumOnValue(voteCount: VoteCount, value: Value): bool =
         isQuorum(voteCount.valuesWeights.getOrElse(value, 0), voteCount.totalWeight)

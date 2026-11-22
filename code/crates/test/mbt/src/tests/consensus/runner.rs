@@ -22,6 +22,7 @@ pub struct ConsensusRunner {
     pub address_map: BTreeMap<String, Address>,
     pub last_state: Option<State>,
     pub skip_step: bool,
+    unstarted_round: Option<i64>,
 }
 
 impl ConsensusRunner {
@@ -31,13 +32,14 @@ impl ConsensusRunner {
             address_map,
             last_state: None,
             skip_step: false,
+            unstarted_round: None,
         }
     }
 }
 
 impl ItfRunner for ConsensusRunner {
     type ActualState = RoundState<TestContext>;
-    type Result = Option<Output<TestContext>>;
+    type Result = (bool, Option<Output<TestContext>>);
     type ExpectedState = State;
     type Error = ();
 
@@ -64,13 +66,19 @@ impl ItfRunner for ConsensusRunner {
             if &last_state == expected {
                 println!("➡️ Skipping duplicate step");
                 self.skip_step = true;
-                return Ok(None);
+                return Ok((false, None));
             }
         }
 
         println!("🔸 step: actual state={actual:?}");
         println!("🔸 step: model input={:?}", expected.input);
         println!("🔸 step: model state={:?}", expected.state);
+
+        if let ModelOutput::SkipRound(target) = expected.output {
+            self.unstarted_round = Some(target);
+        } else if expected.state.step != Step::Unstarted {
+            self.unstarted_round = None;
+        }
 
         let address = self.address_map.get(&expected.state.process).unwrap();
         let some_other_node = self.address_map.get(OTHER_PROCESS).unwrap();
@@ -137,11 +145,18 @@ impl ItfRunner for ConsensusRunner {
 
             ModelInput::ProposalAndPolkaAndInvalid(value) => {
                 let data = Info::new(actual.round, address, some_other_node);
+                // This abstract input carries a prior proof but erases its round.
+                // Choose the immediately prior round when the current round has one.
+                let prior_round = actual
+                    .round
+                    .as_u32()
+                    .and_then(|r| r.checked_sub(1))
+                    .map_or(Round::Nil, Round::new);
                 let proposal = self.ctx.new_proposal(
                     actual.height,
                     actual.round,
                     value_from_model(value).unwrap(),
-                    Round::Nil,
+                    prior_round,
                     *some_other_node,
                 );
                 (data, Input::InvalidProposalAndPolkaPrevious(proposal))
@@ -212,7 +227,7 @@ impl ItfRunner for ConsensusRunner {
 
         *actual = transition.next_state;
 
-        Ok(transition.output)
+        Ok((transition.valid, transition.output))
     }
 
     fn result_invariant(
@@ -231,14 +246,23 @@ impl ItfRunner for ConsensusRunner {
         println!("🟣 result invariant: expected output={expected_result:?}");
 
         // Check result against expected result.
-        match result {
+        let (valid, output) = result;
+        assert_eq!(
+            *valid,
+            !matches!(expected_result, ModelOutput::Error(_)),
+            "guard result"
+        );
+        match output {
             Some(result) => match (result, expected_result) {
                 (Output::NewRound(round), ModelOutput::SkipRound(expected_round)) => {
                     assert_eq!(round.as_i64(), *expected_round);
                 }
 
                 (Output::Proposal(proposal), ModelOutput::Proposal(expected_proposal)) => {
-                    // TODO: check expected_proposal.src_address
+                    assert_eq!(
+                        proposal.validator_address,
+                        self.address_map[&expected_proposal.src_address]
+                    );
                     assert_eq!(proposal.height.as_u64() as i64, expected_proposal.height);
                     assert_eq!(proposal.round.as_i64(), expected_proposal.round);
                     assert_eq!(proposal.pol_round.as_i64(), expected_proposal.valid_round);
@@ -291,7 +315,12 @@ impl ItfRunner for ConsensusRunner {
                     Output::Decision(round, proposal),
                     ModelOutput::Decided(expected_round, expected_decided_value),
                 ) => {
-                    assert_eq!(round.as_i64(), *expected_round, "unexpected decided round");
+                    assert_eq!(round.as_i64(), expected.state.round, "local decision round");
+                    assert_eq!(
+                        proposal.round.as_i64(),
+                        *expected_round,
+                        "certified proposal round"
+                    );
 
                     assert_eq!(
                         Some(&proposal.value),
@@ -303,7 +332,13 @@ impl ItfRunner for ConsensusRunner {
                 _ => panic!("actual: {result:?}\nexpected: {expected:?}"),
             },
 
-            None => panic!("no actual result; expected result: {expected_result:?}"),
+            None => assert!(
+                matches!(
+                    expected_result,
+                    ModelOutput::NoOutput | ModelOutput::Error(_)
+                ),
+                "expected output {expected_result:?}"
+            ),
         }
 
         Ok(true)
@@ -318,7 +353,7 @@ impl ItfRunner for ConsensusRunner {
             return Ok(true);
         }
 
-        // TODO: What to do with actual.height? There is no height in the spec.
+        assert_eq!(actual.height.as_u64() as i64, expected.state.height);
 
         println!("🟢 state invariant: actual state={actual:?}");
         println!("🟢 state invariant: expected state={:?}", expected.state);
@@ -330,12 +365,8 @@ impl ItfRunner for ConsensusRunner {
             assert_eq!(Some(actual.step), expected.state.step.to_round_step());
 
             if expected.state.step == Step::Unstarted {
-                // In the spec, the new round comes from the input, it's not in the state.
-                assert_eq!(
-                    actual.round.as_i64(),
-                    expected.state.round + 1,
-                    "unexpected round"
-                );
+                // Quint exposes the target on the skip output; Rust installs it immediately.
+                assert_eq!(Some(actual.round.as_i64()), self.unstarted_round);
             } else {
                 assert_eq!(
                     actual.round.as_i64(),
