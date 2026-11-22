@@ -27,6 +27,7 @@ pub fn value_from_string(v: &NonNilValue) -> Option<Value> {
     match v.as_str() {
         "block" => Some(Value::new(1)),
         "nextBlock" => Some(Value::new(2)),
+        "invalid" => Some(Value::new(3)),
         _ => panic!("unknown value {v:?}"),
     }
 }

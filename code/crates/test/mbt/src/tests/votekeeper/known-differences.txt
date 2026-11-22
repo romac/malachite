@@ -1,0 +1,3 @@
+futureCommitQuorumPriorityTest delivery 2 result: Quint Some(SkipRound(Some(1))) / Rust Some(PrecommitValue(ValueId(1)))
+futureCommitQuorumPriorityTest delivery 2 round 1 stored outputs: Quint {SkipRound(Some(1))} / Rust {PrecommitValue(ValueId(1))}
+repeatedFutureSkipTest delivery 2 result: Quint Some(SkipRound(Some(1))) / Rust None

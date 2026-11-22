@@ -24,9 +24,15 @@ num-traits = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
-glob = { workspace = true }
 pretty_assertions = { workspace = true }
 multihash = { workspace = true }
 
 [dev-dependencies]
+bytes.workspace = true
+malachitebft-app-channel.workspace = true
+malachitebft-core-consensus.workspace = true
+malachitebft-core-driver.workspace = true
+malachitebft-metrics.workspace = true
+malachitebft-sync.workspace = true
+malachitebft-test-streaming.workspace = true
 tempfile = { version = "3.25.0" }

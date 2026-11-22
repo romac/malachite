@@ -114,4 +114,31 @@ module votekeeperTest {
         .then(applyVoteAction(mkVote(Precommit, "bob", 1, 2, Val("v1")), 1))
         .expect(lastEmitted == SkipVKOutput(2))
 
+    // With weight 6, neither 2 nor 4 clears its respective strict threshold.
+    run exactOneThirdFutureRoundTest =
+        initWith(1, Map("alice" -> 2, "bob" -> 1, "john" -> 3))
+        .then(applyVoteAction(mkVote(Prevote, "alice", 1, 2, Nil), 0))
+        .expect(lastEmitted == NoVKOutput)
+        .then(applyVoteAction(mkVote(Precommit, "bob", 1, 2, Nil), 0))
+        .expect(lastEmitted == SkipVKOutput(2))
+
+    run exactTwoThirdsCurrentRoundTest =
+        initWith(1, Map("alice" -> 3, "bob" -> 1, "john" -> 2))
+        .then(applyVoteAction(mkVote(Precommit, "alice", 1, 0, Val("v1")), 0))
+        .then(applyVoteAction(mkVote(Precommit, "bob", 1, 0, Val("v1")), 0))
+        .expect(lastEmitted == NoVKOutput)
+        .then(applyVoteAction(mkVote(Precommit, "john", 1, 0, Val("v1")), 0))
+        .expect(lastEmitted == PrecommitValueVKOutput((0, "v1")))
+
+    run futureCommitQuorumPriorityTest =
+        initWith(1, Map("alice" -> 2, "bob" -> 3, "john" -> 2))
+        .then(applyVoteAction(mkVote(Precommit, "alice", 1, 1, Val("v1")), 0))
+        .then(applyVoteAction(mkVote(Precommit, "bob", 1, 1, Val("v1")), 0))
+        .expect(bookkeeper.rounds.get(1).precommits.receivedVotes.size() == 2)
+
+    run repeatedFutureSkipTest =
+        initWith(1, Map("alice" -> 2, "bob" -> 3, "john" -> 2))
+        .then(applyVoteAction(mkVote(Prevote, "bob", 1, 1, Val("v1")), 0))
+        .then(applyVoteAction(mkVote(Precommit, "bob", 1, 1, Val("v1")), 0))
+        .expect(bookkeeper.rounds.get(1).precommits.receivedVotes.size() == 1)
 }

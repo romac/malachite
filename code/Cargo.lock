@@ -668,13 +668,19 @@ dependencies = [
 name = "arc-malachitebft-test-mbt"
 version = "0.8.2"
 dependencies = [
+ "arc-malachitebft-app-channel",
+ "arc-malachitebft-core-consensus",
+ "arc-malachitebft-core-driver",
  "arc-malachitebft-core-state-machine",
  "arc-malachitebft-core-types",
  "arc-malachitebft-core-votekeeper",
  "arc-malachitebft-engine",
+ "arc-malachitebft-metrics",
  "arc-malachitebft-peer",
+ "arc-malachitebft-sync",
  "arc-malachitebft-test",
- "glob",
+ "arc-malachitebft-test-streaming",
+ "bytes",
  "itf",
  "multihash",
  "num-bigint",

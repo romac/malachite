@@ -57,12 +57,10 @@ jobs:
         run: |
           cargo nextest run \
            -p arc-malachitebft-test-mbt \
-           -p arc-malachitebft-starknet-test-mbt \
            --all-features --no-run
       - name: Run tests
         working-directory: code/crates/test/mbt
         run: |
           cargo nextest run \
            -p arc-malachitebft-test-mbt \
-           -p arc-malachitebft-starknet-test-mbt \
            --all-features

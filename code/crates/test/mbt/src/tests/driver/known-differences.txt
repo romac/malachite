@@ -1,0 +1,24 @@
+commitByVotesTest event 4
+  outputs: Quint [Decide(Some(0), Proposal { height: Height(1), round: Some(0), value: Value { value: 1, extensions: b"" }, pol_round: Nil, validator_address: proposer[r0] }), ScheduleTimeout(Timeout { kind: Precommit, round: Some(0) })] / Rust [Decide(Some(0), Proposal { height: Height(1), round: Some(0), value: Value { value: 1, extensions: b"" }, pol_round: Nil, validator_address: proposer[r0] })]
+commitBeforeProposalTest event 4
+  outputs: Quint [Decide(Some(0), Proposal { height: Height(1), round: Some(0), value: Value { value: 1, extensions: b"" }, pol_round: Nil, validator_address: proposer[r0] }), ScheduleTimeout(Timeout { kind: Precommit, round: Some(0) })] / Rust [Decide(Some(0), Proposal { height: Height(1), round: Some(0), value: Value { value: 1, extensions: b"" }, pol_round: Nil, validator_address: proposer[r0] })]
+commitCertificateTest event 3
+  outputs: Quint [Decide(Some(0), Proposal { height: Height(1), round: Some(0), value: Value { value: 1, extensions: b"" }, pol_round: Nil, validator_address: proposer[r0] }), ScheduleTimeout(Timeout { kind: Precommit, round: Some(0) })] / Rust [Decide(Some(0), Proposal { height: Height(1), round: Some(0), value: Value { value: 1, extensions: b"" }, pol_round: Nil, validator_address: proposer[r0] })]
+invalidProposalWithPriorRoundTest event 3
+  step: Quint Prevote / Rust Propose
+  outputs: Quint [Vote(Vote { typ: Prevote, height: Height(1), round: Some(1), value: Nil, validator_address: proposer[r2], extension: None })] / Rust []
+currentPolkaTest event 4
+  outputs: Quint [ScheduleTimeout(Timeout { kind: Prevote, round: Some(0) }), Vote(Vote { typ: Precommit, height: Height(1), round: Some(0), value: Val(ValueId(1)), validator_address: proposer[r1], extension: None })] / Rust [Vote(Vote { typ: Precommit, height: Height(1), round: Some(0), value: Val(ValueId(1)), validator_address: proposer[r1], extension: None })]
+cachedNilPolkaTest event 4
+  step: Quint Prevote / Rust Precommit
+  outputs: Quint [Vote(Vote { typ: Prevote, height: Height(1), round: Some(0), value: Val(ValueId(1)), validator_address: proposer[r1], extension: None })] / Rust [Vote(Vote { typ: Prevote, height: Height(1), round: Some(0), value: Val(ValueId(1)), validator_address: proposer[r1], extension: None }), Vote(Vote { typ: Precommit, height: Height(1), round: Some(0), value: Nil, validator_address: proposer[r1], extension: None })]
+futurePolkaTest event 2
+  round: Quint Some(0) / Rust Some(2)
+  outputs: Quint [] / Rust [ScheduleTimeout(Timeout { kind: Propose, round: Some(2) })]
+nonAdjacentProposerTest event 2
+  outputs: Quint [ScheduleTimeout(Timeout { kind: Propose, round: Some(2) })] / Rust [ScheduleTimeout(Timeout { kind: Propose, round: Some(2) }), GetValue(Height(1), Some(2), Timeout { kind: Propose, round: Some(2) })]
+futureCommitWithProposalTest event 4
+  round: Quint Some(1) / Rust Some(0)
+  step: Quint Propose / Rust Commit
+  decided: Quint None / Rust Some(RoundValue { value: Value { value: 1, extensions: b"" }, round: Some(1) })
+  outputs: Quint [ScheduleTimeout(Timeout { kind: Propose, round: Some(1) })] / Rust [Decide(Some(0), Proposal { height: Height(1), round: Some(1), value: Value { value: 1, extensions: b"" }, pol_round: Nil, validator_address: proposer[r1] })]

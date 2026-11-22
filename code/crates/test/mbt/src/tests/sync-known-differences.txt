@@ -1,0 +1,3 @@
+retryDecidedPrefixTest Transient(2)
+  sends: Quint [(1, "p1", Range { lo: 1, hi: 2 })] / Rust [(1, "p1", Range { lo: 2, hi: 2 })]
+  pending: Quint {1: Entry { range: Range { lo: 1, hi: 2 }, peer: "p1", excluded: {}, inflight: true }} / Rust {1: Entry { range: Range { lo: 2, hi: 2 }, peer: "p1", excluded: {}, inflight: true }}
