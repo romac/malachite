@@ -81,36 +81,30 @@ where
         proposal: SignedProposal<Ctx>,
         validity: Validity,
     ) -> StoreProposalResult<Ctx> {
-        // Signatures are not part of proposal identity.
-        if self.contains_message_with_validity(&proposal, validity) {
-            return StoreProposalResult::Stored;
-        }
+        self.add_with_validity(proposal, validity).0
+    }
 
-        // Ensure all proposals come from the same validator
+    fn add_with_validity(
+        &mut self,
+        proposal: SignedProposal<Ctx>,
+        validity: Validity,
+    ) -> (StoreProposalResult<Ctx>, Validity) {
         self.verify_same_validator(&proposal);
-
-        // Update existing proposal or add new one
-        match self.proposal_validity_mut(&proposal) {
-            Some(existing_validity) => {
-                Self::update_validity(&proposal, existing_validity, validity);
+        // Signatures are not part of proposal identity.
+        let retained = match self.proposal_validity_mut(&proposal) {
+            Some(current) if *current == validity => {
+                return (StoreProposalResult::Stored, validity)
+            }
+            Some(current) => {
+                Self::update_validity(&proposal, current, validity);
+                *current
             }
             None => {
                 self.proposals.push((proposal.clone(), validity));
+                validity
             }
-        }
-
-        // Check for equivocation (multiple distinct proposals)
-        self.check_equivocation(proposal)
-    }
-
-    fn contains_message_with_validity(
-        &self,
-        proposal: &SignedProposal<Ctx>,
-        validity: Validity,
-    ) -> bool {
-        self.proposals
-            .iter()
-            .any(|(p, v)| p.message == proposal.message && *v == validity)
+        };
+        (self.check_equivocation(proposal), retained)
     }
 
     fn verify_same_validator(&self, proposal: &SignedProposal<Ctx>) {
@@ -246,10 +240,19 @@ where
         proposal: SignedProposal<Ctx>,
         validity: Validity,
     ) -> StoreProposalResult<Ctx> {
+        self.store_with_validity(proposal, validity).0
+    }
+
+    /// Also return the retained verdict for this exact proposal message.
+    pub(crate) fn store_with_validity(
+        &mut self,
+        proposal: SignedProposal<Ctx>,
+        validity: Validity,
+    ) -> (StoreProposalResult<Ctx>, Validity) {
         self.per_round
             .entry(proposal.round())
             .or_default()
-            .add(proposal, validity)
+            .add_with_validity(proposal, validity)
     }
 
     /// Record a pair of equivocating proposals directly in the evidence map.

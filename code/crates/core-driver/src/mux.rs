@@ -198,12 +198,13 @@ where
         let proposal = signed_proposal.message.clone();
 
         // Store the proposal and its validity, recording evidence if it reveals an equivocation.
+        let (outcome, validity) = self
+            .proposal_keeper
+            .store_with_validity(signed_proposal, validity);
         if let StoreProposalResult::Equivocation {
             existing,
             conflicting,
-        } = self
-            .proposal_keeper
-            .store_proposal(signed_proposal, validity)
+        } = outcome
         {
             self.proposal_keeper.record_evidence(existing, conflicting);
         }
