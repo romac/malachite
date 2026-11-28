@@ -341,9 +341,9 @@ where
                 state.driver.prune_votes_and_certificates(vote.round());
 
                 if state.driver.round() >= HIDDEN_LOCK_ROUND && state.is_active_validator() {
-                    if let Some((signed_proposal, Validity::Valid)) = state
+                    if let Some(signed_proposal) = state
                         .driver
-                        .proposal_and_validity_for_round_and_value(vote.round(), value_id.clone())
+                        .valid_proposal_for_round_and_value(vote.round(), value_id.clone())
                     {
                         // The certificate goes out ahead of the value so that a peer which has
                         // not assembled the polka from prevotes holds it by the time the value
