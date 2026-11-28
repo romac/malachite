@@ -164,15 +164,16 @@ impl<Ctx: Context> Driver<Ctx> {
                 RoundInput::SkipRound(proof_round),
             ));
         }
-        if let Some((proposal, validity)) =
-            self.proposal_and_validity_for_round_and_value(self.round(), value)
-        {
-            if let Some(event) = self.polka_rule(&proposal.message, *validity, proof_round) {
-                return Some(event);
-            }
-        }
-        // A value polka still proves the any-value prevote quorum (L34).
-        self.prevote_timer_rule(proof_round)
+        // Distinct proposal messages can have the same value and cite different
+        // POL rounds. Select the first one for which this proof enables a rule.
+        self.proposals_and_validities_for_round(self.round())
+            .iter()
+            .filter(|(proposal, _)| proposal.value().id() == value)
+            .find_map(|(proposal, validity)| {
+                self.polka_rule(&proposal.message, *validity, proof_round)
+            })
+            // A value polka still proves the any-value prevote quorum (L34).
+            .or_else(|| self.prevote_timer_rule(proof_round))
     }
 
     fn prevote_timer_rule(&self, round: Round) -> Option<RoundEvent<Ctx>> {

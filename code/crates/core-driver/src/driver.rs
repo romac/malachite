@@ -330,14 +330,10 @@ where
         round: Round,
         value_id: ValueId<Ctx>,
     ) -> Option<&SignedProposal<Ctx>> {
-        if let Some((proposal, validity)) =
-            self.proposal_and_validity_for_round_and_value(round, value_id)
-        {
-            if validity.is_valid() {
-                return Some(proposal);
-            }
-        }
-        None
+        self.proposals_and_validities_for_round(round)
+            .iter()
+            .find(|(proposal, validity)| validity.is_valid() && proposal.value().id() == value_id)
+            .map(|(proposal, _)| proposal)
     }
 
     /// Returns the proposals and their validities for the given round, if any.

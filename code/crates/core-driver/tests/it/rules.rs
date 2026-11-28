@@ -129,3 +129,93 @@ fn late_polka_updates_valid_without_relocking_or_voting_again() {
         );
     }
 }
+
+#[test]
+fn previous_polka_selects_the_proposal_that_cites_its_round() {
+    let round = Round::new(2);
+    let proof_round = Round::new(1);
+    let value = Value::new(17);
+    for certificate in [false, true] {
+        for proof_first in [false, true] {
+            let (mut driver, voters) = fixture();
+            driver.process(new_round_input(round, voters[0])).unwrap();
+            let proposal = |pol_round| {
+                proposal_input(round, value.clone(), pol_round, Validity::Valid, voters[0])
+            };
+
+            // Both messages propose the same value, but only the second cites round 1.
+            assert!(driver.process(proposal(Round::new(0))).unwrap().is_empty());
+            let mut proof: Vec<_> = if certificate {
+                vec![polka_certificate_input_at(
+                    proof_round,
+                    value.clone(),
+                    &voters[..3],
+                )]
+            } else {
+                voters[..3]
+                    .iter()
+                    .map(|voter| prevote_input_at(proof_round, value.clone(), voter))
+                    .collect()
+            };
+            if proof_first {
+                proof.push(proposal(proof_round));
+            } else {
+                proof.insert(0, proposal(proof_round));
+            }
+            let mut outputs = Vec::new();
+            for input in proof {
+                outputs.extend(driver.process(input).unwrap());
+            }
+            assert_eq!(outputs, [prevote_output(round, value.clone(), &voters[3])]);
+            assert!(driver.polka_certificate(proof_round, &value.id()).is_some());
+            assert_eq!(
+                driver
+                    .take_proposal_evidence()
+                    .get(&voters[0])
+                    .unwrap()
+                    .len(),
+                1
+            );
+        }
+    }
+}
+
+#[test]
+fn commit_quorum_selects_a_valid_matching_proposal() {
+    let (mut driver, voters) = fixture();
+    let round = Round::new(2);
+    let value = Value::new(17);
+    driver.process(new_round_input(round, voters[0])).unwrap();
+    for (pol_round, validity) in [
+        (Round::new(0), Validity::Invalid),
+        (Round::new(1), Validity::Valid),
+    ] {
+        assert!(driver
+            .process(proposal_input(
+                round,
+                value.clone(),
+                pol_round,
+                validity,
+                voters[0]
+            ))
+            .unwrap()
+            .is_empty());
+    }
+    let candidate = driver
+        .valid_proposal_for_round_and_value(round, value.id())
+        .unwrap();
+    assert_eq!(candidate.message.pol_round, Round::new(1));
+    let expected = decide_output(round, candidate.message.clone());
+    assert_eq!(
+        driver
+            .process(commit_certificate_input_at(
+                round,
+                value.clone(),
+                &voters[..3]
+            ))
+            .unwrap(),
+        [expected]
+    );
+    assert_eq!(driver.decided_value(), Some((round, value)));
+    assert_eq!(driver.commit_certificates().len(), 1);
+}
