@@ -537,12 +537,12 @@ where
         round: Round,
         proposer: Ctx::Address,
     ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
-        if self.height() == height {
-            // If it's a new round for same height, just reset the round, keep the valid and locked values
-            self.round_state.round = round;
-        } else {
-            self.round_state = RoundState::new(height, round);
+        if self.height() != height {
+            // A direct NewRound can also start a height. All evidence used by
+            // the rules is scoped to that height, including the vote keeper.
+            self.move_to_height(height, self.validator_set.clone());
         }
+        self.round_state.round = round;
 
         // Update the proposer for the new round
         self.proposer = Some(proposer);

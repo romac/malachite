@@ -219,3 +219,40 @@ fn commit_quorum_selects_a_valid_matching_proposal() {
     assert_eq!(driver.decided_value(), Some((round, value)));
     assert_eq!(driver.commit_certificates().len(), 1);
 }
+
+#[test]
+fn new_height_with_the_same_round_number_evaluates_only_its_own_evidence() {
+    let (mut driver, voters) = fixture();
+    let round = Round::new(0);
+    let value = Value::new(17);
+    driver.process(new_round_input(round, voters[0])).unwrap();
+    driver
+        .process(polka_certificate_input_at(
+            round,
+            value.clone(),
+            &voters[..3],
+        ))
+        .unwrap();
+    driver
+        .process(proposal_input(
+            round,
+            value,
+            Round::Nil,
+            Validity::Valid,
+            voters[0],
+        ))
+        .unwrap();
+    assert_eq!(driver.step(), Step::Precommit);
+
+    let height = Height::new(2);
+    let outputs = driver
+        .process(Input::NewRound(height, round, voters[0]))
+        .unwrap();
+    assert_eq!(outputs, [start_propose_timer_output(round)]);
+    assert_eq!(driver.height(), height);
+    assert_eq!(driver.step(), Step::Propose);
+    assert!(driver.proposals_and_validities_for_round(round).is_empty());
+    assert!(driver.votes().per_round(round).is_none());
+    assert!(driver.polka_certificates().is_empty());
+    assert!(driver.round_state().locked.is_none());
+}

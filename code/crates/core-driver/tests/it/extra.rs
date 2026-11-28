@@ -2985,10 +2985,8 @@ fn polka_any_and_prevote_step_timeout_prevote() {
     run_steps(&mut driver, steps);
 }
 
-// A PolkaCertificate received in Step::Propose (no proposal yet) must be replayed
-// as PolkaAny on the Propose → Prevote transition so timeoutPrevote is scheduled
-// (L34/L35). The certificate bypasses the vote keeper, so without explicit replay
-// the step change would produce no PolkaAny input.
+// A polka certificate received before the proposal already proves the any-value
+// prevote quorum. Entering Prevote makes L34/L35 eligible to schedule its timer.
 #[test]
 fn polka_certificate_in_propose_step_replayed_on_prevote_transition() {
     let value = Value::new(9999);
@@ -4488,9 +4486,8 @@ fn skip_round_with_precommit_any_stores_round_certificate_for_next_round() {
     assert_eq!(outputs, vec![new_round_output(Round::new(1))]);
     assert_eq!(driver.round(), Round::new(1));
 
-    // Start round 1. The pending PrecommitAny for round 1 is replayed via
-    // multiplex_step_change, scheduling the precommit timeout alongside the
-    // propose timeout.
+    // Starting round 1 makes its stored precommit quorum eligible to schedule
+    // the precommit timeout alongside the propose timeout.
     let outputs = driver
         .process(new_round_input(Round::new(1), v2.address))
         .expect("process succeeded");
@@ -4810,9 +4807,8 @@ fn commit_certificate_without_proposal_stores_round_certificate() {
 }
 
 // We prevote nil for an invalid proposal for X with no pol_round. Then a current-round polka
-// certificate for X arrives. Applying the certificate discards the vote keeper's outputs, so the
-// multiplexer must send `PolkaAny`. The state machine then starts the prevote timer (L34), and we
-// precommit nil when it fires instead of stalling.
+// certificate for X arrives. Even with an invalid proposal, the certificate establishes
+// the quorum for the prevote timer (L34). When it fires, the node precommits nil.
 #[test]
 fn polka_certificate_with_invalid_proposal_and_no_pol_round_starts_prevote_timer() {
     let value_x = Value::new(9999);

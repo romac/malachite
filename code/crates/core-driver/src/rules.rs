@@ -3,6 +3,16 @@
 //! Proposals and threshold notifications identify which round and value to examine.
 //! A verified certificate is also a quorum proof in its own right, even if the vote
 //! keeper retained an earlier, conflicting vote from one of its signers.
+//!
+//! | Rule | Evidence | Input round |
+//! |---|---|---|
+//! | L22 | Fresh proposal in Propose | Current round |
+//! | L28 | Current proposal cites a matching earlier value polka | Proposal round |
+//! | L36 | Valid current proposal and a current value polka | Current round |
+//! | L34 / L44 | Any-value / nil prevote quorum in Prevote | Current round |
+//! | L47 | Any-value precommit quorum | Current round |
+//! | L49 | Valid candidate and a matching value precommit quorum | Certified round |
+//! | L55 | Enough voting power to enter a higher round | Future round |
 
 use malachitebft_core_state_machine::input::Input as RoundInput;
 use malachitebft_core_state_machine::state::Step;
