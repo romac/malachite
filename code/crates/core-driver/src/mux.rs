@@ -273,20 +273,16 @@ where
         // Store the certificate
         self.commit_certificates.push(certificate);
 
-        // Check for associated Proposal: if found and valid, decide it
-        if let Some((signed_proposal, validity)) =
-            self.proposal_and_validity_for_round_and_value(certificate_round, certificate_value_id)
-        {
-            if validity.is_valid() {
-                return RoundInput::ProposalAndPrecommitValue(signed_proposal.message.clone());
-            }
-        }
+        self.input_for_commit_quorum(certificate_round, certificate_value_id)
+    }
 
-        // Proposal not received or deemed invalid
-        if certificate_round > self.round() {
-            RoundInput::SkipRound(certificate_round)
-        } else {
-            RoundInput::PrecommitAny
+    /// L49 takes priority over a future-round skip. Without a valid proposal, the
+    /// same quorum can justify entering a future round or starting the current timer.
+    fn input_for_commit_quorum(&self, round: Round, value_id: ValueId<Ctx>) -> RoundInput<Ctx> {
+        match self.valid_proposal_for_round_and_value(round, value_id) {
+            Some(proposal) => RoundInput::ProposalAndPrecommitValue(proposal.message.clone()),
+            None if round > self.round() => RoundInput::SkipRound(round),
+            None => RoundInput::PrecommitAny,
         }
     }
 
@@ -376,19 +372,10 @@ where
             VKOutput::PolkaNil => (threshold_round, RoundInput::PolkaNil),
             VKOutput::PrecommitAny => (threshold_round, RoundInput::PrecommitAny),
             VKOutput::SkipRound(r) => (threshold_round, RoundInput::SkipRound(r)),
-            VKOutput::PrecommitValue(v) => {
-                if let Some(proposal) = self.valid_proposal_for_round_and_value(threshold_round, v)
-                {
-                    (
-                        threshold_round,
-                        RoundInput::ProposalAndPrecommitValue(proposal.message.clone()),
-                    )
-                } else if threshold_round > self.round() {
-                    (threshold_round, RoundInput::SkipRound(threshold_round))
-                } else {
-                    (threshold_round, RoundInput::PrecommitAny)
-                }
-            }
+            VKOutput::PrecommitValue(v) => (
+                threshold_round,
+                self.input_for_commit_quorum(threshold_round, v),
+            ),
             VKOutput::PolkaValue(v) => {
                 if let Some((proposal, validity)) =
                     self.proposal_and_validity_for_round_and_value(self.round(), v)
