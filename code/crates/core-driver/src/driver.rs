@@ -1,4 +1,3 @@
-use alloc::collections::BTreeSet;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
@@ -9,16 +8,16 @@ use malachitebft_core_state_machine::state::{RoundValue, State as RoundState, St
 use malachitebft_core_state_machine::state_machine::Info;
 use malachitebft_core_types::{
     Context, EnterRoundCertificate, ExtendedCommitCertificate, NilOrVal, PolkaCertificate,
-    PolkaSignature, Proposal, Round, RoundCertificate, RoundCertificateType, RoundSignature,
-    SignedProposal, SignedVote, Threshold, Timeout, TimeoutKind, Validator, ValidatorSet, Validity,
-    Value, ValueId, Vote, VoteType,
+    Proposal, Round, SignedProposal, SignedVote, Threshold, Timeout, TimeoutKind, Validator,
+    ValidatorSet, Validity, Value, ValueId, Vote, VoteType,
 };
 use malachitebft_core_votekeeper::keeper::Output as VKOutput;
 use malachitebft_core_votekeeper::keeper::VoteKeeper;
 
 use crate::input::Input;
 use crate::output::Output;
-use crate::proposal_keeper::{self, ProposalKeeper};
+use crate::proposal_keeper::{self, ProposalKeeper, StoreProposalResult};
+use crate::rules::RoundEvent;
 use crate::Error;
 use crate::ThresholdParams;
 
@@ -60,10 +59,6 @@ where
     /// The state of the round state machine.
     pub(crate) round_state: RoundState<Ctx>,
 
-    /// The pending inputs to be processed next, if any.
-    /// The first element of the tuple is the round at which that input has been emitted.
-    pending_inputs: Vec<(Round, RoundInput<Ctx>)>,
-
     last_prevote: Option<Ctx::Vote>,
     last_precommit: Option<Ctx::Vote>,
 
@@ -99,7 +94,6 @@ where
             vote_keeper,
             round_state,
             proposer: None,
-            pending_inputs: vec![],
             commit_certificates: vec![],
             polka_certificates: vec![],
             last_prevote: None,
@@ -108,7 +102,7 @@ where
         }
     }
 
-    /// Reset votes, round state, pending input and move to new height with the given validator set.
+    /// Reset votes and round state and move to the new height with the given validator set.
     pub fn move_to_height(&mut self, height: Ctx::Height, validator_set: Ctx::ValidatorSet) {
         // Update the validator set
         self.validator_set = validator_set.clone();
@@ -132,7 +126,6 @@ where
         self.polka_certificates = vec![];
 
         // Reset additional internal state
-        self.pending_inputs = vec![];
         self.last_prevote = None;
         self.last_precommit = None;
     }
@@ -301,9 +294,9 @@ where
         self.polka_certificates.as_ref()
     }
 
-    /// Return all pending inputs, as pairs (round, round input).
+    /// Rule evaluation completes synchronously in `process`, so the driver has no queued inputs.
     pub fn pending_inputs(&self) -> &[(Round, RoundInput<Ctx>)] {
-        self.pending_inputs.as_ref()
+        &[]
     }
 
     /// Return the last issued prevote, if any.
@@ -370,27 +363,56 @@ where
 
     /// Process the given input, returning the outputs to be broadcast to the network.
     pub fn process(&mut self, msg: Input<Ctx>) -> Result<Vec<Output<Ctx>>, Error<Ctx>> {
-        let round_output = match self.apply(msg)? {
-            Some(msg) => msg,
-            None => return Ok(Vec::new()),
-        };
-
-        let mut outputs = vec![];
-
-        // Lift the round state machine output to one or more driver outputs
-        self.lift_output(round_output, &mut outputs);
-
-        // Apply the pending inputs, if any, and lift their outputs
-        while !self.pending_inputs.is_empty() {
-            let new_pending = core::mem::take(&mut self.pending_inputs);
-            for (round, input) in new_pending {
-                if let Some(output) = self.apply_input(round, input)? {
-                    self.lift_output(output, &mut outputs)
-                }
-            }
+        let mut outputs = Vec::new();
+        let mut previous = (self.height(), self.step());
+        if let Some(output) = self.apply(msg)? {
+            self.lift_output(output, &mut outputs);
         }
 
+        // Finish the rules for one step entry before starting the next. This
+        // preserves the ordering of already-enabled timers relative to votes.
+        // Each pass visits a finite set of proposals once, then both aggregate
+        // quorums. Another pass requires a step advance, even for silent rules.
+        while previous != (self.height(), self.step()) {
+            let entered = self.step();
+            if matches!(entered, Step::Unstarted | Step::Commit) {
+                break;
+            }
+            // L36 is already eligible in Prevote. A later proposal or polka can
+            // still update the valid value in Precommit without a step change.
+            if matches!(entered, Step::Propose | Step::Prevote) {
+                let count = self.proposals_and_validities_for_round(self.round()).len();
+                for index in 0..count {
+                    let rule = self.proposal_on_step_entry(entered, index);
+                    self.emit_rule(rule, &mut outputs)?;
+                }
+            }
+            self.emit_rule(self.prevote_quorum_rule(), &mut outputs)?;
+            self.emit_rule(self.precommit_quorum_rule(), &mut outputs)?;
+            previous = (self.height(), entered);
+        }
         Ok(outputs)
+    }
+
+    fn emit_rule(
+        &mut self,
+        rule: Option<RoundEvent<Ctx>>,
+        outputs: &mut Vec<Output<Ctx>>,
+    ) -> Result<(), Error<Ctx>> {
+        if let Some(output) = self.apply_rule(rule)? {
+            self.lift_output(output, outputs);
+        }
+        Ok(())
+    }
+
+    fn apply_rule(
+        &mut self,
+        rule: Option<RoundEvent<Ctx>>,
+    ) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
+        match rule {
+            Some(event) => self.apply_input(event.input_round, event.input),
+            None => Ok(None),
+        }
     }
 
     /// Convert the output of the round state machine to the output type of the driver.
@@ -480,14 +502,15 @@ where
 
         // A commit certificate for a future round contains 2f+1 precommits,
         // which is more than enough to justify entering that round (f+1 suffices).
-        // Store it as a round certificate now, before the mux consumes the certificate,
+        // Store it as a round certificate before applying the rule,
         // so that a SkipRound transition has a proper justification.
         if round > self.round() {
             self.store_round_certificate_from_commit_certificate(&certificate);
         }
 
-        let round_input = self.store_and_multiplex_commit_certificate(certificate);
-        self.apply_input(round, round_input)
+        let value = certificate.value_id.clone();
+        self.record_commit_certificate(certificate);
+        self.apply_rule(self.stored_commit_rule(round, value))
     }
 
     fn apply_polka_certificate(
@@ -501,16 +524,15 @@ where
             });
         }
 
-        // Store the Skip round certificate before the mux consumes the polka certificate,
-        // so the SkipRound transition has justification.
-        if certificate.round > self.round() {
+        let round = certificate.round;
+        // Retain the proof before a future-round certificate can trigger a skip.
+        if round > self.round() {
             self.store_round_certificate_from_polka_certificate(&certificate);
         }
 
-        match self.store_and_multiplex_polka_certificate(certificate) {
-            Some((input_round, round_input)) => self.apply_input(input_round, round_input),
-            None => Ok(None),
-        }
+        let value = certificate.value_id.clone();
+        self.record_polka_certificate(certificate);
+        self.apply_rule(self.stored_polka_rule(round, value))
     }
 
     fn apply_new_round(
@@ -552,12 +574,16 @@ where
             });
         }
 
-        let round = proposal.round();
-
-        match self.store_and_multiplex_proposal(proposal, validity) {
-            Some(round_input) => self.apply_input(round, round_input),
-            None => Ok(None),
+        let message = proposal.message.clone();
+        let (outcome, retained) = self.proposal_keeper.store_with_validity(proposal, validity);
+        if let StoreProposalResult::Equivocation {
+            existing,
+            conflicting,
+        } = outcome
+        {
+            self.proposal_keeper.record_evidence(existing, conflicting);
         }
+        self.apply_rule(self.proposal_rule(&message, retained, self.step()))
     }
 
     fn apply_vote(
@@ -588,7 +614,7 @@ where
         };
 
         match &output {
-            VKOutput::PolkaValue(val) => self.store_polka_certificate(vote_round, val),
+            VKOutput::PolkaValue(val) => self.build_polka_certificate(vote_round, val),
             // Only store PrecommitAny certificates for the current round:
             // - Lower round PrecommitAny is ignored
             // - Higher round PrecommitAny cannot occur because receiving 2f+1
@@ -608,177 +634,20 @@ where
                         VoteType::Prevote,
                         Threshold::Value(value_id.clone()),
                     ) {
-                        self.store_polka_certificate(vote_round, value_id);
+                        self.build_polka_certificate(vote_round, value_id);
                     }
                 }
             }
             // For future rounds, PrecommitValue may have taken priority over SkipRound
             // in the vote keeper. Store the skip round certificate here so it's available
-            // if the mux falls back to SkipRound (e.g. no valid proposal).
+            // if the quorum rule falls back to SkipRound (e.g. no valid proposal).
             VKOutput::PrecommitValue(_) if vote_round > this_round => {
                 self.store_skip_round_certificate(vote_round)
             }
             _ => (),
         }
 
-        let (input_round, round_input) = self.multiplex_vote_threshold(output, vote_round);
-
-        if round_input == RoundInput::NoInput {
-            return Ok(None);
-        }
-
-        self.apply_input(input_round, round_input)
-    }
-
-    fn store_polka_certificate(&mut self, vote_round: Round, value_id: &ValueId<Ctx>) {
-        let Some(per_round) = self.vote_keeper.per_round(vote_round) else {
-            return;
-        };
-
-        self.polka_certificates.push(PolkaCertificate {
-            height: self.height(),
-            round: vote_round,
-            value_id: value_id.clone(),
-            polka_signatures: per_round
-                .received_votes()
-                .iter()
-                .filter(|v| {
-                    v.vote_type() == VoteType::Prevote
-                        && v.value().as_ref() == NilOrVal::Val(value_id)
-                })
-                .map(|v| PolkaSignature::new(v.validator_address().clone(), v.signature.clone()))
-                .collect(),
-        })
-    }
-
-    /// Prunes all polka certificates and votes from rounds less than `min_round`.
-    pub fn prune_votes_and_certificates(&mut self, min_round: Round) {
-        self.prune_polka_certificates(min_round);
-        self.vote_keeper.prune_votes(min_round);
-    }
-
-    /// Prunes all polka certificates from rounds less than `min_round`.
-    fn prune_polka_certificates(&mut self, min_round: Round) {
-        self.polka_certificates
-            .retain(|cert| cert.round >= min_round);
-    }
-
-    fn store_precommit_any_round_certificate(&mut self, vote_round: Round) {
-        let Some(per_round) = self.vote_keeper.per_round(vote_round) else {
-            panic!("Missing the PrecommitAny votes for round {vote_round}");
-        };
-
-        let precommits: Vec<SignedVote<Ctx>> = per_round
-            .received_votes()
-            .iter()
-            .filter(|v| v.vote_type() == VoteType::Precommit)
-            .cloned()
-            .collect();
-
-        self.round_certificate = Some(EnterRoundCertificate::new_from_votes(
-            self.height(),
-            vote_round.increment(),
-            vote_round,
-            RoundCertificateType::Precommit,
-            precommits,
-        ));
-    }
-
-    fn store_skip_round_certificate(&mut self, vote_round: Round) {
-        let Some(per_round) = self.vote_keeper.per_round(vote_round) else {
-            panic!("Missing the SkipRoundvotes for round {vote_round}");
-        };
-
-        // NOTE: We include all received votes even though only f+1 are needed
-        // for a Skip round certificate. Could be trimmed if needed.
-        let mut seen_addresses = BTreeSet::new();
-        let skip_votes: Vec<_> = per_round
-            .received_votes()
-            .iter()
-            .filter(|vote| seen_addresses.insert(vote.validator_address()))
-            .cloned()
-            .collect();
-
-        self.round_certificate = Some(EnterRoundCertificate::new_from_votes(
-            self.height(),
-            vote_round,
-            vote_round,
-            RoundCertificateType::Skip,
-            skip_votes,
-        ));
-    }
-
-    fn store_round_certificate_from_commit_certificate(
-        &mut self,
-        certificate: &ExtendedCommitCertificate<Ctx>,
-    ) {
-        // NOTE: We include all 2f+1 signatures from the commit certificate even though
-        // only f+1 are needed for a Skip round certificate. Could be trimmed if needed.
-        let commit_certificate = certificate.trim_vote_extensions();
-        self.round_certificate = Some(EnterRoundCertificate::from_commit_certificate(
-            &commit_certificate,
-            RoundCertificateType::Skip,
-            certificate.round,
-        ));
-    }
-
-    fn store_round_certificate_from_polka_certificate(
-        &mut self,
-        certificate: &PolkaCertificate<Ctx>,
-    ) {
-        let round_signatures = certificate
-            .polka_signatures
-            .iter()
-            .map(|ps| {
-                RoundSignature::new(
-                    VoteType::Prevote,
-                    NilOrVal::Val(certificate.value_id.clone()),
-                    ps.address.clone(),
-                    ps.signature.clone(),
-                )
-            })
-            .collect();
-
-        self.round_certificate = Some(EnterRoundCertificate {
-            certificate: RoundCertificate {
-                height: certificate.height,
-                round: certificate.round,
-                cert_type: RoundCertificateType::Skip,
-                round_signatures,
-            },
-            enter_round: certificate.round,
-        });
-    }
-
-    /// Ensure a precommit round certificate is stored for the given round.
-    ///
-    /// Called when TimeoutPrecommit fires and no round certificate exists yet.
-    /// Looks for evidence of 2f+1 precommits in:
-    ///  1. The vote keeper (individual precommit votes), or
-    ///  2. A stored commit certificate for the round.
-    fn ensure_precommit_round_certificate(&mut self, round: Round) {
-        // Try the vote keeper first: if we have 2f+1 precommits from individual votes
-        if self
-            .vote_keeper
-            .is_threshold_met(&round, VoteType::Precommit, Threshold::Any)
-        {
-            self.store_precommit_any_round_certificate(round);
-            return;
-        }
-
-        // Otherwise, try a stored commit certificate for this round
-        if let Some(cert) = self
-            .commit_certificates
-            .iter()
-            .find(|c| c.round == round && c.height == self.height())
-        {
-            let commit_certificate = cert.trim_vote_extensions();
-            self.round_certificate = Some(EnterRoundCertificate::from_commit_certificate(
-                &commit_certificate,
-                RoundCertificateType::Precommit,
-                cert.round.increment(),
-            ));
-        }
+        self.apply_rule(self.threshold_rule(vote_round, output))
     }
 
     fn apply_timeout(&mut self, timeout: Timeout) -> Result<Option<RoundOutput<Ctx>>, Error<Ctx>> {
@@ -842,7 +711,7 @@ where
 
         // Go through the state machine with ProposalAndPrecommitValue
         // This will trigger L49 and produce a Decision output
-        self.apply_input(round, RoundInput::ProposalAndPrecommitValue(proposal))
+        self.apply_rule(self.commit_rule(round, Some(&proposal)))
     }
 
     /// Apply the input, update the state.
@@ -856,20 +725,11 @@ where
         // the replace can leave `round_state` at its default.
         let proposer_address = self.get_proposer()?.address().clone();
 
-        let (previous_step, output) = self.with_round_state(|ctx, address, round_state| {
-            let previous_step = round_state.step;
+        Ok(self.with_round_state(|ctx, address, round_state| {
             let info = Info::new(input_round, address, &proposer_address);
             let transition = round_state.apply(ctx, &info, input);
-            (transition.next_state, (previous_step, transition.output))
-        });
-
-        if previous_step != self.round_state.step && self.round_state.step != Step::Unstarted {
-            let pending_inputs = self.multiplex_step_change(input_round);
-
-            self.pending_inputs = pending_inputs;
-        }
-
-        Ok(output)
+            (transition.next_state, transition.output)
+        }))
     }
 
     /// Atomically transition `round_state` via the given infallible closure.

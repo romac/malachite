@@ -15,11 +15,12 @@
 
 extern crate alloc;
 
+mod certificates;
 mod driver;
 mod error;
 mod input;
-mod mux;
 mod output;
+mod rules;
 
 pub mod proposal_keeper;
 

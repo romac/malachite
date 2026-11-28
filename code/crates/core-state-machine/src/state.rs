@@ -43,6 +43,11 @@ impl ScheduledTimeouts {
         self.bits = 0;
     }
 
+    /// Whether the given timeout has already been scheduled in this round.
+    pub fn is_scheduled(&self, timeout: TimeoutKind) -> bool {
+        Self::mask(timeout).is_some_and(|mask| self.bits & mask != 0)
+    }
+
     /// Checks whether a timeout can be scheduled.
     ///
     /// Returns `true` and records the timeout as scheduled if it wasn't already.
